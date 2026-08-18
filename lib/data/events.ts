@@ -159,6 +159,15 @@ export async function getAttendeesForEvent(eventId: string): Promise<AttendeeRow
   return (data ?? []) as AttendeeRow[];
 }
 
+export async function getAttendeeCounts(eventIds: string[]) {
+  if (eventIds.length === 0) return new Map<string, number>();
+  const supabase = await createClient();
+  const { data } = await supabase.from("event_attendance").select("event_id").in("event_id", eventIds);
+  const counts = new Map<string, number>();
+  for (const row of data ?? []) counts.set(row.event_id, (counts.get(row.event_id) ?? 0) + 1);
+  return counts;
+}
+
 export async function getEventsByCreator(creatorId: string) {
   const supabase = await createClient();
   const { data } = await supabase.from("events").select("*").eq("created_by", creatorId).order("created_at", { ascending: false });
