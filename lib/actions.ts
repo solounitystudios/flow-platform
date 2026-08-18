@@ -432,7 +432,11 @@ function generateCheckinCode() {
   return `FLOW-${digits}-${letters}`;
 }
 
-export async function registerForEventAction(eventId: string): Promise<LifecycleResult> {
+export interface RegisterResult extends LifecycleResult {
+  attendanceId?: string;
+}
+
+export async function registerForEventAction(eventId: string): Promise<RegisterResult> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -441,12 +445,16 @@ export async function registerForEventAction(eventId: string): Promise<Lifecycle
 
   const { data: event } = await supabase.from("events").select("ticket_price_cents").eq("id", eventId).maybeSingle();
 
-  const { error } = await supabase.from("event_attendance").insert({
-    event_id: eventId,
-    profile_id: user.id,
-    checkin_code: generateCheckinCode(),
-    price_cents: event?.ticket_price_cents ?? 0,
-  });
+  const { data, error } = await supabase
+    .from("event_attendance")
+    .insert({
+      event_id: eventId,
+      profile_id: user.id,
+      checkin_code: generateCheckinCode(),
+      price_cents: event?.ticket_price_cents ?? 0,
+    })
+    .select("id")
+    .single();
 
   if (error) {
     if (error.code === "23505") return { error: "You're already registered for this event." };
@@ -455,7 +463,7 @@ export async function registerForEventAction(eventId: string): Promise<Lifecycle
 
   revalidatePath(`/events/${eventId}`);
   revalidatePath("/tickets");
-  return {};
+  return { attendanceId: data.id };
 }
 
 export async function cancelEventRegistrationAction(attendanceId: string): Promise<LifecycleResult> {

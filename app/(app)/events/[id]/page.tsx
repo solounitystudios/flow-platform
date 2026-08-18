@@ -2,18 +2,22 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, BadgeCheck, Calendar, MapPin, Users2 } from "lucide-react";
-import { mockEvents } from "@/lib/mock/data";
+import { getCurrentUser } from "@/lib/data/profile";
+import { getEventDetail } from "@/lib/data/events";
 import { Badge } from "@/components/ui/Badge";
 import { Card, CardBody } from "@/components/ui/Card";
 import { RegisterButton } from "@/components/events/RegisterButton";
+import { RealRegisterButton } from "@/components/events/RealRegisterButton";
 import { formatDateTime } from "@/lib/utils";
 
 export default async function EventDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const event = mockEvents.find((e) => e.id === id);
+  const user = await getCurrentUser();
+  const event = await getEventDetail(id, user?.id ?? null);
   if (!event) notFound();
 
   const spotsLeft = event.capacity - event.registered;
+  const hasCapacityLimit = event.capacity < 999999;
   const isUpcoming = event.status === "published";
 
   return (
@@ -46,10 +50,27 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
           <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-3">
             <InfoRow icon={<Calendar className="h-4 w-4" />} label="When" value={formatDateTime(event.starts_at)} />
             <InfoRow icon={<MapPin className="h-4 w-4" />} label="Where" value={`${event.venue}, ${event.city}`} />
-            <InfoRow icon={<Users2 className="h-4 w-4" />} label="Capacity" value={`${event.registered} going · ${spotsLeft} spots left`} />
+            <InfoRow
+              icon={<Users2 className="h-4 w-4" />}
+              label="Capacity"
+              value={`${event.registered} going${hasCapacityLimit && spotsLeft > 0 ? ` · ${spotsLeft} spots left` : ""}`}
+            />
           </div>
 
-          {isUpcoming ? <RegisterButton price_cents={event.price_cents} full /> : <p className="text-sm text-ink-400">This event has already happened.</p>}
+          {isUpcoming ? (
+            event.source === "real" ? (
+              <RealRegisterButton
+                eventId={event.id}
+                isOwner={event.isOwner}
+                priceCents={event.price_cents}
+                initialAttendance={event.myAttendance ? { id: event.myAttendance.id, status: event.myAttendance.status } : null}
+              />
+            ) : (
+              <RegisterButton price_cents={event.price_cents} full />
+            )
+          ) : (
+            <p className="text-sm text-ink-400">This event has already happened.</p>
+          )}
         </CardBody>
       </Card>
     </div>
