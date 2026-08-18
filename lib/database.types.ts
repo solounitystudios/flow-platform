@@ -6,6 +6,12 @@ export type Database = {
   };
   public: {
     Tables: {
+      achievements: {
+        Row: { description: string; icon: string; key: string; points_bonus: number; title: string };
+        Insert: { description: string; icon: string; key: string; points_bonus?: number; title: string };
+        Update: { description?: string; icon?: string; key?: string; points_bonus?: number; title?: string };
+        Relationships: [];
+      };
       applications: {
         Row: {
           accepted_at: string | null;
@@ -50,71 +56,129 @@ export type Database = {
       };
       event_attendance: {
         Row: {
+          cancelled_at: string | null;
+          check_in_method: string | null;
           checked_in_at: string | null;
+          checked_in_by: string | null;
+          checkin_code: string;
           event_id: string;
+          id: string;
+          price_cents: number;
           profile_id: string;
+          reserved_at: string;
           status: string;
+          ticket_type: string;
         };
         Insert: {
+          cancelled_at?: string | null;
+          check_in_method?: string | null;
           checked_in_at?: string | null;
+          checked_in_by?: string | null;
+          checkin_code: string;
           event_id: string;
+          id?: string;
+          price_cents?: number;
           profile_id: string;
+          reserved_at?: string;
           status?: string;
+          ticket_type?: string;
         };
         Update: {
+          cancelled_at?: string | null;
+          check_in_method?: string | null;
           checked_in_at?: string | null;
+          checked_in_by?: string | null;
+          checkin_code?: string;
           event_id?: string;
+          id?: string;
+          price_cents?: number;
           profile_id?: string;
+          reserved_at?: string;
           status?: string;
+          ticket_type?: string;
         };
         Relationships: [
+          { foreignKeyName: "event_attendance_checked_in_by_fkey"; columns: ["checked_in_by"]; isOneToOne: false; referencedRelation: "profiles"; referencedColumns: ["id"] },
           { foreignKeyName: "event_attendance_event_id_fkey"; columns: ["event_id"]; isOneToOne: false; referencedRelation: "events"; referencedColumns: ["id"] },
           { foreignKeyName: "event_attendance_profile_id_fkey"; columns: ["profile_id"]; isOneToOne: false; referencedRelation: "profiles"; referencedColumns: ["id"] },
         ];
       };
       events: {
         Row: {
+          address: string | null;
+          age_restriction: string | null;
           capacity: number | null;
+          category: string | null;
           city: string;
           created_at: string;
           created_by: string;
           description: string | null;
           ends_at: string | null;
+          featured: boolean;
           id: string;
+          image_url: string | null;
+          is_paid: boolean;
+          is_public: boolean;
+          lat: number | null;
+          lng: number | null;
           organization_id: string | null;
           starts_at: string;
           state: string;
           status: string;
+          tags: string[] | null;
+          ticket_price_cents: number | null;
           title: string;
           venue: string | null;
         };
         Insert: {
+          address?: string | null;
+          age_restriction?: string | null;
           capacity?: number | null;
+          category?: string | null;
           city?: string;
           created_at?: string;
           created_by: string;
           description?: string | null;
           ends_at?: string | null;
+          featured?: boolean;
           id?: string;
+          image_url?: string | null;
+          is_paid?: boolean;
+          is_public?: boolean;
+          lat?: number | null;
+          lng?: number | null;
           organization_id?: string | null;
           starts_at: string;
           state?: string;
           status?: string;
+          tags?: string[] | null;
+          ticket_price_cents?: number | null;
           title: string;
           venue?: string | null;
         };
         Update: {
+          address?: string | null;
+          age_restriction?: string | null;
           capacity?: number | null;
+          category?: string | null;
           city?: string;
           created_at?: string;
           created_by?: string;
           description?: string | null;
           ends_at?: string | null;
+          featured?: boolean;
           id?: string;
+          image_url?: string | null;
+          is_paid?: boolean;
+          is_public?: boolean;
+          lat?: number | null;
+          lng?: number | null;
           organization_id?: string | null;
           starts_at?: string;
           state?: string;
           status?: string;
+          tags?: string[] | null;
+          ticket_price_cents?: number | null;
           title?: string;
           venue?: string | null;
         };
@@ -129,67 +193,51 @@ export type Database = {
           created_at: string;
           description: string | null;
           entry_type: string;
+          event_id: string | null;
           id: string;
           opportunity_id: string | null;
           points: number;
           profile_id: string;
+          redemption_id: string | null;
+          source: string | null;
         };
         Insert: {
           amount_cents?: number;
           created_at?: string;
           description?: string | null;
           entry_type: string;
+          event_id?: string | null;
           id?: string;
           opportunity_id?: string | null;
           points?: number;
           profile_id: string;
+          redemption_id?: string | null;
+          source?: string | null;
         };
         Update: {
           amount_cents?: number;
           created_at?: string;
           description?: string | null;
           entry_type?: string;
+          event_id?: string | null;
           id?: string;
           opportunity_id?: string | null;
           points?: number;
           profile_id?: string;
+          redemption_id?: string | null;
+          source?: string | null;
         };
         Relationships: [
+          { foreignKeyName: "flow_ledger_event_id_fkey"; columns: ["event_id"]; isOneToOne: false; referencedRelation: "events"; referencedColumns: ["id"] },
           { foreignKeyName: "flow_ledger_opportunity_id_fkey"; columns: ["opportunity_id"]; isOneToOne: false; referencedRelation: "opportunities"; referencedColumns: ["id"] },
           { foreignKeyName: "flow_ledger_profile_id_fkey"; columns: ["profile_id"]; isOneToOne: false; referencedRelation: "profiles"; referencedColumns: ["id"] },
+          { foreignKeyName: "flow_ledger_redemption_id_fkey"; columns: ["redemption_id"]; isOneToOne: false; referencedRelation: "reward_redemptions"; referencedColumns: ["id"] },
         ];
       };
       notifications: {
-        Row: {
-          body: string | null;
-          created_at: string;
-          href: string | null;
-          id: string;
-          profile_id: string;
-          read: boolean;
-          title: string;
-          type: string;
-        };
-        Insert: {
-          body?: string | null;
-          created_at?: string;
-          href?: string | null;
-          id?: string;
-          profile_id: string;
-          read?: boolean;
-          title: string;
-          type: string;
-        };
-        Update: {
-          body?: string | null;
-          created_at?: string;
-          href?: string | null;
-          id?: string;
-          profile_id?: string;
-          read?: boolean;
-          title?: string;
-          type?: string;
-        };
+        Row: { body: string | null; created_at: string; href: string | null; id: string; profile_id: string; read: boolean; title: string; type: string };
+        Insert: { body?: string | null; created_at?: string; href?: string | null; id?: string; profile_id: string; read?: boolean; title: string; type: string };
+        Update: { body?: string | null; created_at?: string; href?: string | null; id?: string; profile_id?: string; read?: boolean; title?: string; type?: string };
         Relationships: [
           { foreignKeyName: "notifications_profile_id_fkey"; columns: ["profile_id"]; isOneToOne: false; referencedRelation: "profiles"; referencedColumns: ["id"] },
         ];
@@ -273,8 +321,10 @@ export type Database = {
           description: string | null;
           id: string;
           name: string;
+          org_type: string;
           owner_id: string;
           state: string | null;
+          verification_requested_at: string | null;
           verified: boolean;
         };
         Insert: {
@@ -283,8 +333,10 @@ export type Database = {
           description?: string | null;
           id?: string;
           name: string;
+          org_type?: string;
           owner_id: string;
           state?: string | null;
+          verification_requested_at?: string | null;
           verified?: boolean;
         };
         Update: {
@@ -293,33 +345,29 @@ export type Database = {
           description?: string | null;
           id?: string;
           name?: string;
+          org_type?: string;
           owner_id?: string;
           state?: string | null;
+          verification_requested_at?: string | null;
           verified?: boolean;
         };
         Relationships: [
           { foreignKeyName: "organizations_owner_id_fkey"; columns: ["owner_id"]; isOneToOne: false; referencedRelation: "profiles"; referencedColumns: ["id"] },
         ];
       };
+      profile_achievements: {
+        Row: { achievement_key: string; earned_at: string; profile_id: string };
+        Insert: { achievement_key: string; earned_at?: string; profile_id: string };
+        Update: { achievement_key?: string; earned_at?: string; profile_id?: string };
+        Relationships: [
+          { foreignKeyName: "profile_achievements_achievement_key_fkey"; columns: ["achievement_key"]; isOneToOne: false; referencedRelation: "achievements"; referencedColumns: ["key"] },
+          { foreignKeyName: "profile_achievements_profile_id_fkey"; columns: ["profile_id"]; isOneToOne: false; referencedRelation: "profiles"; referencedColumns: ["id"] },
+        ];
+      };
       profile_skills: {
-        Row: {
-          profile_id: string;
-          skill_id: string;
-          verified: boolean;
-          verified_at: string | null;
-        };
-        Insert: {
-          profile_id: string;
-          skill_id: string;
-          verified?: boolean;
-          verified_at?: string | null;
-        };
-        Update: {
-          profile_id?: string;
-          skill_id?: string;
-          verified?: boolean;
-          verified_at?: string | null;
-        };
+        Row: { profile_id: string; skill_id: string; verified: boolean; verified_at: string | null };
+        Insert: { profile_id: string; skill_id: string; verified?: boolean; verified_at?: string | null };
+        Update: { profile_id?: string; skill_id?: string; verified?: boolean; verified_at?: string | null };
         Relationships: [
           { foreignKeyName: "profile_skills_profile_id_fkey"; columns: ["profile_id"]; isOneToOne: false; referencedRelation: "profiles"; referencedColumns: ["id"] },
           { foreignKeyName: "profile_skills_skill_id_fkey"; columns: ["skill_id"]; isOneToOne: false; referencedRelation: "skills"; referencedColumns: ["id"] },
@@ -410,25 +458,72 @@ export type Database = {
           { foreignKeyName: "recommendations_recipient_id_fkey"; columns: ["recipient_id"]; isOneToOne: false; referencedRelation: "profiles"; referencedColumns: ["id"] },
         ];
       };
-      skills: {
+      reward_redemptions: {
+        Row: { created_at: string; id: string; points_spent: number; profile_id: string; redemption_code: string; reward_id: string; status: string };
+        Insert: { created_at?: string; id?: string; points_spent: number; profile_id: string; redemption_code: string; reward_id: string; status?: string };
+        Update: { created_at?: string; id?: string; points_spent?: number; profile_id?: string; redemption_code?: string; reward_id?: string; status?: string };
+        Relationships: [
+          { foreignKeyName: "reward_redemptions_profile_id_fkey"; columns: ["profile_id"]; isOneToOne: false; referencedRelation: "profiles"; referencedColumns: ["id"] },
+          { foreignKeyName: "reward_redemptions_reward_id_fkey"; columns: ["reward_id"]; isOneToOne: false; referencedRelation: "rewards"; referencedColumns: ["id"] },
+        ];
+      };
+      rewards: {
         Row: {
-          category: string | null;
           created_at: string;
+          created_by: string | null;
+          description: string | null;
+          eligibility: string | null;
+          ends_at: string | null;
           id: string;
-          name: string;
+          inventory: number | null;
+          partner: string;
+          points_required: number;
+          redeemed_count: number;
+          redemption_instructions: string | null;
+          starts_at: string | null;
+          status: string;
+          title: string;
         };
         Insert: {
-          category?: string | null;
           created_at?: string;
+          created_by?: string | null;
+          description?: string | null;
+          eligibility?: string | null;
+          ends_at?: string | null;
           id?: string;
-          name: string;
+          inventory?: number | null;
+          partner: string;
+          points_required: number;
+          redeemed_count?: number;
+          redemption_instructions?: string | null;
+          starts_at?: string | null;
+          status?: string;
+          title: string;
         };
         Update: {
-          category?: string | null;
           created_at?: string;
+          created_by?: string | null;
+          description?: string | null;
+          eligibility?: string | null;
+          ends_at?: string | null;
           id?: string;
-          name?: string;
+          inventory?: number | null;
+          partner?: string;
+          points_required?: number;
+          redeemed_count?: number;
+          redemption_instructions?: string | null;
+          starts_at?: string | null;
+          status?: string;
+          title?: string;
         };
+        Relationships: [
+          { foreignKeyName: "rewards_created_by_fkey"; columns: ["created_by"]; isOneToOne: false; referencedRelation: "profiles"; referencedColumns: ["id"] },
+        ];
+      };
+      skills: {
+        Row: { category: string | null; created_at: string; id: string; name: string };
+        Insert: { category?: string | null; created_at?: string; id?: string; name: string };
+        Update: { category?: string | null; created_at?: string; id?: string; name?: string };
         Relationships: [];
       };
       verifications: {
@@ -496,7 +591,14 @@ export type Database = {
         Relationships: [];
       };
     };
-    Functions: Record<string, never>;
+    Functions: {
+      check_in_ticket: {
+        Args: { p_checkin_code?: string; p_event_id: string; p_method?: string; p_profile_id?: string };
+        Returns: Json;
+      };
+      mark_no_show: { Args: { p_event_id: string; p_profile_id: string }; Returns: Json };
+      redeem_reward: { Args: { p_reward_id: string }; Returns: Json };
+    };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
   };
@@ -512,6 +614,7 @@ export type PassportSummary = DefaultSchema["Views"]["passport_summary"]["Row"];
 export type ReliabilityBreakdown = DefaultSchema["Views"]["reliability_breakdown"]["Row"];
 
 export type ApplicationStatus = "pending" | "accepted" | "rejected" | "withdrawn" | "completed" | "no_show" | "cancelled";
+export type AttendanceStatus = "registered" | "attended" | "no_show" | "cancelled";
 export type NotificationType =
   | "application_submitted"
   | "application_accepted"
@@ -520,4 +623,39 @@ export type NotificationType =
   | "opportunity_cancelled"
   | "gig_reminder"
   | "completion_confirmed"
-  | "recommendation_received";
+  | "recommendation_received"
+  | "ticket_reserved"
+  | "event_reminder"
+  | "event_changed"
+  | "event_cancelled"
+  | "checkin_success"
+  | "points_earned"
+  | "achievement_unlocked"
+  | "reward_redeemed";
+export type EventCategory =
+  | "Networking"
+  | "Career"
+  | "Hiring"
+  | "Community"
+  | "Music"
+  | "Arts"
+  | "Technology"
+  | "Education"
+  | "Sports/Fitness"
+  | "Entrepreneurship"
+  | "Government/Civic"
+  | "Volunteer"
+  | "FLOW Official";
+
+export interface CheckInResult {
+  ok: boolean;
+  reason?: "event_not_found" | "not_authorized" | "no_identifier" | "invalid_code" | "wrong_event" | "cancelled" | "no_show" | "already_checked_in";
+  checked_in_at?: string;
+  attendee_name?: string;
+}
+
+export interface RedeemResult {
+  ok: boolean;
+  redemption_id?: string;
+  code?: string;
+}
