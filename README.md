@@ -21,8 +21,8 @@ App runs at `http://localhost:3000`.
 
 ## What's real vs. demo data
 
-- **Real, Supabase-backed:** sign up / log in / sessions, your own profile, skills, Passport visibility and achievements, business profile creation, posting/managing opportunities and events as a business (including ticket check-in), the full opportunity and event lifecycles (apply/accept/complete, register/cancel/no-show), FLOW Points redemption, notifications, and Discover (real members with a public passport + real businesses).
-- **Demo/mock data** (`lib/mock/data.ts`): supplements the above so browse screens never look empty before the platform has enough real multi-city content — extra opportunities, events, and rewards-catalog entries are blended in alongside real rows. Connections and Messages are still fully mock/stubbed; Messages says so in the UI. These mirror the real database schema field-for-field so they can be swapped out entirely as real content grows. See `lib/mock/passport-adapter.ts` for how demo profiles resolve on `/p/[username]`.
+- **Real, Supabase-backed:** sign up / log in / sessions, your own profile, skills, Passport visibility and achievements, business profile creation, posting/managing opportunities and events as a business (including ticket check-in), the full opportunity and event lifecycles (apply/accept/complete, register/cancel/no-show), FLOW Points redemption, notifications, Discover (real members with a public passport + real businesses), and Connections (send/accept/remove real connection requests).
+- **Demo/mock data** (`lib/mock/data.ts`): supplements the above so browse screens never look empty before the platform has enough real multi-city content — extra opportunities, events, rewards-catalog entries, and Discover profiles/businesses are blended in alongside real rows. Messages is still a UI stub (no conversations/messages tables yet) and says so on the page. Mock rows mirror the real database schema field-for-field so they can be phased out as real content grows. See `lib/mock/passport-adapter.ts` for how demo profiles resolve on `/p/[username]`.
 
 ## Scripts
 
@@ -33,4 +33,4 @@ App runs at `http://localhost:3000`.
 
 ## Database
 
-Schema, RLS policies, and the `passport_summary` view live in the Supabase project (`flow-platform`). Key tables: `profiles`, `skills`, `profile_skills`, `organizations`, `opportunities`, `applications`, `events`, `event_attendance`, `recommendations`, `verifications`, `flow_ledger`.
+Schema, RLS policies, and the `passport_summary` view live in the Supabase project (`flow-platform`). Key tables: `profiles`, `skills`, `profile_skills`, `organizations`, `opportunities`, `applications`, `events`, `event_attendance`, `recommendations`, `verifications`, `flow_ledger`, `rewards`, `reward_redemptions`, `achievements`, `profile_achievements`, `connections`.
