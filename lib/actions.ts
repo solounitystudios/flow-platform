@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import type { CheckInResult, RedeemResult } from "@/lib/database.types";
 
 export interface ActionState {
   error?: string;
@@ -421,4 +422,163 @@ export async function markAllNotificationsReadAction() {
 
   await supabase.from("notifications").update({ read: true }).eq("profile_id", user.id).eq("read", false);
   revalidatePath("/notifications");
+}
+
+// ── Events & tickets ────────────────────────────────────────────────────
+
+function generateCheckinCode() {
+  const digits = Math.floor(1000 + Math.random() * 9000);
+  const letters = Array.from({ length: 2 }, () => String.fromCharCode(65 + Math.floor(Math.random() * 26))).join("");
+  return `FLOW-${digits}-${letters}`;
+}
+
+export async function registerForEventAction(eventId: string): Promise<LifecycleResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Log in to register for this event." };
+
+  const { data: event } = await supabase.from("events").select("ticket_price_cents").eq("id", eventId).maybeSingle();
+
+  const { error } = await supabase.from("event_attendance").insert({
+    event_id: eventId,
+    profile_id: user.id,
+    checkin_code: generateCheckinCode(),
+    price_cents: event?.ticket_price_cents ?? 0,
+  });
+
+  if (error) {
+    if (error.code === "23505") return { error: "You're already registered for this event." };
+    return { error: error.message };
+  }
+
+  revalidatePath(`/events/${eventId}`);
+  revalidatePath("/tickets");
+  return {};
+}
+
+export async function cancelEventRegistrationAction(attendanceId: string): Promise<LifecycleResult> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("event_attendance").update({ status: "cancelled", cancelled_at: new Date().toISOString() }).eq("id", attendanceId);
+  if (error) return { error: error.message };
+
+  revalidatePath("/tickets");
+  return {};
+}
+
+export interface CheckInActionResult {
+  error?: string;
+  result?: CheckInResult;
+}
+
+export async function checkInByCodeAction(eventId: string, code: string): Promise<CheckInActionResult> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("check_in_ticket", { p_event_id: eventId, p_checkin_code: code, p_method: "code" });
+  if (error) return { error: error.message };
+
+  revalidatePath(`/business/events/${eventId}`);
+  return { result: data as unknown as CheckInResult };
+}
+
+export async function checkInByProfileAction(eventId: string, profileId: string): Promise<CheckInActionResult> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("check_in_ticket", { p_event_id: eventId, p_profile_id: profileId, p_method: "manual" });
+  if (error) return { error: error.message };
+
+  revalidatePath(`/business/events/${eventId}`);
+  return { result: data as unknown as CheckInResult };
+}
+
+export async function markNoShowEventAction(eventId: string, profileId: string): Promise<CheckInActionResult> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("mark_no_show", { p_event_id: eventId, p_profile_id: profileId });
+  if (error) return { error: error.message };
+
+  revalidatePath(`/business/events/${eventId}`);
+  return { result: data as unknown as CheckInResult };
+}
+
+export async function createEventAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Your session expired. Please log in again." };
+
+  const title = String(formData.get("title") ?? "").trim();
+  const description = String(formData.get("description") ?? "");
+  const category = String(formData.get("category") ?? "") || null;
+  const organization_id = String(formData.get("organization_id") ?? "") || null;
+  const venue = String(formData.get("venue") ?? "") || null;
+  const address = String(formData.get("address") ?? "") || null;
+  const city = String(formData.get("city") ?? "Buffalo");
+  const state = String(formData.get("state") ?? "NY");
+  const capacityRaw = formData.get("capacity");
+  const capacity = capacityRaw ? Number(capacityRaw) : null;
+  const priceDollars = formData.get("ticket_price_dollars");
+  const ticket_price_cents = priceDollars ? Math.round(Number(priceDollars) * 100) : 0;
+  const starts_at = formData.get("starts_at") ? new Date(String(formData.get("starts_at"))).toISOString() : null;
+  const ends_at = formData.get("ends_at") ? new Date(String(formData.get("ends_at"))).toISOString() : null;
+
+  if (!title) return { error: "Give the event a title." };
+  if (!starts_at) return { error: "Set a start date and time." };
+
+  const { error } = await supabase.from("events").insert({
+    created_by: user.id,
+    organization_id,
+    title,
+    description,
+    category,
+    venue,
+    address,
+    city,
+    state,
+    capacity: capacity && capacity > 0 ? capacity : null,
+    ticket_price_cents,
+    is_paid: ticket_price_cents > 0,
+    starts_at,
+    ends_at,
+    status: "published",
+  });
+
+  if (error) return { error: error.message };
+
+  revalidatePath("/business");
+  revalidatePath("/events");
+  redirect("/business");
+}
+
+export async function updateEventStatusAction(id: string, status: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return;
+
+  await supabase.from("events").update({ status }).eq("id", id).eq("created_by", user.id);
+  revalidatePath("/business");
+  revalidatePath(`/business/events/${id}`);
+  revalidatePath("/events");
+}
+
+// ── Rewards ─────────────────────────────────────────────────────────────
+
+export interface RedeemActionResult {
+  error?: string;
+  result?: RedeemResult;
+}
+
+export async function redeemRewardAction(rewardId: string): Promise<RedeemActionResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Log in to redeem rewards." };
+
+  const { data, error } = await supabase.rpc("redeem_reward", { p_reward_id: rewardId });
+  if (error) return { error: error.message };
+
+  revalidatePath("/rewards");
+  return { result: data as unknown as RedeemResult };
 }
