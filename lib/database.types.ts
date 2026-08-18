@@ -54,13 +54,68 @@ export type Database = {
           { foreignKeyName: "applications_opportunity_id_fkey"; columns: ["opportunity_id"]; isOneToOne: false; referencedRelation: "opportunities"; referencedColumns: ["id"] },
         ];
       };
-      connections: {
-        Row: { created_at: string; id: string; recipient_id: string; requester_id: string; responded_at: string | null; status: string };
-        Insert: { created_at?: string; id?: string; recipient_id: string; requester_id: string; responded_at?: string | null; status?: string };
-        Update: { created_at?: string; id?: string; recipient_id?: string; requester_id?: string; responded_at?: string | null; status?: string };
+      admins: {
+        Row: { created_at: string; profile_id: string };
+        Insert: { created_at?: string; profile_id: string };
+        Update: { created_at?: string; profile_id?: string };
         Relationships: [
+          { foreignKeyName: "admins_profile_id_fkey"; columns: ["profile_id"]; isOneToOne: true; referencedRelation: "profiles"; referencedColumns: ["id"] },
+        ];
+      };
+      connections: {
+        Row: {
+          blocked_by: string | null;
+          created_at: string;
+          id: string;
+          recipient_id: string;
+          requester_id: string;
+          responded_at: string | null;
+          status: string;
+          updated_at: string;
+        };
+        Insert: {
+          blocked_by?: string | null;
+          created_at?: string;
+          id?: string;
+          recipient_id: string;
+          requester_id: string;
+          responded_at?: string | null;
+          status?: string;
+          updated_at?: string;
+        };
+        Update: {
+          blocked_by?: string | null;
+          created_at?: string;
+          id?: string;
+          recipient_id?: string;
+          requester_id?: string;
+          responded_at?: string | null;
+          status?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          { foreignKeyName: "connections_blocked_by_fkey"; columns: ["blocked_by"]; isOneToOne: false; referencedRelation: "profiles"; referencedColumns: ["id"] },
           { foreignKeyName: "connections_recipient_id_fkey"; columns: ["recipient_id"]; isOneToOne: false; referencedRelation: "profiles"; referencedColumns: ["id"] },
           { foreignKeyName: "connections_requester_id_fkey"; columns: ["requester_id"]; isOneToOne: false; referencedRelation: "profiles"; referencedColumns: ["id"] },
+        ];
+      };
+      connection_events: {
+        Row: { action: string; actor_id: string; created_at: string; id: string; recipient_id: string; requester_id: string };
+        Insert: { action: string; actor_id: string; created_at?: string; id?: string; recipient_id: string; requester_id: string };
+        Update: { action?: string; actor_id?: string; created_at?: string; id?: string; recipient_id?: string; requester_id?: string };
+        Relationships: [
+          { foreignKeyName: "connection_events_actor_id_fkey"; columns: ["actor_id"]; isOneToOne: false; referencedRelation: "profiles"; referencedColumns: ["id"] },
+          { foreignKeyName: "connection_events_recipient_id_fkey"; columns: ["recipient_id"]; isOneToOne: false; referencedRelation: "profiles"; referencedColumns: ["id"] },
+          { foreignKeyName: "connection_events_requester_id_fkey"; columns: ["requester_id"]; isOneToOne: false; referencedRelation: "profiles"; referencedColumns: ["id"] },
+        ];
+      };
+      connection_reports: {
+        Row: { created_at: string; details: string | null; id: string; reason: string; reported_id: string; reporter_id: string; status: string };
+        Insert: { created_at?: string; details?: string | null; id?: string; reason: string; reported_id: string; reporter_id: string; status?: string };
+        Update: { created_at?: string; details?: string | null; id?: string; reason?: string; reported_id?: string; reporter_id?: string; status?: string };
+        Relationships: [
+          { foreignKeyName: "connection_reports_reported_id_fkey"; columns: ["reported_id"]; isOneToOne: false; referencedRelation: "profiles"; referencedColumns: ["id"] },
+          { foreignKeyName: "connection_reports_reporter_id_fkey"; columns: ["reporter_id"]; isOneToOne: false; referencedRelation: "profiles"; referencedColumns: ["id"] },
         ];
       };
       event_attendance: {
@@ -601,16 +656,28 @@ export type Database = {
       };
     };
     Functions: {
+      block_profile: { Args: { p_target_id: string }; Returns: Json };
+      cancel_connection_request: { Args: { p_connection_id: string }; Returns: Json };
       check_in_ticket: {
         Args: { p_checkin_code?: string; p_event_id: string; p_method?: string; p_profile_id?: string };
         Returns: Json;
       };
       evaluate_achievements: { Args: { p_profile_id: string }; Returns: undefined };
+      get_my_blocked_profiles: {
+        Args: Record<PropertyKey, never>;
+        Returns: { avatar_url: string | null; blocked_at: string; city: string; connection_id: string; full_name: string | null; profile_id: string; state: string; username: string | null }[];
+      };
+      is_blocked_between: { Args: { a: string; b: string }; Returns: boolean };
       mark_no_show: { Args: { p_event_id: string; p_profile_id: string }; Returns: Json };
       maybe_fill_opportunity: { Args: { p_opportunity_id: string }; Returns: undefined };
       notify: { Args: { p_body: string; p_href: string; p_profile_id: string; p_title: string; p_type: string }; Returns: undefined };
       recompute_reliability: { Args: { p_profile_id: string }; Returns: undefined };
       redeem_reward: { Args: { p_reward_id: string }; Returns: Json };
+      remove_connection: { Args: { p_connection_id: string }; Returns: Json };
+      report_profile: { Args: { p_details?: string; p_reason: string; p_target_id: string }; Returns: Json };
+      respond_to_connection_request: { Args: { p_action: string; p_connection_id: string }; Returns: Json };
+      send_connection_request: { Args: { p_recipient_id: string }; Returns: Json };
+      unblock_profile: { Args: { p_target_id: string }; Returns: Json };
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
@@ -628,7 +695,16 @@ export type ReliabilityBreakdown = DefaultSchema["Views"]["reliability_breakdown
 
 export type ApplicationStatus = "pending" | "accepted" | "rejected" | "withdrawn" | "completed" | "no_show" | "cancelled";
 export type AttendanceStatus = "registered" | "attended" | "no_show" | "cancelled";
-export type ConnectionStatus = "pending" | "accepted";
+export type ConnectionStatus = "pending" | "accepted" | "blocked";
+export type ConnectionAction = "sent" | "accepted" | "declined" | "cancelled" | "removed" | "blocked" | "unblocked";
+
+export interface ConnectionRpcResult {
+  ok: boolean;
+  reason?: "not_authenticated" | "self" | "not_found" | "blocked" | "already_connected" | "already_pending" | "not_authorized" | "not_pending" | "not_connected" | "not_blocked" | "invalid_action" | "missing_reason" | "unknown_state";
+  status?: ConnectionStatus | "declined" | "cancelled" | "removed" | "unblocked";
+  connection_id?: string;
+  auto_accepted?: boolean;
+}
 export type NotificationType =
   | "application_submitted"
   | "application_accepted"
@@ -645,7 +721,9 @@ export type NotificationType =
   | "checkin_success"
   | "points_earned"
   | "achievement_unlocked"
-  | "reward_redeemed";
+  | "reward_redeemed"
+  | "connection_request"
+  | "connection_accepted";
 export type EventCategory =
   | "Networking"
   | "Career"

@@ -4,17 +4,31 @@ import { useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import { PersonCard } from "@/components/social/PersonCard";
 import { OrganizationCard } from "@/components/social/OrganizationCard";
+import { ConnectionControl } from "@/components/social/ConnectionControl";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { isUuid } from "@/lib/geo";
 import { cn } from "@/lib/utils";
 import type { MockOrganization, MockPerson } from "@/lib/types";
+import type { ConnectionState } from "@/lib/data/connections";
 
 type DiscoverPerson = Pick<MockPerson, "id" | "username" | "full_name" | "avatar_url" | "city" | "state" | "bio" | "reliability_score" | "available_now">;
 
 const TABS = ["People", "Businesses"] as const;
 
-export function DiscoverBrowser({ people, orgs }: { people: DiscoverPerson[]; orgs: MockOrganization[] }) {
+export function DiscoverBrowser({
+  people,
+  orgs,
+  viewerId,
+  statuses,
+}: {
+  people: DiscoverPerson[];
+  orgs: MockOrganization[];
+  viewerId: string | null;
+  statuses: [string, ConnectionState][];
+}) {
   const [tab, setTab] = useState<(typeof TABS)[number]>("People");
   const [query, setQuery] = useState("");
+  const statusMap = useMemo(() => new Map(statuses), [statuses]);
 
   const filteredPeople = useMemo(
     () => people.filter((p) => [p.full_name, p.username, p.bio].join(" ").toLowerCase().includes(query.toLowerCase())),
@@ -56,9 +70,27 @@ export function DiscoverBrowser({ people, orgs }: { people: DiscoverPerson[]; or
       {tab === "People" ? (
         filteredPeople.length > 0 ? (
           <div className="grid gap-3 sm:grid-cols-2">
-            {filteredPeople.map((p) => (
-              <PersonCard key={p.id} person={p} />
-            ))}
+            {filteredPeople.map((p) => {
+              const connectable = viewerId && p.id !== viewerId && isUuid(p.id);
+              const state = statusMap.get(p.id);
+              return (
+                <PersonCard
+                  key={p.id}
+                  person={p}
+                  action={
+                    connectable && state?.status !== "blocked" ? (
+                      <ConnectionControl
+                        personId={p.id}
+                        personName={p.full_name}
+                        initialStatus={state?.status ?? "suggested"}
+                        initialConnectionId={state?.connectionId ?? null}
+                        size="sm"
+                      />
+                    ) : undefined
+                  }
+                />
+              );
+            })}
           </div>
         ) : (
           <EmptyState title="No members found" body="Try a different search term." />

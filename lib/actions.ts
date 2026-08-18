@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import type { CheckInResult, RedeemResult } from "@/lib/database.types";
+import type { CheckInResult, RedeemResult, ConnectionRpcResult } from "@/lib/database.types";
 
 export interface ActionState {
   error?: string;
@@ -592,44 +592,89 @@ export async function redeemRewardAction(rewardId: string): Promise<RedeemAction
 }
 
 // ── Connections ─────────────────────────────────────────────────────────
+// Every mutation goes through a SECURITY DEFINER RPC (see the harden_connections
+// migration) — the client never writes to the connections table directly, so
+// the state machine and race-condition handling live in one place, in the DB.
 
-export interface ConnectionActionResult extends LifecycleResult {
+export interface ConnectionActionResult {
+  error?: string;
+  status?: string;
   connectionId?: string;
+  autoAccepted?: boolean;
+}
+
+const CONNECTION_ERROR_TEXT: Record<string, string> = {
+  not_authenticated: "Log in to manage connections.",
+  self: "You can't do that with your own profile.",
+  not_found: "That profile or request couldn't be found.",
+  blocked: "You can't connect with this member.",
+  already_connected: "You're already connected with this person.",
+  already_pending: "You already have a pending request with this person.",
+  not_authorized: "You're not able to do that.",
+  not_pending: "That request has already been handled.",
+  not_connected: "You're not connected with this person.",
+  not_blocked: "This member isn't blocked.",
+  invalid_action: "That action isn't supported.",
+  missing_reason: "Choose a reason before submitting your report.",
+  unknown_state: "Something went wrong. Try again.",
+};
+
+function toConnectionResult(data: unknown, error: { message: string } | null): ConnectionActionResult {
+  if (error) return { error: error.message };
+
+  const result = data as unknown as ConnectionRpcResult;
+  if (!result.ok) return { error: CONNECTION_ERROR_TEXT[result.reason ?? ""] ?? "Something went wrong. Try again." };
+
+  revalidatePath("/connections");
+  revalidatePath("/discover");
+  revalidatePath("/p", "layout");
+  return { status: result.status, connectionId: result.connection_id, autoAccepted: result.auto_accepted };
 }
 
 export async function sendConnectionRequestAction(recipientId: string): Promise<ConnectionActionResult> {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "Log in to connect with other members." };
-  if (user.id === recipientId) return { error: "You can't connect with yourself." };
-
-  const { data, error } = await supabase.from("connections").insert({ requester_id: user.id, recipient_id: recipientId }).select("id").single();
-
-  if (error) {
-    if (error.code === "23505") return { error: "You already have a connection with this person." };
-    return { error: error.message };
-  }
-
-  revalidatePath("/connections");
-  return { connectionId: data.id };
+  const { data, error } = await supabase.rpc("send_connection_request", { p_recipient_id: recipientId });
+  return toConnectionResult(data, error);
 }
 
-export async function acceptConnectionRequestAction(connectionId: string): Promise<LifecycleResult> {
+export async function acceptConnectionRequestAction(connectionId: string): Promise<ConnectionActionResult> {
   const supabase = await createClient();
-  const { error } = await supabase.from("connections").update({ status: "accepted", responded_at: new Date().toISOString() }).eq("id", connectionId);
-  if (error) return { error: error.message };
-
-  revalidatePath("/connections");
-  return {};
+  const { data, error } = await supabase.rpc("respond_to_connection_request", { p_connection_id: connectionId, p_action: "accept" });
+  return toConnectionResult(data, error);
 }
 
-export async function removeConnectionAction(connectionId: string): Promise<LifecycleResult> {
+export async function declineConnectionRequestAction(connectionId: string): Promise<ConnectionActionResult> {
   const supabase = await createClient();
-  const { error } = await supabase.from("connections").delete().eq("id", connectionId);
-  if (error) return { error: error.message };
+  const { data, error } = await supabase.rpc("respond_to_connection_request", { p_connection_id: connectionId, p_action: "decline" });
+  return toConnectionResult(data, error);
+}
 
-  revalidatePath("/connections");
-  return {};
+export async function cancelConnectionRequestAction(connectionId: string): Promise<ConnectionActionResult> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("cancel_connection_request", { p_connection_id: connectionId });
+  return toConnectionResult(data, error);
+}
+
+export async function removeConnectionAction(connectionId: string): Promise<ConnectionActionResult> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("remove_connection", { p_connection_id: connectionId });
+  return toConnectionResult(data, error);
+}
+
+export async function blockProfileAction(targetId: string): Promise<ConnectionActionResult> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("block_profile", { p_target_id: targetId });
+  return toConnectionResult(data, error);
+}
+
+export async function unblockProfileAction(targetId: string): Promise<ConnectionActionResult> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("unblock_profile", { p_target_id: targetId });
+  return toConnectionResult(data, error);
+}
+
+export async function reportProfileAction(targetId: string, reason: string, details?: string): Promise<ConnectionActionResult> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("report_profile", { p_target_id: targetId, p_reason: reason, p_details: details ?? undefined });
+  return toConnectionResult(data, error);
 }
