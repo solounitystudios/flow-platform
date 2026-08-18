@@ -135,7 +135,7 @@ export function ChatScreen({ conversationId, viewer, meta, initialMessages }: { 
               <div className={cn("flex max-w-[75%] flex-col gap-0.5", isMine ? "items-end" : "items-start")}>
                 <div
                   className={cn(
-                    "rounded-2xl px-3.5 py-2 text-sm",
+                    "rounded-2xl px-3.5 py-2 text-sm break-words",
                     isDeleted
                       ? "italic text-ink-400 border border-dashed border-ink-200 dark:border-ink-700"
                       : isMine

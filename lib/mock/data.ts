@@ -1,8 +1,6 @@
 import type {
   MockActivityItem,
   MockEvent,
-  MockLedgerEntry,
-  MockNotification,
   MockOpportunity,
   MockOrganization,
   MockPerson,
@@ -105,27 +103,6 @@ export const mockActivity: MockActivityItem[] = [
   { id: "act-5", type: "project", actor: { id: "p-3", full_name: "Theo Chen", avatar_url: avatar("theo"), username: "tchen" }, summary: "started a community video project", created_at: agoDays(3) },
   { id: "act-6", type: "connection", actor: { id: "p-8", full_name: "Maya Ferreira", avatar_url: avatar("maya"), username: "mferreira" }, summary: "connected with Kiran Patel", created_at: agoDays(4) },
   { id: "act-7", type: "points_earned", actor: { id: "p-1", full_name: "Jordan Martinez", avatar_url: avatar("jordan"), username: "jmartinez" }, summary: "earned FLOW Points for a completed gig", created_at: agoDays(5), points: 60 },
-];
-
-export const mockNotifications: MockNotification[] = [
-  { id: "notif-1", type: "opportunity", title: "New gig near you", body: "Two servers needed tonight at The Dockside Tavern — 1.2 mi away.", created_at: agoHrs(1), read: false, href: "/gigs/opp-1" },
-  { id: "notif-2", type: "social", title: "New recommendation", body: "Lena Nowak left you a recommendation.", created_at: agoDays(1), read: false, href: "/passport" },
-  { id: "notif-3", type: "event", title: "Event starting soon", body: "Front Park Cleanup + Cookout starts in 45 minutes.", created_at: agoMinAbs(50), read: false, href: "/events/evt-5" },
-  { id: "notif-4", type: "payment", title: "Payout sent", body: "$140.00 was deposited for your Dockside Tavern bartending gig.", created_at: agoDays(2), read: true, href: "/rewards" },
-  { id: "notif-5", type: "system", title: "Skill verified", body: "Your Photography skill was verified by Queen City Studios.", created_at: agoDays(3), read: true, href: "/passport" },
-  { id: "notif-6", type: "opportunity", title: "Application accepted", body: "You're confirmed for the Larkin Square networking mixer host role.", created_at: agoDays(4), read: true, href: "/gigs/opp-6" },
-];
-
-function agoMinAbs(min: number) {
-  return new Date(Date.now() - min * 60_000).toISOString();
-}
-
-export const mockLedger: MockLedgerEntry[] = [
-  { id: "led-1", entry_type: "earning", amount_cents: 14000, points: 60, description: "Bartending — The Dockside Tavern", created_at: agoDays(2) },
-  { id: "led-2", entry_type: "reward", amount_cents: 0, points: 25, description: "Skill verified: Photography", created_at: agoDays(3) },
-  { id: "led-3", entry_type: "earning", amount_cents: 22000, points: 40, description: "Product shoot — Queen City Studios", created_at: agoDays(8) },
-  { id: "led-4", entry_type: "reward", amount_cents: 0, points: 15, description: "Event attended: Sunrise Community Workout", created_at: agoDays(9) },
-  { id: "led-5", entry_type: "adjustment", amount_cents: 0, points: 100, description: "Founding member bonus", created_at: agoDays(20) },
 ];
 
 export const REWARDS_CATALOG = [

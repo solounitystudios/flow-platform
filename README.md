@@ -35,6 +35,8 @@ App runs at `http://localhost:3000`.
 
 Schema, RLS policies, and the `passport_summary` view live in the Supabase project (`flow-platform`). Key tables: `profiles`, `skills`, `profile_skills`, `organizations`, `opportunities`, `applications`, `events`, `event_attendance`, `recommendations`, `verifications`, `flow_ledger`, `rewards`, `reward_redemptions`, `achievements`, `profile_achievements`, `connections`, `connection_events`, `connection_reports`, `admins`, `conversations`, `conversation_members`, `messages`.
 
+Migrations for the Connections and Messages work live in `supabase/migrations/` — see that directory's `README.md` for what is and isn't captured there yet.
+
 ### Connections & blocking
 
 `connections` holds one canonical row per unordered pair of profiles (a unique index on `least`/`greatest` of the two ids enforces this) with a live `status` of `pending`, `accepted`, or `blocked`. Every mutation goes through a `SECURITY DEFINER` RPC — the client has no direct INSERT/UPDATE/DELETE grant on the table at all:

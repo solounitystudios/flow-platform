@@ -99,22 +99,3 @@ export interface MockActivityItem {
   created_at: string;
   points?: number;
 }
-
-export interface MockNotification {
-  id: string;
-  type: "opportunity" | "event" | "social" | "system" | "payment";
-  title: string;
-  body: string;
-  created_at: string;
-  read: boolean;
-  href?: string;
-}
-
-export interface MockLedgerEntry {
-  id: string;
-  entry_type: "earning" | "reward" | "adjustment";
-  amount_cents: number;
-  points: number;
-  description: string;
-  created_at: string;
-}
