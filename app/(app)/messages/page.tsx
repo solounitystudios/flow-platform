@@ -1,11 +1,17 @@
+import { redirect } from "next/navigation";
 import { MessageCircle } from "lucide-react";
-import { mockConnections } from "@/lib/mock/data";
+import { getCurrentUser } from "@/lib/data/profile";
+import { getMyConnections } from "@/lib/data/connections";
 import { Avatar } from "@/components/ui/Avatar";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Badge } from "@/components/ui/Badge";
 
-export default function MessagesPage() {
-  const threads = mockConnections.filter((c) => c.status === "connected");
+export default async function MessagesPage() {
+  const user = await getCurrentUser();
+  if (!user) redirect("/login");
+
+  const connections = await getMyConnections(user.id);
+  const threads = connections.filter((c) => c.status === "accepted");
 
   return (
     <div className="grid gap-4 lg:grid-cols-[300px_1fr]">

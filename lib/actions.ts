@@ -590,3 +590,46 @@ export async function redeemRewardAction(rewardId: string): Promise<RedeemAction
   revalidatePath("/rewards");
   return { result: data as unknown as RedeemResult };
 }
+
+// ── Connections ─────────────────────────────────────────────────────────
+
+export interface ConnectionActionResult extends LifecycleResult {
+  connectionId?: string;
+}
+
+export async function sendConnectionRequestAction(recipientId: string): Promise<ConnectionActionResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Log in to connect with other members." };
+  if (user.id === recipientId) return { error: "You can't connect with yourself." };
+
+  const { data, error } = await supabase.from("connections").insert({ requester_id: user.id, recipient_id: recipientId }).select("id").single();
+
+  if (error) {
+    if (error.code === "23505") return { error: "You already have a connection with this person." };
+    return { error: error.message };
+  }
+
+  revalidatePath("/connections");
+  return { connectionId: data.id };
+}
+
+export async function acceptConnectionRequestAction(connectionId: string): Promise<LifecycleResult> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("connections").update({ status: "accepted", responded_at: new Date().toISOString() }).eq("id", connectionId);
+  if (error) return { error: error.message };
+
+  revalidatePath("/connections");
+  return {};
+}
+
+export async function removeConnectionAction(connectionId: string): Promise<LifecycleResult> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("connections").delete().eq("id", connectionId);
+  if (error) return { error: error.message };
+
+  revalidatePath("/connections");
+  return {};
+}

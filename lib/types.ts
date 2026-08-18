@@ -82,28 +82,12 @@ export interface MockEvent {
   category: string;
 }
 
-export interface MockTicket {
-  id: string;
-  event: MockEvent;
-  ticket_code: string;
-  tier: string;
-  purchased_at: string;
-  status: "valid" | "used" | "refunded";
-}
-
 export interface MockRecommendation {
   id: string;
   author: Pick<MockPerson, "id" | "full_name" | "avatar_url" | "username">;
   body: string;
   context: string;
   created_at: string;
-}
-
-export interface MockConnection {
-  person: Pick<MockPerson, "id" | "full_name" | "avatar_url" | "username" | "city" | "state" | "reliability_score">;
-  mutuals: number;
-  connected_since: string;
-  status: "connected" | "pending_incoming" | "pending_outgoing" | "suggested";
 }
 
 export interface MockActivityItem {

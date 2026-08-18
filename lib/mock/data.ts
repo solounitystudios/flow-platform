@@ -1,6 +1,5 @@
 import type {
   MockActivityItem,
-  MockConnection,
   MockEvent,
   MockLedgerEntry,
   MockNotification,
@@ -8,7 +7,6 @@ import type {
   MockOrganization,
   MockPerson,
   MockRecommendation,
-  MockTicket,
 } from "@/lib/types";
 
 // All content below is realistic seed/demo data for Buffalo, NY — FLOW's pilot city.
@@ -77,13 +75,6 @@ export const mockEvents: MockEvent[] = [
   { id: "evt-7", organization: org("org-3"), title: "FLOW Passport Launch Party", description: "Celebrate the launch of FLOW in Buffalo — meet the founding members.", city: "Buffalo", state: "NY", venue: "Larkin Square", lat: 42.8721, lng: -78.8586, starts_at: agoDays(18), ends_at: agoDays(18), capacity: 300, registered: 300, status: "completed", cover_url: avatar("flow-launch"), price_cents: 0, category: "Community" },
 ];
 
-export const mockTickets: MockTicket[] = [
-  { id: "tix-1", event: mockEvents[0], ticket_code: "FLOW-8832-KQ", tier: "General Admission", purchased_at: agoDays(2), status: "valid" },
-  { id: "tix-2", event: mockEvents[1], ticket_code: "FLOW-1190-VZ", tier: "General Admission", purchased_at: agoDays(1), status: "valid" },
-  { id: "tix-3", event: mockEvents[5], ticket_code: "FLOW-4471-LP", tier: "General Admission", purchased_at: agoDays(6), status: "used" },
-  { id: "tix-4", event: mockEvents[6], ticket_code: "FLOW-0021-AA", tier: "Founding Member", purchased_at: agoDays(20), status: "used" },
-];
-
 const skillSet = (names: [string, boolean, string][]) => names.map(([name, verified, category]) => ({ name, verified, category }));
 
 export const mockPeople: MockPerson[] = [
@@ -104,16 +95,6 @@ export const mockRecommendations: MockRecommendation[] = [
   { id: "rec-1", author: { id: "p-2", full_name: "Amara Okafor", avatar_url: avatar("amara"), username: "aokafor" }, body: "Jordan showed up early, worked the whole load-in without being asked twice, and made the whole crew's night easier. Would work with them again any time.", context: "Stagehand — Shea's Theatre", created_at: agoDays(9) },
   { id: "rec-2", author: { id: "p-6", full_name: "Lena Nowak", avatar_url: avatar("lena"), username: "lnowak" }, body: "Organized the whole photo wall for our cleanup event on no notice. Reliable, kind, and genuinely great with people.", context: "Front Park Cleanup", created_at: agoDays(24) },
   { id: "rec-3", author: { id: "p-4", full_name: "Riley Washington", avatar_url: avatar("riley"), username: "rwashington" }, body: "Covered a shift for me with two hours notice and didn't miss a beat.", context: "Bartending — The Dockside Tavern", created_at: agoDays(41) },
-];
-
-export const mockConnections: MockConnection[] = [
-  { person: { id: "p-2", full_name: "Amara Okafor", avatar_url: avatar("amara"), username: "aokafor", city: "Buffalo", state: "NY", reliability_score: 100 }, mutuals: 6, connected_since: agoDays(120), status: "connected" },
-  { person: { id: "p-4", full_name: "Riley Washington", avatar_url: avatar("riley"), username: "rwashington", city: "Buffalo", state: "NY", reliability_score: 99 }, mutuals: 3, connected_since: agoDays(80), status: "connected" },
-  { person: { id: "p-6", full_name: "Lena Nowak", avatar_url: avatar("lena"), username: "lnowak", city: "Buffalo", state: "NY", reliability_score: 100 }, mutuals: 9, connected_since: agoDays(200), status: "connected" },
-  { person: { id: "p-3", full_name: "Theo Chen", avatar_url: avatar("theo"), username: "tchen", city: "Buffalo", state: "NY", reliability_score: 96 }, mutuals: 2, connected_since: "", status: "pending_incoming" },
-  { person: { id: "p-8", full_name: "Maya Ferreira", avatar_url: avatar("maya"), username: "mferreira", city: "Buffalo", state: "NY", reliability_score: 97 }, mutuals: 1, connected_since: "", status: "pending_outgoing" },
-  { person: { id: "p-5", full_name: "Kiran Patel", avatar_url: avatar("kiran"), username: "kpatel", city: "Buffalo", state: "NY", reliability_score: 94 }, mutuals: 4, connected_since: "", status: "suggested" },
-  { person: { id: "p-7", full_name: "Diego Santos", avatar_url: avatar("diego"), username: "dsantos", city: "Buffalo", state: "NY", reliability_score: 91 }, mutuals: 2, connected_since: "", status: "suggested" },
 ];
 
 export const mockActivity: MockActivityItem[] = [

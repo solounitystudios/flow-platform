@@ -54,6 +54,15 @@ export type Database = {
           { foreignKeyName: "applications_opportunity_id_fkey"; columns: ["opportunity_id"]; isOneToOne: false; referencedRelation: "opportunities"; referencedColumns: ["id"] },
         ];
       };
+      connections: {
+        Row: { created_at: string; id: string; recipient_id: string; requester_id: string; responded_at: string | null; status: string };
+        Insert: { created_at?: string; id?: string; recipient_id: string; requester_id: string; responded_at?: string | null; status?: string };
+        Update: { created_at?: string; id?: string; recipient_id?: string; requester_id?: string; responded_at?: string | null; status?: string };
+        Relationships: [
+          { foreignKeyName: "connections_recipient_id_fkey"; columns: ["recipient_id"]; isOneToOne: false; referencedRelation: "profiles"; referencedColumns: ["id"] },
+          { foreignKeyName: "connections_requester_id_fkey"; columns: ["requester_id"]; isOneToOne: false; referencedRelation: "profiles"; referencedColumns: ["id"] },
+        ];
+      };
       event_attendance: {
         Row: {
           cancelled_at: string | null;
@@ -596,7 +605,11 @@ export type Database = {
         Args: { p_checkin_code?: string; p_event_id: string; p_method?: string; p_profile_id?: string };
         Returns: Json;
       };
+      evaluate_achievements: { Args: { p_profile_id: string }; Returns: undefined };
       mark_no_show: { Args: { p_event_id: string; p_profile_id: string }; Returns: Json };
+      maybe_fill_opportunity: { Args: { p_opportunity_id: string }; Returns: undefined };
+      notify: { Args: { p_body: string; p_href: string; p_profile_id: string; p_title: string; p_type: string }; Returns: undefined };
+      recompute_reliability: { Args: { p_profile_id: string }; Returns: undefined };
       redeem_reward: { Args: { p_reward_id: string }; Returns: Json };
     };
     Enums: Record<string, never>;
@@ -615,6 +628,7 @@ export type ReliabilityBreakdown = DefaultSchema["Views"]["reliability_breakdown
 
 export type ApplicationStatus = "pending" | "accepted" | "rejected" | "withdrawn" | "completed" | "no_show" | "cancelled";
 export type AttendanceStatus = "registered" | "attended" | "no_show" | "cancelled";
+export type ConnectionStatus = "pending" | "accepted";
 export type NotificationType =
   | "application_submitted"
   | "application_accepted"
