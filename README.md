@@ -21,8 +21,8 @@ App runs at `http://localhost:3000`.
 
 ## What's real vs. demo data
 
-- **Real, Supabase-backed:** sign up / log in / sessions, your own profile, skills, Passport visibility, business profile creation, and posting/managing opportunities as a business.
-- **Demo/mock data** (`lib/mock/data.ts`): the browse/discovery experience — other members, businesses, the live opportunity map, events, tickets, rewards catalog, notifications, and the activity feed. These mirror the real database schema field-for-field so they can be swapped for live queries once the platform has real multi-user content. See `lib/mock/passport-adapter.ts` for how demo profiles resolve on `/p/[username]`.
+- **Real, Supabase-backed:** sign up / log in / sessions, your own profile, skills, Passport visibility and achievements, business profile creation, posting/managing opportunities and events as a business (including ticket check-in), the full opportunity and event lifecycles (apply/accept/complete, register/cancel/no-show), FLOW Points redemption, notifications, and Discover (real members with a public passport + real businesses).
+- **Demo/mock data** (`lib/mock/data.ts`): supplements the above so browse screens never look empty before the platform has enough real multi-city content — extra opportunities, events, and rewards-catalog entries are blended in alongside real rows. Connections and Messages are still fully mock/stubbed; Messages says so in the UI. These mirror the real database schema field-for-field so they can be swapped out entirely as real content grows. See `lib/mock/passport-adapter.ts` for how demo profiles resolve on `/p/[username]`.
 
 ## Scripts
 
