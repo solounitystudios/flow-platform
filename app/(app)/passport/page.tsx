@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Settings } from "lucide-react";
 import { getCurrentUser, getFullProfile } from "@/lib/data/profile";
 import { getReliabilityBreakdown } from "@/lib/data/reliability";
+import { getAllAchievements, getEarnedAchievements } from "@/lib/data/achievements";
 import { PassportCard } from "@/components/passport/PassportCard";
 import { PassportActions } from "@/components/passport/PassportActions";
 import { SkillsList } from "@/components/passport/SkillsList";
@@ -22,6 +23,7 @@ export default async function PassportPage() {
   const { profile, passport, skills, recommendations } = full;
   const username = profile.username ?? user.id.slice(0, 8);
   const breakdown = await getReliabilityBreakdown(user.id);
+  const [allAchievements, earnedAchievements] = await Promise.all([getAllAchievements(), getEarnedAchievements(user.id)]);
 
   return (
     <div className="space-y-6">
@@ -56,14 +58,14 @@ export default async function PassportPage() {
       <Card>
         <CardHeader>
           <h2 className="font-bold text-ink-900 dark:text-white">Achievements</h2>
+          {allAchievements.length > 0 && (
+            <span className="text-sm text-ink-400">
+              {earnedAchievements.length} of {allAchievements.length} unlocked
+            </span>
+          )}
         </CardHeader>
         <CardBody>
-          <Achievements
-            gigsCompleted={passport.gigs_completed ?? 0}
-            skillsVerified={passport.skills_verified ?? 0}
-            recommendationsCount={passport.recommendations ?? 0}
-            reliabilityScore={passport.reliability_score ?? 100}
-          />
+          <Achievements all={allAchievements} earned={earnedAchievements} />
         </CardBody>
       </Card>
 
