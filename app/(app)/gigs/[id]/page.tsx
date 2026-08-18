@@ -1,16 +1,19 @@
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, BadgeCheck, Calendar, Clock, MapPin, Users2 } from "lucide-react";
-import { mockOpportunities } from "@/lib/mock/data";
+import { ArrowLeft, BadgeCheck, Calendar, Clock, MapPin, Users2, Zap } from "lucide-react";
+import { getOpportunityDetail } from "@/lib/data/opportunities";
+import { getCurrentUser } from "@/lib/data/profile";
 import { Badge } from "@/components/ui/Badge";
 import { Card, CardBody } from "@/components/ui/Card";
 import { ApplyButton } from "@/components/opportunities/ApplyButton";
+import { RealApplyButton } from "@/components/opportunities/RealApplyButton";
 import { formatCents, formatDateTime } from "@/lib/utils";
 
 export default async function GigDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const opportunity = mockOpportunities.find((o) => o.id === id);
+  const user = await getCurrentUser();
+  const opportunity = await getOpportunityDetail(id, user?.id ?? null);
   if (!opportunity) notFound();
 
   const spotsLeft = opportunity.slots - opportunity.slots_filled;
@@ -43,6 +46,11 @@ export default async function GigDetailPage({ params }: { params: Promise<{ id: 
           <div className="flex flex-wrap gap-2">
             <Badge tone="flow">{opportunity.opportunity_type}</Badge>
             <Badge tone={isOpen ? "verified" : "neutral"}>{opportunity.status}</Badge>
+            {opportunity.instantBook && (
+              <Badge tone="gold" icon={<Zap className="h-3 w-3" />}>
+                Instant book
+              </Badge>
+            )}
           </div>
 
           <p className="text-sm leading-relaxed text-ink-600 dark:text-ink-300">{opportunity.description}</p>
@@ -54,7 +62,19 @@ export default async function GigDetailPage({ params }: { params: Promise<{ id: 
             <InfoRow icon={<Clock className="h-4 w-4" />} label="Pay" value={opportunity.pay_cents ? `${formatCents(opportunity.pay_cents)}/hr` : "Volunteer"} />
           </div>
 
-          {isOpen ? <ApplyButton full /> : <p className="text-sm text-ink-400">This opportunity is no longer accepting applicants.</p>}
+          {!isOpen && <p className="text-sm text-ink-400">This opportunity is no longer accepting applicants.</p>}
+
+          {isOpen && opportunity.source === "mock" && <ApplyButton full />}
+
+          {isOpen && opportunity.source === "real" && (
+            <RealApplyButton
+              opportunityId={opportunity.id}
+              isOwner={opportunity.isOwner}
+              instantBook={opportunity.instantBook}
+              initialStatus={opportunity.myApplicationStatus}
+              initialApplicationId={opportunity.myApplicationId}
+            />
+          )}
         </CardBody>
       </Card>
     </div>

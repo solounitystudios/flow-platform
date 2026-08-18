@@ -4,10 +4,12 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { Lock } from "lucide-react";
 import { getFullProfileByUsername } from "@/lib/data/profile";
+import { getReliabilityBreakdown } from "@/lib/data/reliability";
 import { findMockPersonByUsername, mockPersonToPassportData, mockPersonToRecommendations, mockPersonToSkills } from "@/lib/mock/passport-adapter";
 import { PassportCard } from "@/components/passport/PassportCard";
 import { SkillsList } from "@/components/passport/SkillsList";
 import { RecommendationsList } from "@/components/passport/RecommendationsList";
+import { ReliabilityCard } from "@/components/passport/ReliabilityCard";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { flowIdFromUuid } from "@/lib/passport";
@@ -58,6 +60,7 @@ export default async function PublicPassportPage({ params }: { params: Promise<{
   }
 
   const { profile, passport, skills, recommendations } = full;
+  const breakdown = await getReliabilityBreakdown(profile.id);
 
   if (!profile.public_passport) {
     return (
@@ -112,6 +115,15 @@ export default async function PublicPassportPage({ params }: { params: Promise<{
         </CardHeader>
         <CardBody>
           <RecommendationsList recommendations={recommendations} />
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <h2 className="font-bold text-ink-900 dark:text-white">Reliability</h2>
+        </CardHeader>
+        <CardBody>
+          <ReliabilityCard breakdown={breakdown} />
         </CardBody>
       </Card>
 

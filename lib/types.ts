@@ -58,6 +58,8 @@ export interface MockOpportunity {
   slots_filled: number;
   distance_mi: number;
   urgent: boolean;
+  category?: string | null;
+  is_remote?: boolean;
 }
 
 export interface MockEvent {

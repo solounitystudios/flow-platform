@@ -2,10 +2,13 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Settings } from "lucide-react";
 import { getCurrentUser, getFullProfile } from "@/lib/data/profile";
+import { getReliabilityBreakdown } from "@/lib/data/reliability";
 import { PassportCard } from "@/components/passport/PassportCard";
 import { PassportActions } from "@/components/passport/PassportActions";
 import { SkillsList } from "@/components/passport/SkillsList";
 import { RecommendationsList } from "@/components/passport/RecommendationsList";
+import { ReliabilityCard } from "@/components/passport/ReliabilityCard";
+import { Achievements } from "@/components/passport/Achievements";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { flowIdFromUuid } from "@/lib/passport";
 
@@ -18,6 +21,7 @@ export default async function PassportPage() {
 
   const { profile, passport, skills, recommendations } = full;
   const username = profile.username ?? user.id.slice(0, 8);
+  const breakdown = await getReliabilityBreakdown(user.id);
 
   return (
     <div className="space-y-6">
@@ -46,6 +50,29 @@ export default async function PassportPage() {
       <Card>
         <CardBody>
           <PassportActions username={username} initialPublic={profile.public_passport} />
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <h2 className="font-bold text-ink-900 dark:text-white">Achievements</h2>
+        </CardHeader>
+        <CardBody>
+          <Achievements
+            gigsCompleted={passport.gigs_completed ?? 0}
+            skillsVerified={passport.skills_verified ?? 0}
+            recommendationsCount={passport.recommendations ?? 0}
+            reliabilityScore={passport.reliability_score ?? 100}
+          />
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <h2 className="font-bold text-ink-900 dark:text-white">Reliability</h2>
+        </CardHeader>
+        <CardBody>
+          <ReliabilityCard breakdown={breakdown} />
         </CardBody>
       </Card>
 
