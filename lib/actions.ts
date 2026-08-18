@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { getRequestOrigin } from "@/lib/url";
 import type { CheckInResult, RedeemResult, ConnectionRpcResult, ConversationRpcResult, MessageRpcResult } from "@/lib/database.types";
 
 export interface ActionState {
@@ -28,10 +29,14 @@ export async function signUpAction(_prev: ActionState, formData: FormData): Prom
   }
 
   const supabase = await createClient();
+  const origin = await getRequestOrigin();
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
-    options: { data: { full_name: fullName, username: username || undefined } },
+    options: {
+      data: { full_name: fullName, username: username || undefined },
+      emailRedirectTo: `${origin}/auth/callback`,
+    },
   });
 
   if (error) return { error: error.message };
