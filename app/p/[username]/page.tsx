@@ -13,9 +13,11 @@ import { RecommendationsList } from "@/components/passport/RecommendationsList";
 import { ReliabilityCard } from "@/components/passport/ReliabilityCard";
 import { ConnectionControl } from "@/components/social/ConnectionControl";
 import { ConnectionMoreMenu } from "@/components/social/ConnectionMoreMenu";
+import { MessageButton } from "@/components/messages/MessageButton";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { flowIdFromUuid } from "@/lib/passport";
+import { startDirectConversationAction } from "@/lib/actions";
 
 export async function generateMetadata({ params }: { params: Promise<{ username: string }> }): Promise<Metadata> {
   const { username } = await params;
@@ -117,12 +119,17 @@ export default async function PublicPassportPage({ params }: { params: Promise<{
                 <p className="font-semibold text-ink-900 dark:text-white">{profile.full_name || "This member"}</p>
                 {sharedSkills.length > 0 && <p className="text-xs text-ink-400">{sharedSkills.length} shared skill{sharedSkills.length === 1 ? "" : "s"}: {sharedSkills.join(", ")}</p>}
               </div>
-              <ConnectionControl
-                personId={profile.id}
-                personName={profile.full_name || "this member"}
-                initialStatus={connectionState.status}
-                initialConnectionId={connectionState.connectionId}
-              />
+              <div className="flex items-center gap-2">
+                {connectionState.status === "connected" && (
+                  <MessageButton start={startDirectConversationAction.bind(null, profile.id)} />
+                )}
+                <ConnectionControl
+                  personId={profile.id}
+                  personName={profile.full_name || "this member"}
+                  initialStatus={connectionState.status}
+                  initialConnectionId={connectionState.connectionId}
+                />
+              </div>
             </div>
             {connectionState.status !== "blocked" && (
               <div className="border-t border-ink-100 pt-3 dark:border-ink-800">

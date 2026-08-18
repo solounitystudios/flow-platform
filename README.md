@@ -21,8 +21,8 @@ App runs at `http://localhost:3000`.
 
 ## What's real vs. demo data
 
-- **Real, Supabase-backed:** sign up / log in / sessions, your own profile, skills, Passport visibility and achievements, business profile creation, posting/managing opportunities and events as a business (including ticket check-in), the full opportunity and event lifecycles (apply/accept/complete, register/cancel/no-show), FLOW Points redemption, notifications, Discover (real members with a public passport + real businesses), and Connections — send/accept/decline/cancel/remove requests, block/unblock, and report, all enforced by database RPCs and RLS (see "Connections & blocking" below).
-- **Demo/mock data** (`lib/mock/data.ts`): supplements the above so browse screens never look empty before the platform has enough real multi-city content — extra opportunities, events, rewards-catalog entries, and Discover profiles/businesses are blended in alongside real rows. Messages is still a UI stub (no conversations/messages tables yet) and says so on the page. Mock rows mirror the real database schema field-for-field so they can be phased out as real content grows. See `lib/mock/passport-adapter.ts` for how demo profiles resolve on `/p/[username]`.
+- **Real, Supabase-backed:** sign up / log in / sessions, your own profile, skills, Passport visibility and achievements, business profile creation, posting/managing opportunities and events as a business (including ticket check-in), the full opportunity and event lifecycles (apply/accept/complete, register/cancel/no-show), FLOW Points redemption, notifications, Discover (real members with a public passport + real businesses), Connections — send/accept/decline/cancel/remove requests, block/unblock, and report — and Messages: real-time direct messages between connections, event group chats, and opportunity applicant↔employer chats (see "Connections & blocking" and "Messages" below).
+- **Demo/mock data** (`lib/mock/data.ts`): supplements the above so browse screens never look empty before the platform has enough real multi-city content — extra opportunities, events, rewards-catalog entries, and Discover profiles/businesses are blended in alongside real rows. Mock rows mirror the real database schema field-for-field so they can be phased out as real content grows. See `lib/mock/passport-adapter.ts` for how demo profiles resolve on `/p/[username]`.
 
 ## Scripts
 
@@ -33,7 +33,7 @@ App runs at `http://localhost:3000`.
 
 ## Database
 
-Schema, RLS policies, and the `passport_summary` view live in the Supabase project (`flow-platform`). Key tables: `profiles`, `skills`, `profile_skills`, `organizations`, `opportunities`, `applications`, `events`, `event_attendance`, `recommendations`, `verifications`, `flow_ledger`, `rewards`, `reward_redemptions`, `achievements`, `profile_achievements`, `connections`, `connection_events`, `connection_reports`, `admins`.
+Schema, RLS policies, and the `passport_summary` view live in the Supabase project (`flow-platform`). Key tables: `profiles`, `skills`, `profile_skills`, `organizations`, `opportunities`, `applications`, `events`, `event_attendance`, `recommendations`, `verifications`, `flow_ledger`, `rewards`, `reward_redemptions`, `achievements`, `profile_achievements`, `connections`, `connection_events`, `connection_reports`, `admins`, `conversations`, `conversation_members`, `messages`.
 
 ### Connections & blocking
 
@@ -44,4 +44,15 @@ Schema, RLS policies, and the `passport_summary` view live in the Supabase proje
 - `block_profile` / `unblock_profile` — either party can block from any prior state; only the blocker can unblock. A `RESTRICTIVE` policy on `profiles` (`profiles_block_restrict`, via the `is_blocked_between()` helper) makes each party's profile invisible to the other at the database level — Discover, Suggested, and `/p/[username]` all stop surfacing a blocked pair automatically, without per-query filtering. The one deliberate exception is `get_my_blocked_profiles()`, a narrow RPC that lets the blocker see who they've blocked (name/avatar only) so the "Blocked" tab can actually render and offer Unblock.
 - `report_profile` — writes to `connection_reports`, readable only by the reporter and anyone listed in `admins` (a table nobody can write to through the API — admins are provisioned by running SQL directly against the project).
 
-All seven RPCs have `EXECUTE` revoked from the `anon` role — only signed-in users can call them.
+All of these RPCs have `EXECUTE` revoked from `anon` *and* `PUBLIC` — only signed-in users can call them. (Worth flagging: revoking from `anon` alone turned out to be a no-op the first time, because Postgres grants `EXECUTE` to `PUBLIC` by default at function-creation time and `anon` inherits through that, not a direct grant. `has_function_privilege('anon', ...)` still returned `true` after an `anon`-only revoke; fixed by also revoking from `PUBLIC`. `is_blocked_between()` is the one deliberate exception — it stays `PUBLIC`-executable since the `profiles_block_restrict` policy needs to call it for anonymous, logged-out profile views too.)
+
+### Messages
+
+`conversations` (`direct` / `event` / `opportunity`) + `conversation_members` (per-member `last_read_at`, no separate reads table) + `messages` (soft-deleted via `deleted_at`, never hard-deleted). As with Connections, there is no client INSERT/UPDATE/DELETE policy on any of the three tables — every write goes through a `SECURITY DEFINER` RPC:
+
+- `get_or_create_direct_conversation(p_other_id)` — only between **accepted connections**, and rejected if either side has blocked the other. One conversation per unordered pair, found-or-created under the same `pg_advisory_xact_lock` pattern used for connections.
+- `get_or_create_event_conversation(p_event_id)` — one group conversation per event; membership is granted lazily to the event's organizer or any `registered`/`attended` attendee who calls it, not pre-populated for the whole guest list.
+- `get_or_create_opportunity_conversation(p_opportunity_id, p_applicant_id?)` — one conversation per (opportunity, applicant) pair, between that applicant and the opportunity's creator. There is no general "message request" path to a stranger — eligibility for all three conversation types is checked entirely server-side (accepted connection / registered attendee / applicant-or-employer), so a conversation simply can't be created outside those three contexts.
+- `send_message(p_conversation_id, p_body)` — membership check, block check (direct conversations), and a rate limit (20 messages/60s per sender) all enforced in one transaction before the insert. Notifies the other member(s) via `notify()` with a **generic body** ("X sent you a message") — the message content itself never goes into a notification.
+- `mark_conversation_read(p_conversation_id)` sets the caller's own `last_read_at`; `delete_message(p_message_id)` soft-deletes (sender-only), clearing `body` but keeping the row so the thread doesn't have a gap.
+- `messages` and `conversation_members` are added to the `supabase_realtime` publication so the chat screen gets live inserts (and could get live read-receipts) via Postgres changes, filtered by the same RLS that governs normal reads.

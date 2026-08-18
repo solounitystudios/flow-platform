@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import type { CheckInResult, RedeemResult, ConnectionRpcResult } from "@/lib/database.types";
+import type { CheckInResult, RedeemResult, ConnectionRpcResult, ConversationRpcResult, MessageRpcResult } from "@/lib/database.types";
 
 export interface ActionState {
   error?: string;
@@ -677,4 +677,95 @@ export async function reportProfileAction(targetId: string, reason: string, deta
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("report_profile", { p_target_id: targetId, p_reason: reason, p_details: details ?? undefined });
   return toConnectionResult(data, error);
+}
+
+// ── Messages ────────────────────────────────────────────────────────────
+// Same pattern as Connections: every mutation is a SECURITY DEFINER RPC that
+// enforces eligibility (accepted connection / registered attendee / applicant
+// or employer), blocking, and rate limiting server-side.
+
+export interface ConversationActionResult {
+  error?: string;
+  conversationId?: string;
+}
+
+const CONVERSATION_ERROR_TEXT: Record<string, string> = {
+  not_authenticated: "Log in to send messages.",
+  self: "You can't message yourself.",
+  blocked: "You can't message this member.",
+  not_connected: "You can only message members you're connected with.",
+  event_not_found: "That event could not be found.",
+  not_authorized: "You're not able to do that.",
+  opportunity_not_found: "That opportunity could not be found.",
+  applicant_required: "Choose which applicant to message.",
+  not_an_applicant: "That person hasn't applied to this opportunity.",
+};
+
+function toConversationResult(data: unknown, error: { message: string } | null): ConversationActionResult {
+  if (error) return { error: error.message };
+  const result = data as unknown as ConversationRpcResult;
+  if (!result.ok) return { error: CONVERSATION_ERROR_TEXT[result.reason ?? ""] ?? "Something went wrong. Try again." };
+  return { conversationId: result.conversation_id };
+}
+
+export async function startDirectConversationAction(otherId: string): Promise<ConversationActionResult> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("get_or_create_direct_conversation", { p_other_id: otherId });
+  return toConversationResult(data, error);
+}
+
+export async function startEventConversationAction(eventId: string): Promise<ConversationActionResult> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("get_or_create_event_conversation", { p_event_id: eventId });
+  return toConversationResult(data, error);
+}
+
+export async function startOpportunityConversationAction(opportunityId: string, applicantId?: string): Promise<ConversationActionResult> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("get_or_create_opportunity_conversation", { p_opportunity_id: opportunityId, p_applicant_id: applicantId });
+  return toConversationResult(data, error);
+}
+
+export interface MessageActionResult {
+  error?: string;
+  messageId?: string;
+}
+
+const MESSAGE_ERROR_TEXT: Record<string, string> = {
+  not_authenticated: "Log in to send messages.",
+  empty: "Write something before sending.",
+  too_long: "That message is too long.",
+  not_a_member: "You're not part of this conversation.",
+  blocked: "You can't message this member.",
+  rate_limited: "You're sending messages too quickly. Wait a moment and try again.",
+  not_found: "That message couldn't be found.",
+  not_authorized: "You can only delete your own messages.",
+};
+
+export async function sendMessageAction(conversationId: string, body: string): Promise<MessageActionResult> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("send_message", { p_conversation_id: conversationId, p_body: body });
+  if (error) return { error: error.message };
+
+  const result = data as unknown as MessageRpcResult;
+  if (!result.ok) return { error: MESSAGE_ERROR_TEXT[result.reason ?? ""] ?? "Couldn't send that message." };
+
+  revalidatePath("/messages");
+  return { messageId: result.message_id };
+}
+
+export async function markConversationReadAction(conversationId: string) {
+  const supabase = await createClient();
+  await supabase.rpc("mark_conversation_read", { p_conversation_id: conversationId });
+  revalidatePath("/messages");
+}
+
+export async function deleteMessageAction(messageId: string): Promise<MessageActionResult> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("delete_message", { p_message_id: messageId });
+  if (error) return { error: error.message };
+
+  const result = data as unknown as MessageRpcResult;
+  if (!result.ok) return { error: MESSAGE_ERROR_TEXT[result.reason ?? ""] ?? "Couldn't delete that message." };
+  return {};
 }

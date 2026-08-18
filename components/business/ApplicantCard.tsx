@@ -11,10 +11,12 @@ import {
   markCompletedAction,
   markNoShowAction,
   rejectApplicantAction,
+  startOpportunityConversationAction,
 } from "@/lib/actions";
 import { relativeTime, cn } from "@/lib/utils";
 import type { ApplicantRow } from "@/lib/data/applications";
 import { RecommendationForm } from "@/components/business/RecommendationForm";
+import { MessageButton } from "@/components/messages/MessageButton";
 
 const STATUS_TONE: Record<string, "neutral" | "verified" | "flow" | "danger" | "gold"> = {
   pending: "flow",
@@ -84,6 +86,7 @@ export function ApplicantCard({ row, opportunityId, hasRecommendation }: { row: 
         )}
         {status === "accepted" && (
           <>
+            <MessageButton start={startOpportunityConversationAction.bind(null, opportunityId, row.applicant_id)} />
             <Button size="sm" onClick={() => act(markCompletedAction, "completed")} disabled={pending}>
               <Check className="h-3.5 w-3.5" /> Mark completed
             </Button>

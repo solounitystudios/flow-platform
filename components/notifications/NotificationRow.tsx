@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useTransition } from "react";
-import { Bell, Briefcase, Calendar, CheckCircle2, MessageSquareQuote, ThumbsDown, ThumbsUp, UserCheck, UserPlus, XCircle } from "lucide-react";
+import { Bell, Briefcase, Calendar, CheckCircle2, MessageCircle, MessageSquareQuote, ThumbsDown, ThumbsUp, UserCheck, UserPlus, XCircle } from "lucide-react";
 import { markNotificationReadAction } from "@/lib/actions";
 import { relativeTime, cn } from "@/lib/utils";
 import type { Tables } from "@/lib/database.types";
@@ -18,6 +18,7 @@ const ICONS: Record<string, typeof Bell> = {
   recommendation_received: MessageSquareQuote,
   connection_request: UserPlus,
   connection_accepted: UserCheck,
+  message_received: MessageCircle,
 };
 
 export function NotificationRow({ notification }: { notification: Tables<"notifications"> }) {

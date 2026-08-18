@@ -118,6 +118,53 @@ export type Database = {
           { foreignKeyName: "connection_reports_reporter_id_fkey"; columns: ["reporter_id"]; isOneToOne: false; referencedRelation: "profiles"; referencedColumns: ["id"] },
         ];
       };
+      conversations: {
+        Row: {
+          applicant_id: string | null;
+          created_at: string;
+          created_by: string;
+          event_id: string | null;
+          id: string;
+          last_message_at: string;
+          opportunity_id: string | null;
+          type: string;
+        };
+        Insert: {
+          applicant_id?: string | null;
+          created_at?: string;
+          created_by: string;
+          event_id?: string | null;
+          id?: string;
+          last_message_at?: string;
+          opportunity_id?: string | null;
+          type: string;
+        };
+        Update: {
+          applicant_id?: string | null;
+          created_at?: string;
+          created_by?: string;
+          event_id?: string | null;
+          id?: string;
+          last_message_at?: string;
+          opportunity_id?: string | null;
+          type?: string;
+        };
+        Relationships: [
+          { foreignKeyName: "conversations_applicant_id_fkey"; columns: ["applicant_id"]; isOneToOne: false; referencedRelation: "profiles"; referencedColumns: ["id"] },
+          { foreignKeyName: "conversations_created_by_fkey"; columns: ["created_by"]; isOneToOne: false; referencedRelation: "profiles"; referencedColumns: ["id"] },
+          { foreignKeyName: "conversations_event_id_fkey"; columns: ["event_id"]; isOneToOne: false; referencedRelation: "events"; referencedColumns: ["id"] },
+          { foreignKeyName: "conversations_opportunity_id_fkey"; columns: ["opportunity_id"]; isOneToOne: false; referencedRelation: "opportunities"; referencedColumns: ["id"] },
+        ];
+      };
+      conversation_members: {
+        Row: { conversation_id: string; joined_at: string; last_read_at: string; profile_id: string };
+        Insert: { conversation_id: string; joined_at?: string; last_read_at?: string; profile_id: string };
+        Update: { conversation_id?: string; joined_at?: string; last_read_at?: string; profile_id?: string };
+        Relationships: [
+          { foreignKeyName: "conversation_members_conversation_id_fkey"; columns: ["conversation_id"]; isOneToOne: false; referencedRelation: "conversations"; referencedColumns: ["id"] },
+          { foreignKeyName: "conversation_members_profile_id_fkey"; columns: ["profile_id"]; isOneToOne: false; referencedRelation: "profiles"; referencedColumns: ["id"] },
+        ];
+      };
       event_attendance: {
         Row: {
           cancelled_at: string | null;
@@ -296,6 +343,16 @@ export type Database = {
           { foreignKeyName: "flow_ledger_opportunity_id_fkey"; columns: ["opportunity_id"]; isOneToOne: false; referencedRelation: "opportunities"; referencedColumns: ["id"] },
           { foreignKeyName: "flow_ledger_profile_id_fkey"; columns: ["profile_id"]; isOneToOne: false; referencedRelation: "profiles"; referencedColumns: ["id"] },
           { foreignKeyName: "flow_ledger_redemption_id_fkey"; columns: ["redemption_id"]; isOneToOne: false; referencedRelation: "reward_redemptions"; referencedColumns: ["id"] },
+        ];
+      };
+      messages: {
+        Row: { body: string; conversation_id: string; created_at: string; deleted_at: string | null; deleted_by: string | null; id: string; sender_id: string };
+        Insert: { body: string; conversation_id: string; created_at?: string; deleted_at?: string | null; deleted_by?: string | null; id?: string; sender_id: string };
+        Update: { body?: string; conversation_id?: string; created_at?: string; deleted_at?: string | null; deleted_by?: string | null; id?: string; sender_id?: string };
+        Relationships: [
+          { foreignKeyName: "messages_conversation_id_fkey"; columns: ["conversation_id"]; isOneToOne: false; referencedRelation: "conversations"; referencedColumns: ["id"] },
+          { foreignKeyName: "messages_deleted_by_fkey"; columns: ["deleted_by"]; isOneToOne: false; referencedRelation: "profiles"; referencedColumns: ["id"] },
+          { foreignKeyName: "messages_sender_id_fkey"; columns: ["sender_id"]; isOneToOne: false; referencedRelation: "profiles"; referencedColumns: ["id"] },
         ];
       };
       notifications: {
@@ -662,12 +719,17 @@ export type Database = {
         Args: { p_checkin_code?: string; p_event_id: string; p_method?: string; p_profile_id?: string };
         Returns: Json;
       };
+      delete_message: { Args: { p_message_id: string }; Returns: Json };
       evaluate_achievements: { Args: { p_profile_id: string }; Returns: undefined };
       get_my_blocked_profiles: {
         Args: Record<PropertyKey, never>;
         Returns: { avatar_url: string | null; blocked_at: string; city: string; connection_id: string; full_name: string | null; profile_id: string; state: string; username: string | null }[];
       };
+      get_or_create_direct_conversation: { Args: { p_other_id: string }; Returns: Json };
+      get_or_create_event_conversation: { Args: { p_event_id: string }; Returns: Json };
+      get_or_create_opportunity_conversation: { Args: { p_applicant_id?: string; p_opportunity_id: string }; Returns: Json };
       is_blocked_between: { Args: { a: string; b: string }; Returns: boolean };
+      mark_conversation_read: { Args: { p_conversation_id: string }; Returns: Json };
       mark_no_show: { Args: { p_event_id: string; p_profile_id: string }; Returns: Json };
       maybe_fill_opportunity: { Args: { p_opportunity_id: string }; Returns: undefined };
       notify: { Args: { p_body: string; p_href: string; p_profile_id: string; p_title: string; p_type: string }; Returns: undefined };
@@ -677,6 +739,7 @@ export type Database = {
       report_profile: { Args: { p_details?: string; p_reason: string; p_target_id: string }; Returns: Json };
       respond_to_connection_request: { Args: { p_action: string; p_connection_id: string }; Returns: Json };
       send_connection_request: { Args: { p_recipient_id: string }; Returns: Json };
+      send_message: { Args: { p_body: string; p_conversation_id: string }; Returns: Json };
       unblock_profile: { Args: { p_target_id: string }; Returns: Json };
     };
     Enums: Record<string, never>;
@@ -705,6 +768,21 @@ export interface ConnectionRpcResult {
   connection_id?: string;
   auto_accepted?: boolean;
 }
+
+export type ConversationType = "direct" | "event" | "opportunity";
+
+export interface ConversationRpcResult {
+  ok: boolean;
+  reason?: "not_authenticated" | "self" | "blocked" | "not_connected" | "event_not_found" | "not_authorized" | "opportunity_not_found" | "applicant_required" | "not_an_applicant";
+  conversation_id?: string;
+}
+
+export interface MessageRpcResult {
+  ok: boolean;
+  reason?: "not_authenticated" | "empty" | "too_long" | "not_a_member" | "blocked" | "rate_limited" | "not_found" | "not_authorized";
+  message_id?: string;
+}
+
 export type NotificationType =
   | "application_submitted"
   | "application_accepted"
@@ -723,7 +801,8 @@ export type NotificationType =
   | "achievement_unlocked"
   | "reward_redeemed"
   | "connection_request"
-  | "connection_accepted";
+  | "connection_accepted"
+  | "message_received";
 export type EventCategory =
   | "Networking"
   | "Career"

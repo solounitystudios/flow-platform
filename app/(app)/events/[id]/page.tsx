@@ -8,7 +8,9 @@ import { Badge } from "@/components/ui/Badge";
 import { Card, CardBody } from "@/components/ui/Card";
 import { RegisterButton } from "@/components/events/RegisterButton";
 import { RealRegisterButton } from "@/components/events/RealRegisterButton";
+import { MessageButton } from "@/components/messages/MessageButton";
 import { formatDateTime } from "@/lib/utils";
+import { startEventConversationAction } from "@/lib/actions";
 
 export default async function EventDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -19,6 +21,8 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
   const spotsLeft = event.capacity - event.registered;
   const hasCapacityLimit = event.capacity < 999999;
   const isUpcoming = event.status === "published";
+  const canMessage =
+    event.source === "real" && (event.isOwner || (event.myAttendance && ["registered", "attended"].includes(event.myAttendance.status)));
 
   return (
     <div className="space-y-5">
@@ -44,6 +48,11 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
               </p>
             )}
           </div>
+          {canMessage && (
+            <div className="flex justify-end">
+              <MessageButton start={startEventConversationAction.bind(null, event.id)} label="Message attendees" />
+            </div>
+          )}
 
           <p className="text-sm leading-relaxed text-ink-600 dark:text-ink-300">{event.description}</p>
 
