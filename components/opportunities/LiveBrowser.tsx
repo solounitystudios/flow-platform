@@ -2,20 +2,19 @@
 
 import { useState } from "react";
 import { List, Map as MapIcon } from "lucide-react";
-import { mockEvents } from "@/lib/mock/data";
 import { LiveMap, type MapPin } from "@/components/opportunities/LiveMap";
 import { OpportunityCard } from "@/components/opportunities/OpportunityCard";
 import { EventCard } from "@/components/events/EventCard";
 import { cn } from "@/lib/utils";
-import type { MockOpportunity } from "@/lib/types";
+import type { MockEvent, MockOpportunity } from "@/lib/types";
 
 const FILTERS = ["All", "Gigs", "Jobs", "Volunteer", "Events"] as const;
 
-export function LiveBrowser({ opportunities }: { opportunities: MockOpportunity[] }) {
+export function LiveBrowser({ opportunities, events }: { opportunities: MockOpportunity[]; events: MockEvent[] }) {
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>("All");
   const [view, setView] = useState<"map" | "list">("map");
 
-  const liveEvents = mockEvents.filter((e) => e.status === "published");
+  const liveEvents = events;
 
   const filteredOpportunities = opportunities.filter((o) => {
     if (filter === "All") return true;
