@@ -36,7 +36,7 @@ export interface MockOrganization {
   verified: boolean;
   industry: string;
   member_perk: string | null;
-  rating: number;
+  rating: number | null;
 }
 
 export interface MockOpportunity {

@@ -18,9 +18,11 @@ export function OrganizationCard({ org }: { org: MockOrganization }) {
         </p>
         {org.member_perk && <p className="mt-1 truncate text-xs font-medium text-flow-600">{org.member_perk}</p>}
       </div>
-      <span className="flex shrink-0 items-center gap-1 text-sm font-semibold text-ink-700 dark:text-ink-200">
-        <Star className="h-3.5 w-3.5 fill-gold-500 text-gold-500" /> {org.rating}
-      </span>
+      {org.rating !== null && (
+        <span className="flex shrink-0 items-center gap-1 text-sm font-semibold text-ink-700 dark:text-ink-200">
+          <Star className="h-3.5 w-3.5 fill-gold-500 text-gold-500" /> {org.rating}
+        </span>
+      )}
     </div>
   );
 }
