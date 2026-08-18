@@ -38,6 +38,10 @@ export function formatDateTime(iso: string) {
   }).format(new Date(iso));
 }
 
+export function dicebearAvatar(seed: string) {
+  return `https://api.dicebear.com/9.x/notionists/svg?seed=${encodeURIComponent(seed)}&backgroundColor=b6e3f4,c0aede,d1d4f9,ffd5dc,ffdfbf`;
+}
+
 export function initials(name: string) {
   return name
     .split(" ")

@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { Briefcase, ShieldCheck, CalendarDays, Gift, ArrowRight } from "lucide-react";
 import { getCurrentUser, getFullProfile } from "@/lib/data/profile";
-import { mockActivity, mockEvents, mockOpportunities } from "@/lib/mock/data";
+import { getOpenOpportunities } from "@/lib/data/opportunities";
+import { mockActivity, mockEvents } from "@/lib/mock/data";
 import { SectionHeading } from "@/components/ui/SectionHeading";
 import { OpportunityCard } from "@/components/opportunities/OpportunityCard";
 import { EventCard } from "@/components/events/EventCard";
@@ -15,7 +16,8 @@ export default async function DashboardPage() {
   const full = user ? await getFullProfile(user.id) : null;
   const firstName = full?.profile.full_name?.split(" ")[0] || "there";
 
-  const urgentOpportunities = mockOpportunities.filter((o) => o.status === "open" && o.urgent).slice(0, 4);
+  const opportunities = await getOpenOpportunities();
+  const urgentOpportunities = opportunities.filter((o) => o.urgent).slice(0, 4);
   const upcomingEvents = mockEvents.filter((e) => e.status === "published").slice(0, 3);
 
   return (

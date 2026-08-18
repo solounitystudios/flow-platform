@@ -167,6 +167,9 @@ export async function createOpportunityAction(_prev: ActionState, formData: Form
   const payDollars = formData.get("pay_dollars");
   const pay_cents = payDollars ? Math.round(Number(payDollars) * 100) : null;
   const starts_at = formData.get("starts_at") ? new Date(String(formData.get("starts_at"))).toISOString() : null;
+  const category = String(formData.get("category") ?? "") || null;
+  const is_remote = formData.get("is_remote") === "on";
+  const instant_book = formData.get("instant_book") === "on";
 
   if (!title) return { error: "Give the opportunity a title." };
 
@@ -183,6 +186,9 @@ export async function createOpportunityAction(_prev: ActionState, formData: Form
     pay_cents,
     starts_at,
     status: "open",
+    category,
+    is_remote,
+    instant_book,
   });
 
   if (error) return { error: error.message };
@@ -248,4 +254,171 @@ export async function toggleAvailableNowAction(available: boolean) {
   await supabase.from("profiles").update({ available_now: available }).eq("id", user.id);
   revalidatePath("/dashboard");
   revalidatePath("/passport");
+}
+
+// ── Opportunity lifecycle ──────────────────────────────────────────────
+// These map directly onto the applications state machine enforced in the
+// database (enforce_application_lifecycle trigger). RLS decides which rows
+// you can touch; that trigger decides which transitions are legal — an error
+// raised there (e.g. "This opportunity is already full.") comes straight
+// back through error.message.
+
+export interface LifecycleResult {
+  error?: string;
+}
+
+export async function applyToOpportunityAction(opportunityId: string): Promise<LifecycleResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Log in to apply." };
+
+  const { error } = await supabase.from("applications").insert({ opportunity_id: opportunityId, applicant_id: user.id });
+  if (error) {
+    if (error.code === "23505") return { error: "You've already applied to this opportunity." };
+    return { error: error.message };
+  }
+
+  revalidatePath(`/gigs/${opportunityId}`);
+  revalidatePath("/applications");
+  return {};
+}
+
+export async function claimOpportunityAction(opportunityId: string): Promise<LifecycleResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Log in to claim this opportunity." };
+
+  const { error } = await supabase.from("applications").insert({ opportunity_id: opportunityId, applicant_id: user.id, status: "accepted" });
+  if (error) {
+    if (error.code === "23505") return { error: "You've already applied to this opportunity." };
+    return { error: error.message };
+  }
+
+  revalidatePath(`/gigs/${opportunityId}`);
+  revalidatePath("/work");
+  revalidatePath("/applications");
+  return {};
+}
+
+export async function withdrawApplicationAction(applicationId: string): Promise<LifecycleResult> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("applications").update({ status: "withdrawn" }).eq("id", applicationId);
+  if (error) return { error: error.message };
+
+  revalidatePath("/applications");
+  return {};
+}
+
+export async function acceptApplicantAction(applicationId: string, opportunityId: string): Promise<LifecycleResult> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("applications").update({ status: "accepted" }).eq("id", applicationId);
+  if (error) return { error: error.message };
+
+  revalidatePath(`/business/opportunities/${opportunityId}`);
+  revalidatePath("/business");
+  return {};
+}
+
+export async function rejectApplicantAction(applicationId: string, opportunityId: string): Promise<LifecycleResult> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("applications").update({ status: "rejected" }).eq("id", applicationId);
+  if (error) return { error: error.message };
+
+  revalidatePath(`/business/opportunities/${opportunityId}`);
+  return {};
+}
+
+export async function markCompletedAction(applicationId: string, opportunityId: string): Promise<LifecycleResult> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("applications").update({ status: "completed" }).eq("id", applicationId);
+  if (error) return { error: error.message };
+
+  revalidatePath(`/business/opportunities/${opportunityId}`);
+  revalidatePath("/business");
+  return {};
+}
+
+export async function markNoShowAction(applicationId: string, opportunityId: string): Promise<LifecycleResult> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("applications").update({ status: "no_show" }).eq("id", applicationId);
+  if (error) return { error: error.message };
+
+  revalidatePath(`/business/opportunities/${opportunityId}`);
+  return {};
+}
+
+export async function cancelAcceptedApplicationAction(applicationId: string): Promise<LifecycleResult> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("applications").update({ status: "cancelled" }).eq("id", applicationId);
+  if (error) return { error: error.message };
+
+  revalidatePath("/work");
+  revalidatePath("/business");
+  return {};
+}
+
+export async function acknowledgeCompletionAction(applicationId: string): Promise<LifecycleResult> {
+  const supabase = await createClient();
+  const { error } = await supabase.from("applications").update({ worker_ack_at: new Date().toISOString() }).eq("id", applicationId);
+  if (error) return { error: error.message };
+
+  revalidatePath("/work");
+  return {};
+}
+
+export async function leaveRecommendationAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Your session expired. Please log in again." };
+
+  const recipient_id = String(formData.get("recipient_id") ?? "");
+  const opportunity_id = String(formData.get("opportunity_id") ?? "");
+  const body = String(formData.get("body") ?? "").trim();
+  const ratingRaw = String(formData.get("rating") ?? "");
+  const rating = ratingRaw ? Number(ratingRaw) : null;
+  const skills_demonstrated = formData.getAll("skills_demonstrated").map(String).filter(Boolean);
+
+  if (!body || body.length < 10) return { error: "Write at least a sentence or two." };
+
+  const { error } = await supabase.from("recommendations").insert({
+    author_id: user.id,
+    recipient_id,
+    opportunity_id,
+    body,
+    rating,
+    skills_demonstrated: skills_demonstrated.length > 0 ? skills_demonstrated : null,
+  });
+
+  if (error) {
+    if (error.code === "42501" || error.message.toLowerCase().includes("row-level security")) {
+      return { error: "You can only recommend someone you've actually hired and marked as completed." };
+    }
+    return { error: error.message };
+  }
+
+  revalidatePath(`/business/opportunities/${opportunity_id}`);
+  return { success: true };
+}
+
+export async function markNotificationReadAction(notificationId: string) {
+  const supabase = await createClient();
+  await supabase.from("notifications").update({ read: true }).eq("id", notificationId);
+  revalidatePath("/notifications");
+}
+
+export async function markAllNotificationsReadAction() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return;
+
+  await supabase.from("notifications").update({ read: true }).eq("profile_id", user.id).eq("read", false);
+  revalidatePath("/notifications");
 }

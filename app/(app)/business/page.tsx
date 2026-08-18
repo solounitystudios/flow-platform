@@ -3,6 +3,7 @@ import { Briefcase, Building2, Compass, Plus, Users, Star, Ticket } from "lucide
 import { getCurrentUser } from "@/lib/data/profile";
 import { getOrganizationByOwner } from "@/lib/data/organization";
 import { getOpportunitiesByCreator } from "@/lib/data/opportunities";
+import { getApplicantCounts } from "@/lib/data/applications";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { StatTile } from "@/components/ui/StatTile";
@@ -35,6 +36,7 @@ export default async function BusinessPage() {
 
   const postings = await getOpportunitiesByCreator(user.id);
   const openCount = postings.filter((p) => p.status === "open").length;
+  const applicantCounts = await getApplicantCounts(postings.map((p) => p.id));
 
   return (
     <div className="space-y-6">
@@ -71,7 +73,7 @@ export default async function BusinessPage() {
         {postings.length > 0 ? (
           <div className="space-y-2.5">
             {postings.map((p) => (
-              <OpportunityRow key={p.id} opportunity={p} />
+              <OpportunityRow key={p.id} opportunity={p} applicantCount={applicantCounts.get(p.id) ?? 0} />
             ))}
           </div>
         ) : (

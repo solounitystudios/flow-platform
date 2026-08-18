@@ -11,6 +11,7 @@ import {
   Bell,
   Settings,
   Building2,
+  ClipboardList,
   type LucideIcon,
 } from "lucide-react";
 
@@ -27,6 +28,8 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/gigs", label: "Gigs & Jobs", icon: Briefcase, primary: true },
   { href: "/events", label: "Events", icon: CalendarDays, primary: true },
   { href: "/passport", label: "Passport", icon: IdCard, primary: true },
+  { href: "/work", label: "My Work", icon: Briefcase },
+  { href: "/applications", label: "My Applications", icon: ClipboardList },
   { href: "/discover", label: "Discover", icon: Compass },
   { href: "/connections", label: "Connections", icon: Users },
   { href: "/rewards", label: "FLOW Points", icon: Gift },

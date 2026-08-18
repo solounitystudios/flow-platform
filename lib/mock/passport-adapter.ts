@@ -50,6 +50,8 @@ export function mockPersonToRecommendations(person: (typeof mockPeople)[number])
       recipient_id: person.id,
       opportunity_id: null,
       body: r.body,
+      rating: null,
+      skills_demonstrated: null,
       created_at: r.created_at,
       author: {
         id: r.author.id,

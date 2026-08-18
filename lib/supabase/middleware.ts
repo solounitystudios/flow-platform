@@ -56,4 +56,6 @@ const PROTECTED_PREFIXES = [
   "/connections",
   "/business",
   "/post",
+  "/work",
+  "/applications",
 ];

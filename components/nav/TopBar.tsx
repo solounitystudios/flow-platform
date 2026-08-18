@@ -14,6 +14,8 @@ const TITLES: Record<string, string> = {
   "/gigs": "Gigs & Jobs",
   "/events": "Events",
   "/passport": "FLOW Passport",
+  "/work": "My Work",
+  "/applications": "My Applications",
   "/discover": "Discover",
   "/connections": "Connections",
   "/rewards": "FLOW Points",
