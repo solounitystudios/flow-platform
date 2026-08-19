@@ -729,6 +729,7 @@ export type Database = {
       get_or_create_event_conversation: { Args: { p_event_id: string }; Returns: Json };
       get_or_create_opportunity_conversation: { Args: { p_applicant_id?: string; p_opportunity_id: string }; Returns: Json };
       is_blocked_between: { Args: { a: string; b: string }; Returns: boolean };
+      is_conversation_member: { Args: { p_conversation_id: string; p_profile_id: string }; Returns: boolean };
       mark_conversation_read: { Args: { p_conversation_id: string }; Returns: Json };
       mark_no_show: { Args: { p_event_id: string; p_profile_id: string }; Returns: Json };
       maybe_fill_opportunity: { Args: { p_opportunity_id: string }; Returns: undefined };

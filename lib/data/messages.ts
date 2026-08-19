@@ -21,21 +21,31 @@ const PERSON_COLUMNS = "id, username, full_name, avatar_url";
 export async function getMyConversations(profileId: string): Promise<ConversationSummary[]> {
   const supabase = await createClient();
 
-  const { data: memberships } = await supabase
+  const { data: memberships, error: membershipsError } = await supabase
     .from("conversation_members")
     .select("conversation_id, last_read_at")
     .eq("profile_id", profileId);
+
+  if (membershipsError) {
+    console.error("[getMyConversations] memberships query failed:", membershipsError.message);
+    throw new Error("Unable to load your conversations.");
+  }
 
   const conversationIds = (memberships ?? []).map((m) => m.conversation_id);
   if (conversationIds.length === 0) return [];
 
   const readAtByConversation = new Map((memberships ?? []).map((m) => [m.conversation_id, m.last_read_at]));
 
-  const { data: conversations } = await supabase
+  const { data: conversations, error: conversationsError } = await supabase
     .from("conversations")
     .select(`*, event:events(id, title, image_url), opportunity:opportunities(id, title)`)
     .in("id", conversationIds)
     .order("last_message_at", { ascending: false });
+
+  if (conversationsError) {
+    console.error("[getMyConversations] conversations query failed:", conversationsError.message);
+    throw new Error("Unable to load your conversations.");
+  }
 
   type Row = Tables<"conversations"> & {
     event: Pick<Tables<"events">, "id" | "title" | "image_url"> | null;
@@ -142,19 +152,33 @@ export interface ConversationMeta {
 
 export async function getConversationMeta(conversationId: string, viewerId: string): Promise<ConversationMeta | null> {
   const supabase = await createClient();
-  const { data: isMember } = await supabase
+  const { data: isMember, error: membershipError } = await supabase
     .from("conversation_members")
     .select("conversation_id")
     .eq("conversation_id", conversationId)
     .eq("profile_id", viewerId)
     .maybeSingle();
+
+  // A genuine "you're not a member" (no row, no error) is correctly treated
+  // as not-found — that's real access control. A failed query is a
+  // different thing and must not be silently read the same way: it isn't
+  // evidence the user lacks access, so it must not produce a 404.
+  if (membershipError) {
+    console.error("[getConversationMeta] membership check failed:", membershipError.message);
+    throw new Error("Unable to load this conversation.");
+  }
   if (!isMember) return null;
 
-  const { data: conv } = await supabase
+  const { data: conv, error: conversationError } = await supabase
     .from("conversations")
     .select(`*, event:events(id, title, image_url), opportunity:opportunities(id, title)`)
     .eq("id", conversationId)
     .maybeSingle();
+
+  if (conversationError) {
+    console.error("[getConversationMeta] conversation query failed:", conversationError.message);
+    throw new Error("Unable to load this conversation.");
+  }
   if (!conv) return null;
 
   if (conv.type === "event" && conv.event) {
@@ -198,6 +222,10 @@ export async function getConversationMessages(conversationId: string, before?: s
 
   if (before) query = query.lt("created_at", before);
 
-  const { data } = await query;
+  const { data, error } = await query;
+  if (error) {
+    console.error("[getConversationMessages] query failed:", error.message);
+    throw new Error("Unable to load messages.");
+  }
   return ((data ?? []) as MessageRow[]).reverse();
 }
