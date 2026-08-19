@@ -85,9 +85,15 @@ export function RealRegisterButton({
       )}
 
       {attendance?.status === "cancelled" && (
-        <Button variant="outline" size="lg" fullWidth disabled className="text-ink-400">
-          <X className="h-4 w-4" /> You cancelled your registration
-        </Button>
+        <>
+          <p className="flex items-center gap-1.5 text-sm text-ink-400">
+            <X className="h-4 w-4" /> You cancelled your registration
+          </p>
+          <Button size="lg" fullWidth disabled={pending} onClick={handleRegister}>
+            {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ticket className="h-4 w-4" />}
+            {pending ? "Reserving…" : priceCents === 0 ? "Get free ticket again" : `Get ticket again · $${(priceCents / 100).toFixed(2)}`}
+          </Button>
+        </>
       )}
 
       {attendance?.status === "no_show" && (

@@ -431,16 +431,21 @@ export async function markAllNotificationsReadAction() {
 
 // ── Events & tickets ────────────────────────────────────────────────────
 
-function generateCheckinCode() {
-  const digits = Math.floor(1000 + Math.random() * 9000);
-  const letters = Array.from({ length: 2 }, () => String.fromCharCode(65 + Math.floor(Math.random() * 26))).join("");
-  return `FLOW-${digits}-${letters}`;
-}
-
 export interface RegisterResult extends LifecycleResult {
   attendanceId?: string;
 }
 
+/**
+ * Registers for an event, or reactivates a previously cancelled
+ * registration for the same event — exactly one event_attendance row can
+ * ever exist per (event_id, profile_id), so this upserts on that key
+ * instead of inserting. checkin_code below is a placeholder only, required
+ * by the column's NOT NULL constraint on a fresh insert; it is never the
+ * value actually stored. enforce_attendance_lifecycle (the BEFORE INSERT/
+ * UPDATE trigger) fully owns checkin_code/price_cents on every accepted
+ * transition, and its same-status no-op branch returns OLD unchanged, so
+ * an idempotent repeat tap can't leak this placeholder into a real row.
+ */
 export async function registerForEventAction(eventId: string): Promise<RegisterResult> {
   const supabase = await createClient();
   const {
@@ -448,23 +453,13 @@ export async function registerForEventAction(eventId: string): Promise<RegisterR
   } = await supabase.auth.getUser();
   if (!user) return { error: "Log in to register for this event." };
 
-  const { data: event } = await supabase.from("events").select("ticket_price_cents").eq("id", eventId).maybeSingle();
-
   const { data, error } = await supabase
     .from("event_attendance")
-    .insert({
-      event_id: eventId,
-      profile_id: user.id,
-      checkin_code: generateCheckinCode(),
-      price_cents: event?.ticket_price_cents ?? 0,
-    })
+    .upsert({ event_id: eventId, profile_id: user.id, status: "registered", checkin_code: "" }, { onConflict: "event_id,profile_id" })
     .select("id")
     .single();
 
-  if (error) {
-    if (error.code === "23505") return { error: "You're already registered for this event." };
-    return { error: sanitizeDbError("events", error) };
-  }
+  if (error) return { error: sanitizeDbError("events", error) };
 
   revalidatePath(`/events/${eventId}`);
   revalidatePath("/tickets");
