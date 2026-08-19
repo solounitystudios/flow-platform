@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { mockOpportunities } from "@/lib/mock/data";
 import { milesFromCityCenter, isUuid } from "@/lib/geo";
 import { dicebearAvatar } from "@/lib/utils";
+import { isDemoModeEnabled } from "@/lib/demo";
 import type { MockOpportunity } from "@/lib/types";
 import type { Tables } from "@/lib/database.types";
 
@@ -40,8 +41,9 @@ function toCardShape(row: RealOpportunityRow, slotsFilled: number): MockOpportun
   };
 }
 
-/** Real, Supabase-backed open opportunities, supplemented with demo content so
- * discovery never looks empty before the platform has real multi-city supply. */
+/** Real, Supabase-backed open opportunities. When NEXT_PUBLIC_FLOW_DEMO_MODE is
+ * enabled, supplemented with demo content so discovery never looks empty before
+ * the platform has real multi-city supply — off (the default) returns real rows only. */
 export async function getOpenOpportunities(): Promise<MockOpportunity[]> {
   const supabase = await createClient();
   const { data: rows } = await supabase
@@ -69,6 +71,7 @@ export async function getOpenOpportunities(): Promise<MockOpportunity[]> {
   }
 
   const realShaped = real.map((o) => toCardShape(o as RealOpportunityRow, filledCounts.get(o.id) ?? 0));
+  if (!isDemoModeEnabled()) return realShaped;
   return [...realShaped, ...mockOpportunities.filter((o) => o.status === "open")];
 }
 
@@ -82,6 +85,7 @@ export interface OpportunityDetail extends MockOpportunity {
 
 export async function getOpportunityDetail(id: string, viewerId: string | null): Promise<OpportunityDetail | null> {
   if (!isUuid(id)) {
+    if (!isDemoModeEnabled()) return null;
     const mock = mockOpportunities.find((o) => o.id === id);
     if (!mock) return null;
     return { ...mock, source: "mock", isOwner: false, instantBook: false, myApplicationStatus: null, myApplicationId: null };

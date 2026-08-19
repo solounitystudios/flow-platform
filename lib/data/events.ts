@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { mockEvents } from "@/lib/mock/data";
 import { isUuid } from "@/lib/geo";
 import { dicebearAvatar } from "@/lib/utils";
+import { isDemoModeEnabled } from "@/lib/demo";
 import type { MockEvent } from "@/lib/types";
 import type { Tables } from "@/lib/database.types";
 
@@ -42,8 +43,10 @@ async function getRegisteredCounts(eventIds: string[]) {
   return counts;
 }
 
-/** Real, Supabase-backed published events, supplemented with demo content so
- * the events tab never looks empty before the platform has real multi-city supply. */
+/** Real, Supabase-backed published events. When NEXT_PUBLIC_FLOW_DEMO_MODE is
+ * enabled, supplemented with demo content so the events tab never looks empty
+ * before the platform has real multi-city supply — off (the default) returns
+ * real rows only. */
 export async function getUpcomingEvents(): Promise<MockEvent[]> {
   const supabase = await createClient();
   const { data: rows } = await supabase
@@ -55,6 +58,7 @@ export async function getUpcomingEvents(): Promise<MockEvent[]> {
   const real = rows ?? [];
   const counts = await getRegisteredCounts(real.map((r) => r.id));
   const realShaped = real.map((r) => toCardShape(r as RealEventRow, counts.get(r.id) ?? 0));
+  if (!isDemoModeEnabled()) return realShaped;
   return [...realShaped, ...mockEvents.filter((e) => e.status === "published")];
 }
 
@@ -69,6 +73,7 @@ export async function getPastEvents(): Promise<MockEvent[]> {
   const real = rows ?? [];
   const counts = await getRegisteredCounts(real.map((r) => r.id));
   const realShaped = real.map((r) => toCardShape(r as RealEventRow, counts.get(r.id) ?? 0));
+  if (!isDemoModeEnabled()) return realShaped;
   return [...realShaped, ...mockEvents.filter((e) => e.status === "completed")];
 }
 
@@ -92,6 +97,7 @@ export interface EventDetail extends MockEvent {
 
 export async function getEventDetail(id: string, viewerId: string | null): Promise<EventDetail | null> {
   if (!isUuid(id)) {
+    if (!isDemoModeEnabled()) return null;
     const mock = mockEvents.find((e) => e.id === id);
     if (!mock) return null;
     return { ...mock, source: "mock", isOwner: false, isPaid: mock.price_cents > 0, isPublic: true, ageRestriction: null, address: null, tags: [], myAttendance: null };

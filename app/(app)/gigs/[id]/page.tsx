@@ -5,6 +5,7 @@ import { ArrowLeft, BadgeCheck, Calendar, Clock, MapPin, Users2, Zap } from "luc
 import { getOpportunityDetail } from "@/lib/data/opportunities";
 import { getCurrentUser } from "@/lib/data/profile";
 import { getOpportunityGap } from "@/lib/data/gap";
+import { isDemoModeEnabled } from "@/lib/demo";
 import { Badge } from "@/components/ui/Badge";
 import { Card, CardBody } from "@/components/ui/Card";
 import { ApplyButton } from "@/components/opportunities/ApplyButton";
@@ -67,7 +68,7 @@ export default async function GigDetailPage({ params }: { params: Promise<{ id: 
 
           {!isOpen && <p className="text-sm text-ink-400">This opportunity is no longer accepting applicants.</p>}
 
-          {isOpen && opportunity.source === "mock" && <ApplyButton full />}
+          {isOpen && opportunity.source === "mock" && isDemoModeEnabled() && <ApplyButton full />}
 
           {isOpen && opportunity.source === "real" && (
             <RealApplyButton

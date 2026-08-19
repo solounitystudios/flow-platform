@@ -3,30 +3,34 @@ import Image from "next/image";
 import { ArrowRight, Zap, ShieldCheck, MapPin, Ticket, Gift, Building2, Users, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { PassportCard } from "@/components/passport/PassportCard";
-import { currentUserDemo, mockOpportunities, mockOrganizations } from "@/lib/mock/data";
-import { flowIdFromUuid } from "@/lib/passport";
-import { formatCents, relativeTime } from "@/lib/utils";
+import { mockOpportunities, mockOrganizations } from "@/lib/mock/data";
+import { isDemoModeEnabled } from "@/lib/demo";
+import { dicebearAvatar, formatCents, relativeTime } from "@/lib/utils";
+
+// Illustrative-only example, not sourced from lib/mock's demo dataset — this is
+// marketing copy showing the shape of a Passport, not a fabricated live member.
+const examplePassport = {
+  fullName: "Sample FLOW Member",
+  username: "flow-member",
+  avatarUrl: dicebearAvatar("flow-passport-example"),
+  city: "Buffalo",
+  state: "NY",
+  flowId: "FLOW-EXAMPLE1",
+  reliabilityScore: 98,
+  flowPoints: 1240,
+  gigsCompleted: 37,
+  skillsVerified: 14,
+  eventsAttended: 26,
+  communityProjects: 5,
+  recommendationsCount: 12,
+  earnedCents: 842000,
+  memberSince: "2026",
+  availableNow: true,
+  verified: true,
+};
 
 export default function LandingPage() {
-  const demoPassport = {
-    fullName: currentUserDemo.full_name,
-    username: currentUserDemo.username,
-    avatarUrl: currentUserDemo.avatar_url,
-    city: currentUserDemo.city,
-    state: currentUserDemo.state,
-    flowId: flowIdFromUuid(currentUserDemo.id),
-    reliabilityScore: currentUserDemo.reliability_score,
-    flowPoints: currentUserDemo.flow_points,
-    gigsCompleted: currentUserDemo.gigs_completed,
-    skillsVerified: currentUserDemo.skills.filter((s) => s.verified).length,
-    eventsAttended: currentUserDemo.events_attended,
-    communityProjects: currentUserDemo.community_projects,
-    recommendationsCount: currentUserDemo.recommendations,
-    earnedCents: currentUserDemo.earned_cents,
-    memberSince: currentUserDemo.member_since,
-    availableNow: currentUserDemo.available_now,
-    verified: true,
-  };
+  const demoMode = isDemoModeEnabled();
 
   return (
     <>
@@ -65,7 +69,7 @@ export default function LandingPage() {
           </div>
 
           <div className="mx-auto w-full max-w-sm lg:max-w-none">
-            <PassportCard data={demoPassport} />
+            <PassportCard data={examplePassport} />
           </div>
         </div>
       </section>
@@ -83,28 +87,40 @@ export default function LandingPage() {
             </Button>
           </div>
 
-          <div className="mt-7 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {mockOpportunities.filter((o) => o.status === "open").slice(0, 6).map((opp) => (
-              <div key={opp.id} className="rounded-2xl border border-ink-100 p-4 transition hover:border-flow-300 hover:shadow-card dark:border-ink-800">
-                <div className="flex items-center justify-between">
-                  <span className="rounded-full bg-flow-50 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-flow-700 dark:bg-flow-950 dark:text-flow-300">
-                    {opp.opportunity_type}
-                  </span>
-                  {opp.urgent && <span className="text-[11px] font-semibold text-red-500">● Urgent</span>}
+          {demoMode ? (
+            <div className="mt-7 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {mockOpportunities.filter((o) => o.status === "open").slice(0, 6).map((opp) => (
+                <div key={opp.id} className="rounded-2xl border border-ink-100 p-4 transition hover:border-flow-300 hover:shadow-card dark:border-ink-800">
+                  <div className="flex items-center justify-between">
+                    <span className="rounded-full bg-flow-50 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-flow-700 dark:bg-flow-950 dark:text-flow-300">
+                      {opp.opportunity_type}
+                    </span>
+                    {opp.urgent && <span className="text-[11px] font-semibold text-red-500">● Urgent</span>}
+                  </div>
+                  <h3 className="mt-2.5 font-semibold text-ink-900 dark:text-white">{opp.title}</h3>
+                  <p className="mt-1 flex items-center gap-1 text-xs text-ink-400">
+                    <MapPin className="h-3 w-3" /> {opp.location_name} · {opp.distance_mi} mi
+                  </p>
+                  <div className="mt-3 flex items-center justify-between text-sm">
+                    <span className="font-semibold text-ink-900 dark:text-white">
+                      {opp.pay_cents ? `${formatCents(opp.pay_cents)}/hr` : "Volunteer"}
+                    </span>
+                    <span className="text-ink-400">{relativeTime(opp.starts_at)}</span>
+                  </div>
                 </div>
-                <h3 className="mt-2.5 font-semibold text-ink-900 dark:text-white">{opp.title}</h3>
-                <p className="mt-1 flex items-center gap-1 text-xs text-ink-400">
-                  <MapPin className="h-3 w-3" /> {opp.location_name} · {opp.distance_mi} mi
-                </p>
-                <div className="mt-3 flex items-center justify-between text-sm">
-                  <span className="font-semibold text-ink-900 dark:text-white">
-                    {opp.pay_cents ? `${formatCents(opp.pay_cents)}/hr` : "Volunteer"}
-                  </span>
-                  <span className="text-ink-400">{relativeTime(opp.starts_at)}</span>
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div className="mt-7 rounded-2xl border border-dashed border-ink-200 p-8 text-center dark:border-ink-700">
+              <p className="text-ink-500 dark:text-ink-400">
+                New gigs, jobs, and volunteer opportunities are posted daily — open the live map to see what&apos;s
+                available in your city right now.
+              </p>
+              <Button href="/live" size="sm" className="mt-4">
+                Open live map <ArrowRight className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
         </div>
       </section>
 
@@ -195,17 +211,31 @@ export default function LandingPage() {
               Create a business profile
             </Button>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            {mockOrganizations.slice(0, 4).map((o) => (
-              <div key={o.id} className="rounded-2xl bg-white/10 p-4 backdrop-blur">
-                <div className="relative h-9 w-9 overflow-hidden rounded-lg bg-white/20">
-                  <Image src={o.logo_url} alt={o.name} fill className="object-cover" unoptimized />
+          {demoMode ? (
+            <div className="grid grid-cols-2 gap-3">
+              {mockOrganizations.slice(0, 4).map((o) => (
+                <div key={o.id} className="rounded-2xl bg-white/10 p-4 backdrop-blur">
+                  <div className="relative h-9 w-9 overflow-hidden rounded-lg bg-white/20">
+                    <Image src={o.logo_url} alt={o.name} fill className="object-cover" unoptimized />
+                  </div>
+                  <p className="mt-3 text-sm font-semibold">{o.name}</p>
+                  <p className="text-xs text-flow-200">{o.industry}</p>
                 </div>
-                <p className="mt-3 text-sm font-semibold">{o.name}</p>
-                <p className="text-xs text-flow-200">{o.industry}</p>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              {["Restaurants", "Events", "Fitness", "Trades"].map((industry) => (
+                <div key={industry} className="rounded-2xl bg-white/10 p-4 backdrop-blur">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/20">
+                    <Building2 className="h-4 w-4" />
+                  </div>
+                  <p className="mt-3 text-sm font-semibold">{industry}</p>
+                  <p className="text-xs text-flow-200">Hiring on FLOW</p>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </section>
 

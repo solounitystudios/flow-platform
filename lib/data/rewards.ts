@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { REWARDS_CATALOG } from "@/lib/mock/data";
+import { isDemoModeEnabled } from "@/lib/demo";
 import type { Tables } from "@/lib/database.types";
 
 export interface RewardItem {
@@ -13,8 +14,10 @@ export interface RewardItem {
   source: "real" | "mock";
 }
 
-/** Real, Supabase-backed active rewards, supplemented with demo content so the
- * catalog never looks empty before partners have listed real perks. */
+/** Real, Supabase-backed active rewards. When NEXT_PUBLIC_FLOW_DEMO_MODE is
+ * enabled, supplemented with demo content so the catalog never looks empty
+ * before partners have listed real perks — off (the default) returns real
+ * rewards only. */
 export async function getRewardsCatalog(): Promise<RewardItem[]> {
   const supabase = await createClient();
   const { data } = await supabase.from("rewards").select("*").eq("status", "active").order("points_required", { ascending: true });
@@ -29,6 +32,7 @@ export async function getRewardsCatalog(): Promise<RewardItem[]> {
     redeemed_count: r.redeemed_count,
     source: "real",
   }));
+  if (!isDemoModeEnabled()) return real;
   const mock: RewardItem[] = REWARDS_CATALOG.map((r) => ({
     id: r.id,
     title: r.name,

@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { mockPeople, mockOrganizations } from "@/lib/mock/data";
 import { dicebearAvatar } from "@/lib/utils";
+import { isDemoModeEnabled } from "@/lib/demo";
 import type { MockOrganization, MockPerson } from "@/lib/types";
 import type { Tables } from "@/lib/database.types";
 
@@ -34,10 +35,12 @@ export async function getRealDiscoverPeople(excludeId?: string): Promise<Discove
   return (data ?? []).filter((p) => p.id !== excludeId).map(toPersonCard);
 }
 
-/** Real members supplemented with demo profiles so discovery never looks empty
- * before the platform has real supply. */
+/** Real members. When NEXT_PUBLIC_FLOW_DEMO_MODE is enabled, supplemented with
+ * demo profiles so discovery never looks empty before the platform has real
+ * supply — off (the default) returns real members only. */
 export async function getDiscoverPeople(excludeId?: string): Promise<DiscoverPerson[]> {
   const real = await getRealDiscoverPeople(excludeId);
+  if (!isDemoModeEnabled()) return real;
   return [...real, ...mockPeople];
 }
 
@@ -61,5 +64,6 @@ export async function getDiscoverOrganizations(): Promise<MockOrganization[]> {
   const { data } = await supabase.from("organizations").select("*").order("created_at", { ascending: false });
 
   const real = (data ?? []).map(toOrgCard);
+  if (!isDemoModeEnabled()) return real;
   return [...real, ...mockOrganizations];
 }
