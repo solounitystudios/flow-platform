@@ -586,3 +586,55 @@ export async function commitLeadImportAction(_prev: ImportCommitState, formData:
   revalidatePath("/admin");
   return { result: { created: result.created ?? 0, updated: result.updated ?? 0 } };
 }
+
+// ── V1+ Passport evidence review ────────────────────────────────────────
+// The only path a member's evidence claim ever changes status through —
+// decide_evidence_verification() re-checks is_flow_admin(true) itself,
+// records an immutable verification_reviews row, flips profile_skills.
+// verified when applicable, and mints/revokes the matching
+// profile_credentials badge. Mirrors decide_verification_case() exactly.
+
+export async function decideEvidenceAction(_prev: AdminActionState, formData: FormData): Promise<AdminActionState> {
+  await requireSecureAdmin();
+  const supabase = await createClient();
+
+  const verificationId = String(formData.get("verification_id") ?? "");
+  const status = String(formData.get("status") ?? "").trim();
+  if (!verificationId || !status) return { error: "Missing claim or status." };
+
+  const method = String(formData.get("method") ?? "") || undefined;
+  const reasonCode = String(formData.get("reason_code") ?? "") || undefined;
+  const notes = String(formData.get("notes") ?? "") || undefined;
+  const expiresRaw = String(formData.get("expires_at") ?? "");
+
+  const { data, error } = await supabase.rpc("decide_evidence_verification", {
+    p_verification_id: verificationId,
+    p_new_status: status,
+    p_method: method,
+    p_reason_code: reasonCode,
+    p_notes: notes,
+    p_expires_at: expiresRaw || undefined,
+  });
+
+  if (error) return { error: sanitizeDbError("decideEvidence", error) };
+  const result = data as { ok: boolean; reason?: string } | null;
+  if (!result?.ok) return { error: result?.reason === "not_found" ? "Claim not found." : "Unable to save decision." };
+
+  revalidatePath("/admin/evidence");
+  return {};
+}
+
+export async function grantFoundingClassAction(profileId: string, reason: string): Promise<{ error?: string }> {
+  await requireSecureAdmin();
+  const supabase = await createClient();
+
+  if (!reason.trim()) return { error: "Give a reason for the founding-class grant." };
+
+  const { data, error } = await supabase.rpc("grant_founding_class", { p_profile_id: profileId, p_reason: reason });
+  if (error) return { error: sanitizeDbError("grantFoundingClass", error) };
+  const result = data as { ok: boolean; reason?: string } | null;
+  if (!result?.ok) return { error: "Unable to grant founding-class status." };
+
+  revalidatePath("/admin/evidence");
+  return {};
+}

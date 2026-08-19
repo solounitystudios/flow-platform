@@ -4,10 +4,12 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, BadgeCheck, Calendar, Clock, MapPin, Users2, Zap } from "lucide-react";
 import { getOpportunityDetail } from "@/lib/data/opportunities";
 import { getCurrentUser } from "@/lib/data/profile";
+import { getOpportunityGap } from "@/lib/data/gap";
 import { Badge } from "@/components/ui/Badge";
 import { Card, CardBody } from "@/components/ui/Card";
 import { ApplyButton } from "@/components/opportunities/ApplyButton";
 import { RealApplyButton } from "@/components/opportunities/RealApplyButton";
+import { OpportunityGapCard } from "@/components/opportunities/OpportunityGapCard";
 import { formatCents, formatDateTime } from "@/lib/utils";
 
 export default async function GigDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -18,6 +20,7 @@ export default async function GigDetailPage({ params }: { params: Promise<{ id: 
 
   const spotsLeft = opportunity.slots - opportunity.slots_filled;
   const isOpen = opportunity.status === "open";
+  const gap = user && opportunity.source === "real" ? await getOpportunityGap(id, user.id) : null;
 
   return (
     <div className="space-y-5">
@@ -77,6 +80,8 @@ export default async function GigDetailPage({ params }: { params: Promise<{ id: 
           )}
         </CardBody>
       </Card>
+
+      {gap && <OpportunityGapCard gap={gap} />}
     </div>
   );
 }

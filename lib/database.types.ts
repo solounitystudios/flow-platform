@@ -861,6 +861,33 @@ export type Database = {
           },
         ]
       }
+      credential_types: {
+        Row: {
+          color_token: string
+          description: string
+          icon_name: string
+          key: string
+          label: string
+          sort_order: number
+        }
+        Insert: {
+          color_token: string
+          description: string
+          icon_name: string
+          key: string
+          label: string
+          sort_order?: number
+        }
+        Update: {
+          color_token?: string
+          description?: string
+          icon_name?: string
+          key?: string
+          label?: string
+          sort_order?: number
+        }
+        Relationships: []
+      }
       employer_invitations: {
         Row: {
           accepted_at: string | null
@@ -1250,6 +1277,70 @@ export type Database = {
           },
         ]
       }
+      founding_class_grants: {
+        Row: {
+          created_at: string
+          granted_by: string | null
+          profile_id: string
+          reason: string
+        }
+        Insert: {
+          created_at?: string
+          granted_by?: string | null
+          profile_id: string
+          reason: string
+        }
+        Update: {
+          created_at?: string
+          granted_by?: string | null
+          profile_id?: string
+          reason?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "founding_class_grants_granted_by_fkey"
+            columns: ["granted_by"]
+            isOneToOne: false
+            referencedRelation: "passport_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "founding_class_grants_granted_by_fkey"
+            columns: ["granted_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "founding_class_grants_granted_by_fkey"
+            columns: ["granted_by"]
+            isOneToOne: false
+            referencedRelation: "reliability_breakdown"
+            referencedColumns: ["profile_id"]
+          },
+          {
+            foreignKeyName: "founding_class_grants_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: true
+            referencedRelation: "passport_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "founding_class_grants_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "founding_class_grants_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: true
+            referencedRelation: "reliability_breakdown"
+            referencedColumns: ["profile_id"]
+          },
+        ]
+      }
       lead_organization_links: {
         Row: {
           lead_id: string
@@ -1363,6 +1454,190 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "business_leads"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      match_recommendations: {
+        Row: {
+          acted_at: string | null
+          created_at: string
+          dismissed_at: string | null
+          expires_at: string
+          id: string
+          profile_id: string
+          reasons: string[]
+          recommendation_type: string
+          score: number
+          signals: Json
+          target_opportunity_id: string | null
+          target_profile_id: string | null
+          target_skill_id: string | null
+        }
+        Insert: {
+          acted_at?: string | null
+          created_at?: string
+          dismissed_at?: string | null
+          expires_at?: string
+          id?: string
+          profile_id: string
+          reasons?: string[]
+          recommendation_type: string
+          score?: number
+          signals?: Json
+          target_opportunity_id?: string | null
+          target_profile_id?: string | null
+          target_skill_id?: string | null
+        }
+        Update: {
+          acted_at?: string | null
+          created_at?: string
+          dismissed_at?: string | null
+          expires_at?: string
+          id?: string
+          profile_id?: string
+          reasons?: string[]
+          recommendation_type?: string
+          score?: number
+          signals?: Json
+          target_opportunity_id?: string | null
+          target_profile_id?: string | null
+          target_skill_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "match_recommendations_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "passport_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "match_recommendations_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "match_recommendations_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "reliability_breakdown"
+            referencedColumns: ["profile_id"]
+          },
+          {
+            foreignKeyName: "match_recommendations_target_opportunity_id_fkey"
+            columns: ["target_opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "opportunities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "match_recommendations_target_profile_id_fkey"
+            columns: ["target_profile_id"]
+            isOneToOne: false
+            referencedRelation: "passport_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "match_recommendations_target_profile_id_fkey"
+            columns: ["target_profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "match_recommendations_target_profile_id_fkey"
+            columns: ["target_profile_id"]
+            isOneToOne: false
+            referencedRelation: "reliability_breakdown"
+            referencedColumns: ["profile_id"]
+          },
+          {
+            foreignKeyName: "match_recommendations_target_skill_id_fkey"
+            columns: ["target_skill_id"]
+            isOneToOne: false
+            referencedRelation: "skills"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      member_intents: {
+        Row: {
+          active: boolean
+          availability: string | null
+          created_at: string
+          expires_at: string | null
+          goal: string | null
+          id: string
+          intent_type: string
+          location_city: string | null
+          location_state: string | null
+          profile_id: string
+          radius_miles: number | null
+          remote_preference: string
+          target_categories: string[]
+          target_skills: string[]
+          updated_at: string
+          visible: boolean
+        }
+        Insert: {
+          active?: boolean
+          availability?: string | null
+          created_at?: string
+          expires_at?: string | null
+          goal?: string | null
+          id?: string
+          intent_type: string
+          location_city?: string | null
+          location_state?: string | null
+          profile_id: string
+          radius_miles?: number | null
+          remote_preference?: string
+          target_categories?: string[]
+          target_skills?: string[]
+          updated_at?: string
+          visible?: boolean
+        }
+        Update: {
+          active?: boolean
+          availability?: string | null
+          created_at?: string
+          expires_at?: string | null
+          goal?: string | null
+          id?: string
+          intent_type?: string
+          location_city?: string | null
+          location_state?: string | null
+          profile_id?: string
+          radius_miles?: number | null
+          remote_preference?: string
+          target_categories?: string[]
+          target_skills?: string[]
+          updated_at?: string
+          visible?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "member_intents_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "passport_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "member_intents_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "member_intents_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "reliability_breakdown"
+            referencedColumns: ["profile_id"]
           },
         ]
       }
@@ -1595,6 +1870,39 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      opportunity_skill_requirements: {
+        Row: {
+          opportunity_id: string
+          required: boolean
+          skill_id: string
+        }
+        Insert: {
+          opportunity_id: string
+          required?: boolean
+          skill_id: string
+        }
+        Update: {
+          opportunity_id?: string
+          required?: boolean
+          skill_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "opportunity_skill_requirements_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "opportunities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "opportunity_skill_requirements_skill_id_fkey"
+            columns: ["skill_id"]
+            isOneToOne: false
+            referencedRelation: "skills"
             referencedColumns: ["id"]
           },
         ]
@@ -2076,6 +2384,49 @@ export type Database = {
           },
         ]
       }
+      platform_settings: {
+        Row: {
+          key: string
+          updated_at: string
+          updated_by: string | null
+          value: Json
+        }
+        Insert: {
+          key: string
+          updated_at?: string
+          updated_by?: string | null
+          value: Json
+        }
+        Update: {
+          key?: string
+          updated_at?: string
+          updated_by?: string | null
+          value?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "platform_settings_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "passport_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "platform_settings_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "platform_settings_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "reliability_breakdown"
+            referencedColumns: ["profile_id"]
+          },
+        ]
+      }
       profile_achievements: {
         Row: {
           achievement_key: string
@@ -2116,6 +2467,68 @@ export type Database = {
           },
           {
             foreignKeyName: "profile_achievements_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "reliability_breakdown"
+            referencedColumns: ["profile_id"]
+          },
+        ]
+      }
+      profile_credentials: {
+        Row: {
+          credential_type: string
+          granted_at: string
+          id: string
+          profile_id: string
+          revoked_at: string | null
+          source_id: string | null
+          source_table: string | null
+          title: string
+        }
+        Insert: {
+          credential_type: string
+          granted_at?: string
+          id?: string
+          profile_id: string
+          revoked_at?: string | null
+          source_id?: string | null
+          source_table?: string | null
+          title: string
+        }
+        Update: {
+          credential_type?: string
+          granted_at?: string
+          id?: string
+          profile_id?: string
+          revoked_at?: string | null
+          source_id?: string | null
+          source_table?: string | null
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profile_credentials_credential_type_fkey"
+            columns: ["credential_type"]
+            isOneToOne: false
+            referencedRelation: "credential_types"
+            referencedColumns: ["key"]
+          },
+          {
+            foreignKeyName: "profile_credentials_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "passport_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profile_credentials_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profile_credentials_profile_id_fkey"
             columns: ["profile_id"]
             isOneToOne: false
             referencedRelation: "reliability_breakdown"
@@ -2298,6 +2711,85 @@ export type Database = {
           {
             foreignKeyName: "recommendations_recipient_id_fkey"
             columns: ["recipient_id"]
+            isOneToOne: false
+            referencedRelation: "reliability_breakdown"
+            referencedColumns: ["profile_id"]
+          },
+        ]
+      }
+      referrals: {
+        Row: {
+          accepted_at: string | null
+          accepted_by: string | null
+          created_at: string
+          expires_at: string
+          id: string
+          intended_email: string | null
+          referrer_id: string
+          revoked_at: string | null
+          token_hash: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          accepted_by?: string | null
+          created_at?: string
+          expires_at: string
+          id?: string
+          intended_email?: string | null
+          referrer_id: string
+          revoked_at?: string | null
+          token_hash: string
+        }
+        Update: {
+          accepted_at?: string | null
+          accepted_by?: string | null
+          created_at?: string
+          expires_at?: string
+          id?: string
+          intended_email?: string | null
+          referrer_id?: string
+          revoked_at?: string | null
+          token_hash?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "referrals_accepted_by_fkey"
+            columns: ["accepted_by"]
+            isOneToOne: false
+            referencedRelation: "passport_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "referrals_accepted_by_fkey"
+            columns: ["accepted_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "referrals_accepted_by_fkey"
+            columns: ["accepted_by"]
+            isOneToOne: false
+            referencedRelation: "reliability_breakdown"
+            referencedColumns: ["profile_id"]
+          },
+          {
+            foreignKeyName: "referrals_referrer_id_fkey"
+            columns: ["referrer_id"]
+            isOneToOne: false
+            referencedRelation: "passport_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "referrals_referrer_id_fkey"
+            columns: ["referrer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "referrals_referrer_id_fkey"
+            columns: ["referrer_id"]
             isOneToOne: false
             referencedRelation: "reliability_breakdown"
             referencedColumns: ["profile_id"]
@@ -2519,35 +3011,131 @@ export type Database = {
           },
         ]
       }
+      verification_reviews: {
+        Row: {
+          actor_id: string
+          created_at: string
+          from_status: string | null
+          id: string
+          method: string | null
+          notes: string | null
+          reason_code: string | null
+          to_status: string
+          verification_id: string
+        }
+        Insert: {
+          actor_id?: string
+          created_at?: string
+          from_status?: string | null
+          id?: string
+          method?: string | null
+          notes?: string | null
+          reason_code?: string | null
+          to_status: string
+          verification_id: string
+        }
+        Update: {
+          actor_id?: string
+          created_at?: string
+          from_status?: string | null
+          id?: string
+          method?: string | null
+          notes?: string | null
+          reason_code?: string | null
+          to_status?: string
+          verification_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "verification_reviews_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "passport_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "verification_reviews_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "verification_reviews_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "reliability_breakdown"
+            referencedColumns: ["profile_id"]
+          },
+          {
+            foreignKeyName: "verification_reviews_verification_id_fkey"
+            columns: ["verification_id"]
+            isOneToOne: false
+            referencedRelation: "verifications"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       verifications: {
         Row: {
           created_at: string
+          credential_type: string
+          evidence_note: string | null
+          evidence_url: string | null
+          expires_at: string | null
           id: string
           profile_id: string
           reference_id: string | null
+          reference_table: string | null
+          revoked_at: string | null
+          source: string
           status: string
-          verification_type: string
+          title: string | null
+          updated_at: string
           verified_at: string | null
         }
         Insert: {
           created_at?: string
+          credential_type: string
+          evidence_note?: string | null
+          evidence_url?: string | null
+          expires_at?: string | null
           id?: string
           profile_id: string
           reference_id?: string | null
+          reference_table?: string | null
+          revoked_at?: string | null
+          source?: string
           status?: string
-          verification_type: string
+          title?: string | null
+          updated_at?: string
           verified_at?: string | null
         }
         Update: {
           created_at?: string
+          credential_type?: string
+          evidence_note?: string | null
+          evidence_url?: string | null
+          expires_at?: string | null
           id?: string
           profile_id?: string
           reference_id?: string | null
+          reference_table?: string | null
+          revoked_at?: string | null
+          source?: string
           status?: string
-          verification_type?: string
+          title?: string | null
+          updated_at?: string
           verified_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "verifications_credential_type_fkey"
+            columns: ["credential_type"]
+            isOneToOne: false
+            referencedRelation: "credential_types"
+            referencedColumns: ["key"]
+          },
           {
             foreignKeyName: "verifications_profile_id_fkey"
             columns: ["profile_id"]
@@ -2639,6 +3227,7 @@ export type Database = {
         Args: { p_token_hash: string }
         Returns: Json
       }
+      accept_referral: { Args: { p_token_hash: string }; Returns: Json }
       block_profile: { Args: { p_target_id: string }; Returns: Json }
       cancel_connection_request: {
         Args: { p_connection_id: string }
@@ -2661,6 +3250,17 @@ export type Database = {
         Args: { p_organization_id: string }
         Returns: Json
       }
+      decide_evidence_verification: {
+        Args: {
+          p_expires_at?: string
+          p_method?: string
+          p_new_status: string
+          p_notes?: string
+          p_reason_code?: string
+          p_verification_id: string
+        }
+        Returns: Json
+      }
       decide_verification_case: {
         Args: {
           p_assigned_to?: string
@@ -2675,6 +3275,10 @@ export type Database = {
       evaluate_achievements: {
         Args: { p_profile_id: string }
         Returns: undefined
+      }
+      generate_match_recommendations: {
+        Args: { p_profile_id: string }
+        Returns: Json
       }
       generate_onboarding_followup_tasks: { Args: never; Returns: Json }
       get_my_blocked_profiles: {
@@ -2700,6 +3304,10 @@ export type Database = {
       }
       get_or_create_opportunity_conversation: {
         Args: { p_applicant_id?: string; p_opportunity_id: string }
+        Returns: Json
+      }
+      grant_founding_class: {
+        Args: { p_profile_id: string; p_reason: string }
         Returns: Json
       }
       import_business_leads: { Args: { p_rows: Json }; Returns: Json }
@@ -2992,4 +3600,29 @@ export interface GenerateFollowupsResult {
   ok: boolean;
   reason?: "not_authorized";
   created?: number;
+}
+
+// ── V1+ Passport/Trust/Matching RPC result shapes ────────────────────────
+// Same reasoning as above: jsonb-typed at the SQL level, real shape here.
+
+export interface EvidenceDecisionResult {
+  ok: boolean;
+  reason?: "not_authorized" | "not_found";
+}
+
+export interface ReferralAcceptRpcResult {
+  ok: boolean;
+  reason?: "not_authenticated" | "invalid_or_expired" | "self_referral" | "email_mismatch" | "already_claimed";
+  already_accepted?: boolean;
+}
+
+export interface FoundingClassGrantResult {
+  ok: boolean;
+  reason?: "not_authorized";
+}
+
+export interface GenerateMatchesResult {
+  ok: boolean;
+  reason?: "not_authenticated" | "not_authorized";
+  generated?: number;
 }

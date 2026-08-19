@@ -12,6 +12,8 @@ import {
   Settings,
   Building2,
   ClipboardList,
+  Sparkles,
+  Search,
   type LucideIcon,
 } from "lucide-react";
 
@@ -31,6 +33,8 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/work", label: "My Work", icon: Briefcase },
   { href: "/applications", label: "My Applications", icon: ClipboardList },
   { href: "/discover", label: "Discover", icon: Compass },
+  { href: "/recommendations", label: "Recommended", icon: Sparkles },
+  { href: "/search", label: "Search", icon: Search },
   { href: "/connections", label: "Connections", icon: Users },
   { href: "/rewards", label: "FLOW Points", icon: Gift },
   { href: "/messages", label: "Messages", icon: MessageCircle },

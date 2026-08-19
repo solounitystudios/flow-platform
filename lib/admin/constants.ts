@@ -105,3 +105,31 @@ export const FOLLOW_UP_STATUS_FILTERS = [
   { value: "upcoming", label: "Upcoming follow-up" },
   { value: "none", label: "No follow-up set" },
 ] as const;
+
+// ── V1+ Passport evidence review ──────────────────────────────────────────
+
+export const EVIDENCE_STATUSES = [
+  { value: "pending", label: "Pending" },
+  { value: "verified", label: "Verified" },
+  { value: "rejected", label: "Rejected" },
+  { value: "expired", label: "Expired" },
+  { value: "revoked", label: "Revoked" },
+] as const;
+
+export const EVIDENCE_REASON_CODES = [
+  { value: "identity_confirmed", label: "Identity confirmed" },
+  { value: "evidence_verified", label: "Evidence verified against source" },
+  { value: "insufficient_evidence", label: "Insufficient evidence" },
+  { value: "broken_or_invalid_link", label: "Broken or invalid link" },
+  { value: "does_not_match_claim", label: "Evidence doesn't match claim" },
+  { value: "expired_credential", label: "Credential expired" },
+  { value: "policy_violation", label: "Policy violation" },
+  { value: "other", label: "Other" },
+] as const;
+
+export const EVIDENCE_METHODS = [
+  { value: "manual_review", label: "Manual review" },
+  { value: "link_check", label: "Link check" },
+  { value: "third_party_confirmation", label: "Third-party confirmation" },
+  { value: "document_review", label: "Document review" },
+] as const;

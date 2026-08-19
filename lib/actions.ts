@@ -239,6 +239,7 @@ export async function addProfileSkillAction(skillId: string) {
   if (!user || !skillId) return;
 
   await supabase.from("profile_skills").upsert({ profile_id: user.id, skill_id: skillId }, { onConflict: "profile_id,skill_id" });
+  await supabase.rpc("evaluate_achievements", { p_profile_id: user.id });
   revalidatePath("/settings");
   revalidatePath("/passport");
 }

@@ -1,4 +1,4 @@
-import { Award, Briefcase, CalendarDays, Flame, Gift, Medal, MessageSquareQuote, ShieldCheck, Star, Trophy, Users2, Zap, type LucideIcon } from "lucide-react";
+import { Award, Briefcase, CalendarDays, Flame, Gift, Medal, MessageSquareQuote, ShieldCheck, Star, Trophy, Users2, Zap, UserCheck, Sparkles, FileCheck, Target, Compass, type LucideIcon } from "lucide-react";
 import { cn, relativeTime } from "@/lib/utils";
 import type { AchievementDef, EarnedAchievement } from "@/lib/data/achievements";
 
@@ -15,6 +15,11 @@ const ICONS: Record<string, LucideIcon> = {
   calendar: CalendarDays,
   gift: Gift,
   quote: MessageSquareQuote,
+  "user-check": UserCheck,
+  sparkles: Sparkles,
+  "file-check": FileCheck,
+  target: Target,
+  compass: Compass,
 };
 
 function resolveIcon(icon: string): LucideIcon {

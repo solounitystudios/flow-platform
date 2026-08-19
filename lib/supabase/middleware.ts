@@ -59,4 +59,6 @@ const PROTECTED_PREFIXES = [
   "/work",
   "/applications",
   "/admin",
+  "/recommendations",
+  "/search",
 ];

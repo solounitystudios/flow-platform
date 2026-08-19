@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Users, Kanban, ListTodo, FileText, ShieldCheck, ScrollText, Upload, Download, ArrowLeft } from "lucide-react";
+import { LayoutDashboard, Users, Kanban, ListTodo, FileText, ShieldCheck, BadgeCheck, ScrollText, Upload, Download, ArrowLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const LINKS = [
@@ -12,6 +12,7 @@ const LINKS = [
   { href: "/admin/tasks", label: "Tasks", icon: ListTodo, exact: false },
   { href: "/admin/templates", label: "Templates", icon: FileText, exact: false },
   { href: "/admin/verification", label: "Verification", icon: ShieldCheck, exact: false },
+  { href: "/admin/evidence", label: "Evidence", icon: BadgeCheck, exact: false },
   { href: "/admin/import", label: "Import", icon: Upload, exact: false },
   { href: "/admin/audit", label: "Audit log", icon: ScrollText, exact: false },
 ] as const;
