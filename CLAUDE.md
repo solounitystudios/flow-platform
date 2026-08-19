@@ -1,1 +1,3 @@
 @AGENTS.md
+@.claude/FLOW_ORCHESTRATION.md
+@.claude/FLOW_WORKFLOW.md
