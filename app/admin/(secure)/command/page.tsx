@@ -5,11 +5,15 @@ import { getFlowCommandState, getLiveRepoStatus, deriveRiskFlags } from "@/lib/a
 import { EmptyState } from "@/components/ui/EmptyState";
 import { SectionHeading } from "@/components/ui/SectionHeading";
 import { FlowCommandMissionBar } from "@/components/admin/FlowCommandMissionBar";
+import { FlowCommandActiveNow } from "@/components/admin/FlowCommandActiveNow";
+import { FlowCommandRelay } from "@/components/admin/FlowCommandRelay";
 import { FlowCommandAgentCard } from "@/components/admin/FlowCommandAgentCard";
 import { FlowCommandFeed } from "@/components/admin/FlowCommandFeed";
 import { FlowCommandRiskView } from "@/components/admin/FlowCommandRiskView";
 import { FlowCommandHelpers } from "@/components/admin/FlowCommandHelpers";
+import { FlowCommandYourMove } from "@/components/admin/FlowCommandYourMove";
 import { FlowCommandCurrentMissionComplete, FlowCommandLastMissionRecap } from "@/components/admin/FlowCommandMissionComplete";
+import { getActiveAgents } from "@/lib/admin/flow-command-ui";
 
 // This route shells out to `git` and reads the filesystem — it needs Node,
 // not edge. Admin routes in this repo already run on Node by default; this
@@ -49,6 +53,10 @@ export default async function FlowCommandPage() {
 
   const state = stateResult.state;
   const riskFlags = deriveRiskFlags(state);
+  const activeAgents = getActiveAgents(state.agents);
+  const activeNames = new Set(activeAgents.map((a) => a.name));
+  const restingAgents = state.agents.filter((a) => !activeNames.has(a.name));
+  const allCheckpointsDone = state.checkpoints.length > 0 && state.checkpoints.every((c) => c.status === "done");
 
   return (
     <div className="space-y-6">
@@ -65,17 +73,42 @@ export default async function FlowCommandPage() {
 
       <FlowCommandMissionBar state={state} liveRepo={liveRepo} />
 
-      <FlowCommandCurrentMissionComplete state={state} />
+      <FlowCommandActiveNow activeAgents={activeAgents} founderApprovalRequired={state.founder_approval_required} />
+
+      {state.agents.length > 0 && (
+        <div>
+          <p className="mb-2 text-xs font-bold uppercase tracking-wider text-ink-500 dark:text-ink-400">Relay</p>
+          <FlowCommandRelay agents={state.agents} founderApprovalRequired={state.founder_approval_required} />
+        </div>
+      )}
+
+      <FlowCommandYourMove
+        founderApprovalRequired={state.founder_approval_required}
+        qaStatus={state.qa_status}
+        hasRisks={riskFlags.length > 0}
+        allCheckpointsDone={allCheckpointsDone}
+      />
+
+      <FlowCommandCurrentMissionComplete state={state} liveRepo={liveRepo} />
 
       {state.last_completed_mission && <FlowCommandLastMissionRecap mission={state.last_completed_mission} />}
 
       <div>
-        <SectionHeading title="Agents" subtitle={`${state.agents.length} agent${state.agents.length === 1 ? "" : "s"} in this batch`} />
+        <SectionHeading
+          title="Agents"
+          subtitle={
+            restingAgents.length === 0
+              ? "All agents are active — see Active now above"
+              : `${restingAgents.length} agent${restingAgents.length === 1 ? "" : "s"} not currently active`
+          }
+        />
         {state.agents.length === 0 ? (
           <p className="mt-3 text-sm text-ink-400">No agents recorded for the current mission.</p>
+        ) : restingAgents.length === 0 ? (
+          <p className="mt-3 text-sm text-ink-400">Every agent in this batch is shown above in Active now.</p>
         ) : (
           <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {state.agents.map((agent) => (
+            {restingAgents.map((agent) => (
               <FlowCommandAgentCard key={agent.name} agent={agent} />
             ))}
           </div>

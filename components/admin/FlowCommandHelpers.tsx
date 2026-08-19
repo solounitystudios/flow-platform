@@ -2,7 +2,13 @@ import { Terminal } from "lucide-react";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { CopyButton } from "@/components/admin/CopyButton";
 
-const COMMANDS: { label: string; text: string }[] = [
+export interface FlowCommand {
+  label: string;
+  text: string;
+}
+
+export const COMMANDS: FlowCommand[] = [
+  { label: "Approve checkpoint", text: "FLOW APPROVE CHECKPOINT" },
   { label: "Simple status", text: "FLOW SIMPLE STATUS" },
   { label: "Risks", text: "FLOW RISKS" },
   { label: "Safe point", text: "FLOW SAFE POINT" },
@@ -24,7 +30,7 @@ export function FlowCommandHelpers() {
     <Card>
       <CardHeader>
         <h2 className="flex items-center gap-2 text-lg font-bold text-ink-900 dark:text-white">
-          <Terminal className="h-5 w-5" /> Command helpers
+          <Terminal className="h-5 w-5" /> All commands
         </h2>
       </CardHeader>
       <CardBody className="space-y-3">

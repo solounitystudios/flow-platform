@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect } from "react";
-import { CheckCircle2, History } from "lucide-react";
+import { CheckCircle2, History, ShieldAlert } from "lucide-react";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
-import type { FlowCommandState, FlowLastCompletedMission } from "@/lib/admin/flow-command";
+import type { FlowCommandState, FlowLastCompletedMission, LiveRepoStatus } from "@/lib/admin/flow-command";
 import { qaTone } from "@/lib/admin/flow-command-ui";
+import { cn } from "@/lib/utils";
 
 function BoolPill({ label, value }: { label: string; value: boolean | null | undefined }) {
   const text = value === true ? "YES" : value === false ? "NO" : "unknown";
@@ -32,32 +33,50 @@ function StatusPill({ label, value }: { label: string; value: string | null | un
  * current mission is done, and sets the document title as a tab-visible
  * completion indicator while this page is open — restored on unmount. This
  * is the entirety of the "notification": no email/SMS/push/webhook call. */
-export function FlowCommandCurrentMissionComplete({ state }: { state: FlowCommandState }) {
+export function FlowCommandCurrentMissionComplete({ state, liveRepo }: { state: FlowCommandState; liveRepo: LiveRepoStatus }) {
   const allDone = state.checkpoints.length > 0 && state.checkpoints.every((c) => c.status === "done");
+  // Every checkpoint being done is a genuine milestone, but it isn't a
+  // celebration if QA failed or the founder still hasn't signed off — those
+  // states stay calm and serious rather than festive, per the honest-status
+  // rule this whole page follows.
+  const qaFailed = state.qa_status.toUpperCase() === "FAIL";
+  const needsFounder = state.founder_approval_required;
+  const isCalm = qaFailed || needsFounder;
 
   useEffect(() => {
     if (!allDone) return;
     const original = document.title;
-    document.title = "✅ FLOW Mission Complete";
+    document.title = isCalm ? "FLOW — Checkpoints done, action needed" : "✅ FLOW Mission Complete";
     return () => {
       document.title = original;
     };
-  }, [allDone]);
+  }, [allDone, isCalm]);
 
   if (!allDone) return null;
 
   const agentNames = state.agents.map((a) => a.name);
 
   return (
-    <Card className="border-verified-500/40 bg-verified-500/5">
+    <Card
+      className={cn(
+        "motion-safe:animate-slide-up",
+        isCalm ? "border-gold-500/40 bg-gold-500/5" : "border-verified-500/40 bg-verified-500/5",
+      )}
+    >
       <CardHeader>
-        <h2 className="flex items-center gap-2 text-lg font-bold text-verified-700 dark:text-verified-400">
-          <CheckCircle2 className="h-5 w-5" /> FLOW MISSION COMPLETE
+        <h2 className={cn("flex items-center gap-2 text-lg font-bold", isCalm ? "text-gold-600 dark:text-gold-400" : "text-verified-600 dark:text-verified-400")}>
+          {isCalm ? <ShieldAlert className="h-5 w-5" /> : <CheckCircle2 className="h-5 w-5" />}
+          {isCalm ? "ALL CHECKPOINTS DONE — REVIEW NEEDED" : "FLOW MISSION COMPLETE"}
         </h2>
       </CardHeader>
       <CardBody className="space-y-3">
         <p className="text-sm text-ink-700 dark:text-ink-200">{state.mission}</p>
-        {agentNames.length > 0 && <p className="text-xs text-ink-500 dark:text-ink-400">Agents used: {agentNames.join(", ")}</p>}
+        {isCalm && (
+          <p className="text-xs font-medium text-gold-600 dark:text-gold-400">
+            {qaFailed ? "QA reported FAIL on this batch — do not treat this as shippable." : "Waiting on founder approval before this counts as fully done."}
+          </p>
+        )}
+        {agentNames.length > 0 && <p className="text-xs text-ink-500 dark:text-ink-400">Specialists used: {agentNames.join(", ")}</p>}
         {state.files_touched.length > 0 && (
           <p className="text-xs text-ink-500 dark:text-ink-400">Files changed: {state.files_touched.length}</p>
         )}
@@ -68,7 +87,22 @@ export function FlowCommandCurrentMissionComplete({ state }: { state: FlowComman
           <StatusPill label="QA" value={state.qa_status} />
           <BoolPill label="Production touched" value={state.production_touched} />
           <BoolPill label="Founder approval required" value={state.founder_approval_required} />
+          {liveRepo.available && (
+            <div className="flex items-center justify-between rounded-lg bg-ink-50 px-3 py-2 dark:bg-ink-950">
+              <span className="text-xs font-medium text-ink-500 dark:text-ink-400">Pushed to origin</span>
+              <Badge tone={liveRepo.aheadOfOrigin === 0 ? "verified" : "gold"}>
+                {liveRepo.hasUpstream
+                  ? liveRepo.aheadOfOrigin === 0
+                    ? "YES"
+                    : `NO — ${liveRepo.aheadOfOrigin ?? "?"} commit${liveRepo.aheadOfOrigin === 1 ? "" : "s"} ahead`
+                  : "no upstream tracked"}
+              </Badge>
+            </div>
+          )}
         </div>
+        {liveRepo.available && liveRepo.lastCommit && (
+          <p className="truncate font-mono text-xs text-ink-400">Last commit: {liveRepo.lastCommit}</p>
+        )}
       </CardBody>
     </Card>
   );
