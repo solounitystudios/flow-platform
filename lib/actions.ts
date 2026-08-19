@@ -463,7 +463,7 @@ export async function registerForEventAction(eventId: string): Promise<RegisterR
 
   if (error) {
     if (error.code === "23505") return { error: "You're already registered for this event." };
-    return { error: error.message };
+    return { error: sanitizeDbError("events", error) };
   }
 
   revalidatePath(`/events/${eventId}`);
@@ -474,7 +474,7 @@ export async function registerForEventAction(eventId: string): Promise<RegisterR
 export async function cancelEventRegistrationAction(attendanceId: string): Promise<LifecycleResult> {
   const supabase = await createClient();
   const { error } = await supabase.from("event_attendance").update({ status: "cancelled", cancelled_at: new Date().toISOString() }).eq("id", attendanceId);
-  if (error) return { error: error.message };
+  if (error) return { error: sanitizeDbError("events", error) };
 
   revalidatePath("/tickets");
   return {};
@@ -488,7 +488,7 @@ export interface CheckInActionResult {
 export async function checkInByCodeAction(eventId: string, code: string): Promise<CheckInActionResult> {
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("check_in_ticket", { p_event_id: eventId, p_checkin_code: code, p_method: "code" });
-  if (error) return { error: error.message };
+  if (error) return { error: sanitizeDbError("events", error) };
 
   revalidatePath(`/business/events/${eventId}`);
   return { result: data as unknown as CheckInResult };
@@ -497,7 +497,7 @@ export async function checkInByCodeAction(eventId: string, code: string): Promis
 export async function checkInByProfileAction(eventId: string, profileId: string): Promise<CheckInActionResult> {
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("check_in_ticket", { p_event_id: eventId, p_profile_id: profileId, p_method: "manual" });
-  if (error) return { error: error.message };
+  if (error) return { error: sanitizeDbError("events", error) };
 
   revalidatePath(`/business/events/${eventId}`);
   return { result: data as unknown as CheckInResult };
@@ -506,7 +506,7 @@ export async function checkInByProfileAction(eventId: string, profileId: string)
 export async function markNoShowEventAction(eventId: string, profileId: string): Promise<CheckInActionResult> {
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("mark_no_show", { p_event_id: eventId, p_profile_id: profileId });
-  if (error) return { error: error.message };
+  if (error) return { error: sanitizeDbError("events", error) };
 
   revalidatePath(`/business/events/${eventId}`);
   return { result: data as unknown as CheckInResult };
@@ -555,7 +555,7 @@ export async function createEventAction(_prev: ActionState, formData: FormData):
     status: "published",
   });
 
-  if (error) return { error: error.message };
+  if (error) return { error: sanitizeDbError("events", error) };
 
   revalidatePath("/business");
   revalidatePath("/events");
@@ -590,7 +590,7 @@ export async function redeemRewardAction(rewardId: string): Promise<RedeemAction
   if (!user) return { error: "Log in to redeem rewards." };
 
   const { data, error } = await supabase.rpc("redeem_reward", { p_reward_id: rewardId });
-  if (error) return { error: error.message };
+  if (error) return { error: sanitizeDbError("rewards", error) };
 
   revalidatePath("/rewards");
   return { result: data as unknown as RedeemResult };
