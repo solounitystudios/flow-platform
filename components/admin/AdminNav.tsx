@@ -2,15 +2,17 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Users, ListTodo, FileText, ShieldCheck, ScrollText, Download, ArrowLeft } from "lucide-react";
+import { LayoutDashboard, Users, Kanban, ListTodo, FileText, ShieldCheck, ScrollText, Upload, Download, ArrowLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const LINKS = [
   { href: "/admin", label: "Overview", icon: LayoutDashboard, exact: true },
   { href: "/admin/leads", label: "Leads", icon: Users, exact: false },
+  { href: "/admin/pipeline", label: "Pipeline", icon: Kanban, exact: false },
   { href: "/admin/tasks", label: "Tasks", icon: ListTodo, exact: false },
   { href: "/admin/templates", label: "Templates", icon: FileText, exact: false },
   { href: "/admin/verification", label: "Verification", icon: ShieldCheck, exact: false },
+  { href: "/admin/import", label: "Import", icon: Upload, exact: false },
   { href: "/admin/audit", label: "Audit log", icon: ScrollText, exact: false },
 ] as const;
 

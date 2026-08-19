@@ -284,6 +284,10 @@ export type Database = {
       business_leads: {
         Row: {
           address: string | null
+          archived: boolean
+          archived_at: string | null
+          archived_by: string | null
+          archived_reason: string | null
           assigned_to: string | null
           best_contact_method: string | null
           business_name: string
@@ -315,6 +319,10 @@ export type Database = {
         }
         Insert: {
           address?: string | null
+          archived?: boolean
+          archived_at?: string | null
+          archived_by?: string | null
+          archived_reason?: string | null
           assigned_to?: string | null
           best_contact_method?: string | null
           business_name: string
@@ -346,6 +354,10 @@ export type Database = {
         }
         Update: {
           address?: string | null
+          archived?: boolean
+          archived_at?: string | null
+          archived_by?: string | null
+          archived_reason?: string | null
           assigned_to?: string | null
           best_contact_method?: string | null
           business_name?: string
@@ -376,6 +388,27 @@ export type Database = {
           website_url?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "business_leads_archived_by_fkey"
+            columns: ["archived_by"]
+            isOneToOne: false
+            referencedRelation: "passport_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "business_leads_archived_by_fkey"
+            columns: ["archived_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "business_leads_archived_by_fkey"
+            columns: ["archived_by"]
+            isOneToOne: false
+            referencedRelation: "reliability_breakdown"
+            referencedColumns: ["profile_id"]
+          },
           {
             foreignKeyName: "business_leads_assigned_to_fkey"
             columns: ["assigned_to"]
@@ -838,6 +871,7 @@ export type Database = {
           id: string
           intended_email: string | null
           lead_id: string
+          replaces_invitation_id: string | null
           revoked_at: string | null
           token_hash: string
         }
@@ -850,6 +884,7 @@ export type Database = {
           id?: string
           intended_email?: string | null
           lead_id: string
+          replaces_invitation_id?: string | null
           revoked_at?: string | null
           token_hash: string
         }
@@ -862,6 +897,7 @@ export type Database = {
           id?: string
           intended_email?: string | null
           lead_id?: string
+          replaces_invitation_id?: string | null
           revoked_at?: string | null
           token_hash?: string
         }
@@ -913,6 +949,13 @@ export type Database = {
             columns: ["lead_id"]
             isOneToOne: false
             referencedRelation: "business_leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employer_invitations_replaces_invitation_id_fkey"
+            columns: ["replaces_invitation_id"]
+            isOneToOne: false
+            referencedRelation: "employer_invitations"
             referencedColumns: ["id"]
           },
         ]
@@ -1264,6 +1307,65 @@ export type Database = {
           },
         ]
       }
+      lead_stage_history: {
+        Row: {
+          changed_at: string
+          changed_by: string
+          from_stage: string | null
+          id: string
+          lead_id: string
+          note: string | null
+          to_stage: string
+        }
+        Insert: {
+          changed_at?: string
+          changed_by?: string
+          from_stage?: string | null
+          id?: string
+          lead_id: string
+          note?: string | null
+          to_stage: string
+        }
+        Update: {
+          changed_at?: string
+          changed_by?: string
+          from_stage?: string | null
+          id?: string
+          lead_id?: string
+          note?: string | null
+          to_stage?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_stage_history_changed_by_fkey"
+            columns: ["changed_by"]
+            isOneToOne: false
+            referencedRelation: "passport_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_stage_history_changed_by_fkey"
+            columns: ["changed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_stage_history_changed_by_fkey"
+            columns: ["changed_by"]
+            isOneToOne: false
+            referencedRelation: "reliability_breakdown"
+            referencedColumns: ["profile_id"]
+          },
+          {
+            foreignKeyName: "lead_stage_history_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "business_leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       messages: {
         Row: {
           body: string
@@ -1504,6 +1606,7 @@ export type Database = {
           decided_at: string | null
           decided_by: string | null
           decision_reason: string | null
+          decision_reason_code: string | null
           findings: Json
           id: string
           lead_id: string | null
@@ -1518,6 +1621,7 @@ export type Database = {
           decided_at?: string | null
           decided_by?: string | null
           decision_reason?: string | null
+          decision_reason_code?: string | null
           findings?: Json
           id?: string
           lead_id?: string | null
@@ -1532,6 +1636,7 @@ export type Database = {
           decided_at?: string | null
           decided_by?: string | null
           decision_reason?: string | null
+          decision_reason_code?: string | null
           findings?: Json
           id?: string
           lead_id?: string | null
@@ -1747,6 +1852,7 @@ export type Database = {
       outreach_tasks: {
         Row: {
           assigned_to: string | null
+          auto_generated: boolean
           completed_at: string | null
           created_at: string
           created_by: string
@@ -1757,10 +1863,12 @@ export type Database = {
           status: string
           task_type: string
           title: string
+          trigger_key: string | null
           updated_at: string
         }
         Insert: {
           assigned_to?: string | null
+          auto_generated?: boolean
           completed_at?: string | null
           created_at?: string
           created_by?: string
@@ -1771,10 +1879,12 @@ export type Database = {
           status?: string
           task_type?: string
           title: string
+          trigger_key?: string | null
           updated_at?: string
         }
         Update: {
           assigned_to?: string | null
+          auto_generated?: boolean
           completed_at?: string | null
           created_at?: string
           created_by?: string
@@ -1785,6 +1895,7 @@ export type Database = {
           status?: string
           task_type?: string
           title?: string
+          trigger_key?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -2346,6 +2457,68 @@ export type Database = {
         }
         Relationships: []
       }
+      verification_decisions: {
+        Row: {
+          actor_id: string
+          case_id: string
+          created_at: string
+          from_status: string | null
+          id: string
+          notes: string | null
+          reason_code: string | null
+          to_status: string
+        }
+        Insert: {
+          actor_id?: string
+          case_id: string
+          created_at?: string
+          from_status?: string | null
+          id?: string
+          notes?: string | null
+          reason_code?: string | null
+          to_status: string
+        }
+        Update: {
+          actor_id?: string
+          case_id?: string
+          created_at?: string
+          from_status?: string | null
+          id?: string
+          notes?: string | null
+          reason_code?: string | null
+          to_status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "verification_decisions_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "passport_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "verification_decisions_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "verification_decisions_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "reliability_breakdown"
+            referencedColumns: ["profile_id"]
+          },
+          {
+            foreignKeyName: "verification_decisions_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "organization_verification_cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       verifications: {
         Row: {
           created_at: string
@@ -2471,6 +2644,10 @@ export type Database = {
         Args: { p_connection_id: string }
         Returns: Json
       }
+      change_lead_stage: {
+        Args: { p_lead_id: string; p_new_stage: string; p_note?: string }
+        Returns: Json
+      }
       check_in_ticket: {
         Args: {
           p_checkin_code?: string
@@ -2484,11 +2661,22 @@ export type Database = {
         Args: { p_organization_id: string }
         Returns: Json
       }
+      decide_verification_case: {
+        Args: {
+          p_assigned_to?: string
+          p_case_id: string
+          p_new_status: string
+          p_notes?: string
+          p_reason_code?: string
+        }
+        Returns: Json
+      }
       delete_message: { Args: { p_message_id: string }; Returns: Json }
       evaluate_achievements: {
         Args: { p_profile_id: string }
         Returns: undefined
       }
+      generate_onboarding_followup_tasks: { Args: never; Returns: Json }
       get_my_blocked_profiles: {
         Args: never
         Returns: {
@@ -2514,6 +2702,7 @@ export type Database = {
         Args: { p_applicant_id?: string; p_opportunity_id: string }
         Returns: Json
       }
+      import_business_leads: { Args: { p_rows: Json }; Returns: Json }
       is_blocked_between: { Args: { a: string; b: string }; Returns: boolean }
       is_conversation_member: {
         Args: { p_conversation_id: string; p_profile_id: string }
@@ -2774,4 +2963,33 @@ export interface RedeemResult {
   ok: boolean;
   redemption_id?: string;
   code?: string;
+}
+
+// ── Admin Batch 2 RPC result shapes ──────────────────────────────────────
+// Mirrors the jsonb each function actually returns (see
+// supabase/migrations/20260819050000_admin_batch2_operations.sql) — these
+// aren't in the Supabase-generated schema because Postgres only declares
+// the return type as `jsonb`/Json, not its internal shape.
+
+export interface StageChangeResult {
+  ok: boolean;
+  reason?: "not_authorized" | "not_found";
+}
+
+export interface VerificationDecisionResult {
+  ok: boolean;
+  reason?: "not_authorized" | "not_found";
+}
+
+export interface ImportLeadsResult {
+  ok: boolean;
+  reason?: "not_authorized" | "empty_batch" | "batch_too_large";
+  created?: number;
+  updated?: number;
+}
+
+export interface GenerateFollowupsResult {
+  ok: boolean;
+  reason?: "not_authorized";
+  created?: number;
 }

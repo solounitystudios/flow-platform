@@ -1,23 +1,27 @@
 "use client";
 
 import { useActionState, useState, useTransition } from "react";
-import { AlertCircle, Check, Copy, Plus, Trash2 } from "lucide-react";
+import { AlertCircle, Check, Copy, Plus, Trash2, Archive, RotateCcw, RefreshCw } from "lucide-react";
 import { Input, Textarea, Select } from "@/components/ui/Input";
 import { SubmitButton } from "@/components/ui/SubmitButton";
 import { Button } from "@/components/ui/Button";
 import {
   createContactAction,
   createInvitationAction,
+  replaceInvitationAction,
   createTaskAction,
   logActivityAction,
   revokeInvitationAction,
+  updateLeadAction,
   updateLeadStageAction,
+  archiveLeadAction,
+  restoreLeadAction,
   type AdminActionState,
   type InvitationActionState,
 } from "@/lib/admin/actions";
-import { CONTACT_METHODS, ACTIVITY_METHODS, PIPELINE_STAGES, TASK_TYPES } from "@/lib/admin/constants";
-import { relativeTime } from "@/lib/utils";
-import type { ContactRow, InvitationRow } from "@/lib/data/admin";
+import { CONTACT_METHODS, ACTIVITY_METHODS, PIPELINE_STAGES, TASK_TYPES, INTEREST_LEVELS } from "@/lib/admin/constants";
+import { relativeTime, formatDateTime } from "@/lib/utils";
+import type { ContactRow, InvitationRow, LeadDetail } from "@/lib/data/admin";
 
 const initialAction: AdminActionState = {};
 const initialInvite: InvitationActionState = {};
@@ -138,24 +142,36 @@ export function LogActivityForm({ leadId, contacts }: { leadId: string; contacts
   );
 }
 
-export function CreateInvitationForm({ leadId, invitations }: { leadId: string; invitations: InvitationRow[] }) {
-  const action = createInvitationAction.bind(null, leadId);
-  const [state, formAction] = useActionState(action, initialInvite);
+function invitationStatus(inv: InvitationRow): "accepted" | "revoked" | "expired" | "active" {
+  if (inv.accepted_at) return "accepted";
+  if (inv.revoked_at) return "revoked";
+  if (new Date(inv.expires_at) < new Date()) return "expired";
+  return "active";
+}
+
+/** copiedUrl (never the raw token — the RPC/action only ever returns the
+ * plaintext link exactly once) is shown once for copy-to-clipboard, then
+ * the panel falls back to status-only history. Nothing here ever
+ * re-displays a previously generated token. */
+export function InvitationPanel({ leadId, invitations }: { leadId: string; invitations: InvitationRow[] }) {
+  const [state, formAction] = useActionState(createInvitationAction.bind(null, leadId), initialInvite);
   const [copied, setCopied] = useState(false);
   const [revoking, startRevoke] = useTransition();
+  const [replacingId, setReplacingId] = useState<string | null>(null);
 
-  const active = invitations.filter((i) => !i.revoked_at && !i.accepted_at && new Date(i.expires_at) > new Date());
+  const active = invitations.filter((i) => invitationStatus(i) === "active");
+  const history = invitations.filter((i) => invitationStatus(i) !== "active");
 
   return (
     <div className="space-y-4 rounded-xl border border-dashed border-ink-300 p-4 dark:border-ink-700">
-      <p className="text-sm font-medium text-ink-700 dark:text-ink-200">Employer invitation</p>
+      <p className="text-sm font-medium text-ink-700 dark:text-ink-200">Employer invitations</p>
 
       {active.length > 0 && (
         <ul className="space-y-2">
           {active.map((inv) => (
             <li key={inv.id} className="flex items-center justify-between rounded-lg bg-ink-50 px-3 py-2 text-xs dark:bg-ink-800">
               <span className="text-ink-500 dark:text-ink-400">
-                {inv.intended_email ?? "Any email"} · expires {relativeTime(inv.expires_at)}
+                {inv.intended_email ?? "Any email"} · created {formatDateTime(inv.created_at)} · expires {relativeTime(inv.expires_at)}
               </span>
               <button
                 type="button"
@@ -172,6 +188,32 @@ export function CreateInvitationForm({ leadId, invitations }: { leadId: string; 
             </li>
           ))}
         </ul>
+      )}
+
+      {history.length > 0 && (
+        <ul className="space-y-1.5 border-t border-ink-100 pt-3 dark:border-ink-800">
+          {history.map((inv) => {
+            const status = invitationStatus(inv);
+            return (
+              <li key={inv.id} className="flex items-center justify-between text-xs text-ink-400">
+                <span>
+                  {inv.intended_email ?? "Any email"} · {status} · created {formatDateTime(inv.created_at)}
+                  {inv.accepted_at && ` · accepted ${formatDateTime(inv.accepted_at)}`}
+                  {inv.revoked_at && ` · revoked ${formatDateTime(inv.revoked_at)}`}
+                </span>
+                {status === "expired" && replacingId !== inv.id && (
+                  <button type="button" onClick={() => setReplacingId(inv.id)} className="flex items-center gap-1 text-flow-600 hover:underline">
+                    <RefreshCw className="h-3 w-3" /> Replace
+                  </button>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      {replacingId && (
+        <ReplaceInvitationForm leadId={leadId} invitationId={replacingId} onDone={() => setReplacingId(null)} />
       )}
 
       {state.inviteUrl ? (
@@ -207,6 +249,53 @@ export function CreateInvitationForm({ leadId, invitations }: { leadId: string; 
   );
 }
 
+function ReplaceInvitationForm({ leadId, invitationId, onDone }: { leadId: string; invitationId: string; onDone: () => void }) {
+  const [state, formAction] = useActionState(replaceInvitationAction.bind(null, invitationId, leadId), initialInvite);
+  const [copied, setCopied] = useState(false);
+
+  if (state.inviteUrl) {
+    return (
+      <div className="space-y-2 rounded-lg bg-ink-50 p-3 dark:bg-ink-800">
+        <p className="text-xs text-ink-500 dark:text-ink-400">New link — copy it now, shown once.</p>
+        <div className="flex items-center gap-2">
+          <input readOnly value={state.inviteUrl} className="w-full truncate rounded-lg border border-ink-200 bg-white px-3 py-2 text-xs dark:border-ink-700 dark:bg-ink-900" />
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              navigator.clipboard.writeText(state.inviteUrl!);
+              setCopied(true);
+              setTimeout(() => setCopied(false), 2000);
+            }}
+          >
+            {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+          </Button>
+        </div>
+        <button type="button" onClick={onDone} className="text-xs text-ink-400 hover:text-ink-600">
+          Done
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <form action={formAction} className="space-y-2 rounded-lg bg-ink-50 p-3 dark:bg-ink-800">
+      <Input label="Intended email (optional)" name="intended_email" type="email" />
+      <Input label="Expires in (days)" name="expires_days" type="number" defaultValue={14} min={1} max={90} />
+      {state.error && <p className="text-sm text-red-600">{state.error}</p>}
+      <div className="flex gap-2">
+        <SubmitButton size="sm" pendingLabel="Replacing…">
+          Replace invitation
+        </SubmitButton>
+        <button type="button" onClick={onDone} className="text-xs text-ink-400 hover:text-ink-600">
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
+}
+
 export function QuickAddTaskForm({ leadId }: { leadId: string }) {
   const [state, formAction] = useActionState(createTaskAction, initialAction);
 
@@ -230,6 +319,135 @@ export function QuickAddTaskForm({ leadId }: { leadId: string }) {
       <SubmitButton size="sm" pendingLabel="Saving…">
         <Plus className="h-4 w-4" /> Add task
       </SubmitButton>
+    </form>
+  );
+}
+
+export function EditLeadForm({ lead, admins }: { lead: LeadDetail; admins: { profile_id: string; full_name: string | null; username: string | null }[] }) {
+  const action = updateLeadAction.bind(null, lead.id);
+  const [state, formAction] = useActionState(action, initialAction);
+
+  return (
+    <form action={formAction} className="space-y-4 rounded-xl border border-ink-200 bg-white p-4 dark:border-ink-800 dark:bg-ink-900">
+      <p className="text-sm font-medium text-ink-700 dark:text-ink-200">Edit business profile</p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Input label="Business name" name="business_name" defaultValue={lead.business_name} required />
+        <Input label="Category" name="category" defaultValue={lead.category} required />
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Input label="Address" name="address" defaultValue={lead.address ?? ""} />
+        <Input label="Neighborhood" name="neighborhood" defaultValue={lead.neighborhood ?? ""} />
+      </div>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Input label="City" name="city" defaultValue={lead.city} />
+        <Input label="State" name="region" defaultValue={lead.region} />
+        <Input label="Postal code" name="postal_code" defaultValue={lead.postal_code ?? ""} />
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Input label="Website" name="website_url" type="url" defaultValue={lead.website_url ?? ""} />
+        <Input label="Social URL" name="social_url" type="url" defaultValue={lead.social_url ?? ""} />
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Input label="General email" name="general_email" type="email" defaultValue={lead.general_email ?? ""} />
+        <Input label="General phone" name="general_phone" type="tel" defaultValue={lead.general_phone ?? ""} />
+      </div>
+      <Textarea label="Staffing problems observed" name="staffing_problems" defaultValue={lead.staffing_problems ?? ""} />
+      <Input label="Typical roles" name="typical_roles" defaultValue={lead.typical_roles.join(", ")} hint="Comma-separated" />
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Input label="Hiring frequency" name="hiring_frequency" defaultValue={lead.hiring_frequency ?? ""} />
+        <Select label="Best contact method" name="best_contact_method" defaultValue={lead.best_contact_method ?? ""}>
+          <option value="">Unknown</option>
+          {CONTACT_METHODS.map((m) => (
+            <option key={m.value} value={m.value}>
+              {m.label}
+            </option>
+          ))}
+        </Select>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Select label="Interest level" name="interest_level" defaultValue={lead.interest_level}>
+          {INTEREST_LEVELS.map((i) => (
+            <option key={i.value} value={i.value}>
+              {i.label}
+            </option>
+          ))}
+        </Select>
+        <Select label="Assigned owner" name="assigned_to" defaultValue={lead.assigned_to ?? ""}>
+          <option value="">Unassigned</option>
+          {admins.map((a) => (
+            <option key={a.profile_id} value={a.profile_id}>
+              {a.full_name ?? a.username ?? a.profile_id.slice(0, 8)}
+            </option>
+          ))}
+        </Select>
+      </div>
+      <Input label="Source" name="source" defaultValue={lead.source ?? ""} />
+      <Textarea label="Consent notes" name="consent_notes" defaultValue={lead.consent_notes ?? ""} />
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Input label="Next action" name="next_action" defaultValue={lead.next_action ?? ""} />
+        <Input label="Next action at" name="next_action_at" type="datetime-local" defaultValue={lead.next_action_at?.slice(0, 16) ?? ""} />
+      </div>
+      <Textarea label="Internal notes" name="notes" defaultValue={lead.notes ?? ""} />
+      {state.error && <p className="text-sm text-red-600">{state.error}</p>}
+      <SubmitButton size="sm" pendingLabel="Saving…">
+        Save changes
+      </SubmitButton>
+    </form>
+  );
+}
+
+export function ArchiveControls({ lead }: { lead: Pick<LeadDetail, "id" | "archived" | "archived_reason" | "archived_at"> }) {
+  const [state, formAction] = useActionState(archiveLeadAction.bind(null, lead.id), initialAction);
+  const [restoring, startRestore] = useTransition();
+  const [showForm, setShowForm] = useState(false);
+
+  if (lead.archived) {
+    return (
+      <div className="flex items-center justify-between rounded-xl border border-ink-200 bg-ink-50 p-3 text-sm dark:border-ink-800 dark:bg-ink-800">
+        <div>
+          <p className="font-medium text-ink-700 dark:text-ink-200">Archived {lead.archived_at ? formatDateTime(lead.archived_at) : ""}</p>
+          {lead.archived_reason && <p className="text-xs text-ink-400">{lead.archived_reason}</p>}
+        </div>
+        <button
+          type="button"
+          disabled={restoring}
+          onClick={() =>
+            startRestore(async () => {
+              await restoreLeadAction(lead.id);
+            })
+          }
+          className="flex items-center gap-1.5 rounded-lg bg-flow-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-flow-700 disabled:opacity-50"
+        >
+          <RotateCcw className="h-3.5 w-3.5" /> Restore
+        </button>
+      </div>
+    );
+  }
+
+  if (!showForm) {
+    return (
+      <button
+        type="button"
+        onClick={() => setShowForm(true)}
+        className="flex items-center gap-1.5 rounded-lg border border-ink-200 px-3 py-1.5 text-sm font-medium text-ink-600 hover:bg-ink-100 dark:border-ink-700 dark:text-ink-300 dark:hover:bg-ink-800"
+      >
+        <Archive className="h-4 w-4" /> Archive prospect
+      </button>
+    );
+  }
+
+  return (
+    <form action={formAction} className="space-y-2 rounded-xl border border-ink-200 p-3 dark:border-ink-800">
+      <Textarea label="Reason for archiving" name="archived_reason" required hint="Kept for the record — nothing is deleted." />
+      {state.error && <p className="text-sm text-red-600">{state.error}</p>}
+      <div className="flex gap-2">
+        <SubmitButton size="sm" variant="danger" pendingLabel="Archiving…">
+          Confirm archive
+        </SubmitButton>
+        <button type="button" onClick={() => setShowForm(false)} className="text-xs text-ink-400 hover:text-ink-600">
+          Cancel
+        </button>
+      </div>
     </form>
   );
 }

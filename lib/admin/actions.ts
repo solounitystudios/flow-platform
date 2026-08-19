@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getRequestOrigin } from "@/lib/url";
 import { requireSecureAdmin } from "@/lib/admin/auth";
+import type { StageChangeResult, VerificationDecisionResult, ImportLeadsResult, GenerateFollowupsResult, Json } from "@/lib/database.types";
 
 export interface AdminActionState {
   error?: string;
@@ -97,6 +98,9 @@ export async function updateLeadAction(leadId: string, _prev: AdminActionState, 
       hiring_frequency: String(formData.get("hiring_frequency") ?? "") || null,
       best_contact_method: String(formData.get("best_contact_method") ?? "") || null,
       interest_level: String(formData.get("interest_level") ?? "unknown"),
+      source: String(formData.get("source") ?? "") || null,
+      consent_notes: String(formData.get("consent_notes") ?? "") || null,
+      assigned_to: String(formData.get("assigned_to") ?? "") || null,
       next_action: String(formData.get("next_action") ?? "") || null,
       next_action_at: String(formData.get("next_action_at") ?? "") || null,
       notes: String(formData.get("notes") ?? "") || null,
@@ -110,19 +114,70 @@ export async function updateLeadAction(leadId: string, _prev: AdminActionState, 
   return {};
 }
 
+/** The only path a lead's pipeline_stage ever changes through — both the
+ * lead detail page's StageSelect and the pipeline board call this. The
+ * database RPC (not this function) is the actual authority: it re-checks
+ * is_flow_admin(true) itself and atomically records the change in
+ * lead_stage_history, so a direct REST call to the RPC is exactly as safe
+ * as going through this Server Action. */
 export async function updateLeadStageAction(leadId: string, stage: string): Promise<{ error?: string }> {
+  await requireSecureAdmin();
+  const supabase = await createClient();
+
+  const { data, error } = await supabase.rpc("change_lead_stage", { p_lead_id: leadId, p_new_stage: stage });
+  if (error) return { error: sanitizeDbError("updateLeadStage", error) };
+  const result = data as StageChangeResult | null;
+  if (!result?.ok) return { error: result?.reason === "not_found" ? "Lead not found." : "Unable to change stage." };
+
+  revalidatePath(`/admin/leads/${leadId}`);
+  revalidatePath("/admin/leads");
+  revalidatePath("/admin/pipeline");
+  revalidatePath("/admin");
+  return {};
+}
+
+// ── Archive lifecycle ──────────────────────────────────────────────────
+// Archiving/restoring is a plain, RLS-gated table update rather than a
+// SECURITY DEFINER RPC — requireSecureAdmin() already enforces AAL2
+// server-side, business_leads' existing is_flow_admin(true) ALL policy is
+// the RLS second layer, and the existing business_leads_audit trigger
+// captures the change automatically. Never a hard delete.
+
+export async function archiveLeadAction(leadId: string, _prev: AdminActionState, formData: FormData): Promise<AdminActionState> {
+  const admin = await requireSecureAdmin();
+  const supabase = await createClient();
+
+  const reason = String(formData.get("archived_reason") ?? "").trim();
+  if (!reason) return { error: "Give a reason for archiving." };
+
+  const { error } = await supabase
+    .from("business_leads")
+    .update({ archived: true, archived_at: new Date().toISOString(), archived_reason: reason, archived_by: admin.userId })
+    .eq("id", leadId);
+
+  if (error) return { error: sanitizeDbError("archiveLead", error) };
+
+  revalidatePath(`/admin/leads/${leadId}`);
+  revalidatePath("/admin/leads");
+  revalidatePath("/admin/pipeline");
+  revalidatePath("/admin");
+  return {};
+}
+
+export async function restoreLeadAction(leadId: string): Promise<{ error?: string }> {
   await requireSecureAdmin();
   const supabase = await createClient();
 
   const { error } = await supabase
     .from("business_leads")
-    .update({ pipeline_stage: stage })
+    .update({ archived: false, archived_at: null, archived_reason: null, archived_by: null })
     .eq("id", leadId);
 
-  if (error) return { error: sanitizeDbError("updateLeadStage", error) };
+  if (error) return { error: sanitizeDbError("restoreLead", error) };
 
   revalidatePath(`/admin/leads/${leadId}`);
   revalidatePath("/admin/leads");
+  revalidatePath("/admin/pipeline");
   revalidatePath("/admin");
   return {};
 }
@@ -240,6 +295,53 @@ export async function cancelTaskAction(taskId: string): Promise<{ error?: string
   return {};
 }
 
+export async function rescheduleTaskAction(taskId: string, dueAt: string): Promise<{ error?: string }> {
+  await requireSecureAdmin();
+  const supabase = await createClient();
+
+  if (!dueAt) return { error: "Choose a new due date." };
+
+  const { error } = await supabase.from("outreach_tasks").update({ due_at: dueAt }).eq("id", taskId);
+  if (error) return { error: sanitizeDbError("rescheduleTask", error) };
+
+  revalidatePath("/admin/tasks");
+  return {};
+}
+
+/** Reopens a completed or cancelled task — clears completed_at and puts it
+ * back in the open queue. Reversing a task's status is itself a change
+ * the existing outreach_tasks_audit trigger captures automatically. */
+export async function reopenTaskAction(taskId: string): Promise<{ error?: string }> {
+  await requireSecureAdmin();
+  const supabase = await createClient();
+
+  const { error } = await supabase.from("outreach_tasks").update({ status: "open", completed_at: null }).eq("id", taskId);
+  if (error) return { error: sanitizeDbError("reopenTask", error) };
+
+  revalidatePath("/admin/tasks");
+  return {};
+}
+
+/** On-demand replacement for a cron job: scans for stalled-onboarding
+ * conditions (invitation accepted with no organization, verification
+ * stuck open, verified-but-nothing-posted) and opens one deduplicated
+ * follow-up task per lead per condition. There is no scheduled/automatic
+ * invocation of this — see supabase/migrations/20260819050000_admin_batch2_operations.sql
+ * for why (no tested scheduler in this app yet). */
+export async function generateOnboardingTasksAction(): Promise<{ error?: string; created?: number }> {
+  await requireSecureAdmin();
+  const supabase = await createClient();
+
+  const { data, error } = await supabase.rpc("generate_onboarding_followup_tasks");
+  if (error) return { error: sanitizeDbError("generateOnboardingTasks", error) };
+  const result = data as GenerateFollowupsResult | null;
+  if (!result?.ok) return { error: "Unable to generate follow-ups." };
+
+  revalidatePath("/admin/tasks");
+  revalidatePath("/admin");
+  return { created: result.created };
+}
+
 // ── Employer invitations ───────────────────────────────────────────────
 
 export interface InvitationActionState {
@@ -291,32 +393,196 @@ export async function revokeInvitationAction(invitationId: string, leadId: strin
   return {};
 }
 
+/** Revokes an expired (or still-active) invitation and issues a fresh one
+ * in its place, linked via replaces_invitation_id for lineage. The old
+ * token's hash stays in the table (nothing is deleted) — it just becomes
+ * unusable the moment revoked_at is set, same as revokeInvitationAction. */
+export async function replaceInvitationAction(oldInvitationId: string, leadId: string, _prev: InvitationActionState, formData: FormData): Promise<InvitationActionState> {
+  const admin = await requireSecureAdmin();
+  const supabase = await createClient();
+
+  const intendedEmail = String(formData.get("intended_email") ?? "").trim();
+  const days = Number(formData.get("expires_days") ?? 14) || 14;
+
+  const { error: revokeError } = await supabase
+    .from("employer_invitations")
+    .update({ revoked_at: new Date().toISOString() })
+    .eq("id", oldInvitationId)
+    .is("revoked_at", null);
+  if (revokeError) return { error: sanitizeDbError("replaceInvitation:revoke", revokeError) };
+
+  const token = randomBytes(32).toString("base64url");
+  const token_hash = createHash("sha256").update(token).digest("hex");
+  const expires_at = new Date(Date.now() + days * 86_400_000).toISOString();
+
+  const { error } = await supabase.from("employer_invitations").insert({
+    lead_id: leadId,
+    token_hash,
+    intended_email: intendedEmail || null,
+    expires_at,
+    created_by: admin.userId,
+    replaces_invitation_id: oldInvitationId,
+  });
+
+  if (error) return { error: sanitizeDbError("replaceInvitation:create", error) };
+
+  const origin = await getRequestOrigin();
+  revalidatePath(`/admin/leads/${leadId}`);
+  return { inviteUrl: `${origin}/employer/invite/${token}` };
+}
+
 // ── Verification queue ─────────────────────────────────────────────────
 
-export async function updateVerificationCaseAction(_prev: AdminActionState, formData: FormData): Promise<AdminActionState> {
-  const admin = await requireSecureAdmin();
+/** The only path a verification case's status ever changes through — the
+ * database RPC re-checks is_flow_admin(true) itself, records the decision
+ * in verification_decisions, and (only on approval) advances the lead's
+ * pipeline stage forward via change_lead_stage. Approval alone never
+ * verifies the organization or completes onboarding on its own — that
+ * marketplace-facing flag is a separate, deliberate step untouched here. */
+export async function decideVerificationCaseAction(_prev: AdminActionState, formData: FormData): Promise<AdminActionState> {
+  await requireSecureAdmin();
   const supabase = await createClient();
 
   const caseId = String(formData.get("case_id") ?? "");
   const status = String(formData.get("status") ?? "").trim();
   if (!caseId || !status) return { error: "Missing case or status." };
 
-  const isDecision = status === "approved" || status === "rejected";
+  const reasonCode = String(formData.get("decision_reason_code") ?? "") || undefined;
+  const notes = String(formData.get("decision_reason") ?? "") || undefined;
+  const assignedTo = String(formData.get("assigned_to") ?? "") || undefined;
 
-  const { error } = await supabase
-    .from("organization_verification_cases")
-    .update({
-      status,
-      decision_reason: String(formData.get("decision_reason") ?? "") || null,
-      ...(isDecision ? { decided_by: admin.userId, decided_at: new Date().toISOString() } : {}),
-    })
-    .eq("id", caseId);
+  const { data, error } = await supabase.rpc("decide_verification_case", {
+    p_case_id: caseId,
+    p_new_status: status,
+    p_reason_code: reasonCode,
+    p_notes: notes,
+    p_assigned_to: assignedTo,
+  });
 
-  if (error) return { error: sanitizeDbError("updateVerificationCase", error) };
+  if (error) return { error: sanitizeDbError("decideVerificationCase", error) };
+  const result = data as VerificationDecisionResult | null;
+  if (!result?.ok) return { error: result?.reason === "not_found" ? "Case not found." : "Unable to save decision." };
 
-  // Approval alone does not verify the organization or complete onboarding —
-  // that remains a separate, deliberate step, never an automatic side effect
-  // of a status change here.
   revalidatePath("/admin/verification");
+  revalidatePath("/admin");
   return {};
+}
+
+// ── CSV lead import ─────────────────────────────────────────────────────
+
+export interface ImportPreviewRow {
+  rowIndex: number;
+  data: Record<string, string>;
+  errors: string[];
+  duplicate: { id: string; business_name: string; matchReason: string } | null;
+  decision: "create" | "update" | "skip";
+}
+
+export interface ImportPreviewState {
+  error?: string;
+  rows?: ImportPreviewRow[];
+}
+
+const MAX_IMPORT_ROWS = 500;
+
+export async function previewLeadImportAction(_prev: ImportPreviewState, formData: FormData): Promise<ImportPreviewState> {
+  await requireSecureAdmin();
+  const supabase = await createClient();
+
+  const csvText = String(formData.get("csv_text") ?? "").trim();
+  if (!csvText) return { error: "Paste or upload a CSV first." };
+
+  const { parseCsvWithHeader, normalizeBusinessName, normalizePhone, normalizeWebsiteDomain, CONTACT_METHOD_ALIASES, LEAD_IMPORT_COLUMNS } = await import("@/lib/admin/csv");
+
+  const { headers, rows } = parseCsvWithHeader(csvText);
+  if (!headers.includes("business_name") || !headers.includes("category")) {
+    return { error: "CSV must include at least business_name and category columns." };
+  }
+  if (rows.length === 0) return { error: "No data rows found." };
+  if (rows.length > MAX_IMPORT_ROWS) return { error: `Too many rows — max ${MAX_IMPORT_ROWS} per import.` };
+
+  const { data: existing } = await supabase.from("business_leads").select("id, business_name, website_url, general_phone, archived");
+  const existingLeads = existing ?? [];
+
+  const previewRows: ImportPreviewRow[] = rows.map((raw, i) => {
+    const data: Record<string, string> = {};
+    for (const col of LEAD_IMPORT_COLUMNS) data[col] = raw[col] ?? "";
+
+    const errors: string[] = [];
+    if (!data.business_name.trim()) errors.push("Missing business name.");
+    if (!data.category.trim()) errors.push("Missing category.");
+
+    if (data.best_contact_method) {
+      const mapped = CONTACT_METHOD_ALIASES[data.best_contact_method.toLowerCase()];
+      if (!mapped) errors.push(`Unrecognized contact method "${data.best_contact_method}".`);
+      else data.best_contact_method = mapped;
+    }
+
+    let duplicate: ImportPreviewRow["duplicate"] = null;
+    const normName = normalizeBusinessName(data.business_name);
+    const normPhone = data.phone ? normalizePhone(data.phone) : "";
+    const normDomain = data.website ? normalizeWebsiteDomain(data.website) : "";
+
+    for (const lead of existingLeads) {
+      const leadNorm = normalizeBusinessName(lead.business_name);
+      const leadPhone = lead.general_phone ? normalizePhone(lead.general_phone) : "";
+      const leadDomain = lead.website_url ? normalizeWebsiteDomain(lead.website_url) : "";
+
+      if (normDomain && leadDomain && normDomain === leadDomain) {
+        duplicate = { id: lead.id, business_name: lead.business_name, matchReason: "website domain" };
+        break;
+      }
+      if (normPhone && leadPhone && normPhone === leadPhone) {
+        duplicate = { id: lead.id, business_name: lead.business_name, matchReason: "phone number" };
+        break;
+      }
+      if (normName && leadNorm && normName === leadNorm) {
+        duplicate = { id: lead.id, business_name: lead.business_name, matchReason: "business name" };
+        break;
+      }
+    }
+
+    return {
+      rowIndex: i,
+      data,
+      errors,
+      duplicate,
+      decision: errors.length > 0 ? "skip" : duplicate ? "skip" : "create",
+    };
+  });
+
+  return { rows: previewRows };
+}
+
+export interface ImportCommitState {
+  error?: string;
+  result?: { created: number; updated: number };
+}
+
+/** Executes exactly the admin's confirmed per-row decisions from the
+ * preview step — this never re-derives or re-guesses anything, and never
+ * writes a row the preview flagged with an error. */
+export async function commitLeadImportAction(_prev: ImportCommitState, formData: FormData): Promise<ImportCommitState> {
+  await requireSecureAdmin();
+  const supabase = await createClient();
+
+  const rowsJson = String(formData.get("rows_json") ?? "");
+  let rows: Json[];
+  try {
+    rows = JSON.parse(rowsJson);
+  } catch {
+    return { error: "Malformed import batch." };
+  }
+
+  if (!Array.isArray(rows) || rows.length === 0) return { error: "Nothing to import." };
+  if (rows.length > MAX_IMPORT_ROWS) return { error: `Too many rows — max ${MAX_IMPORT_ROWS} per import.` };
+
+  const { data, error } = await supabase.rpc("import_business_leads", { p_rows: rows });
+  if (error) return { error: sanitizeDbError("commitLeadImport", error) };
+  const result = data as ImportLeadsResult | null;
+  if (!result?.ok) return { error: result?.reason === "batch_too_large" ? `Too many rows — max ${MAX_IMPORT_ROWS} per import.` : "Import failed." };
+
+  revalidatePath("/admin/leads");
+  revalidatePath("/admin");
+  return { result: { created: result.created ?? 0, updated: result.updated ?? 0 } };
 }

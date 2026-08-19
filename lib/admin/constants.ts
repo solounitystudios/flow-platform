@@ -57,10 +57,51 @@ export const TASK_TYPES = [
 ] as const;
 
 export const VERIFICATION_STATUSES = [
-  { value: "pending", label: "Pending" },
+  { value: "pending", label: "Open" },
   { value: "in_review", label: "In review" },
-  { value: "information_requested", label: "Information requested" },
+  { value: "information_requested", label: "Needs information" },
   { value: "approved", label: "Approved" },
   { value: "rejected", label: "Rejected" },
+  { value: "suspicious_duplicate", label: "Suspicious / duplicate" },
+  { value: "suspended", label: "Suspended" },
   { value: "closed", label: "Closed" },
+] as const;
+
+export const DECISION_REASON_CODES = [
+  { value: "identity_confirmed", label: "Identity confirmed" },
+  { value: "address_confirmed", label: "Address confirmed" },
+  { value: "domain_confirmed", label: "Domain confirmed" },
+  { value: "incomplete_documentation", label: "Incomplete documentation" },
+  { value: "unverifiable_address", label: "Unverifiable address" },
+  { value: "duplicate_listing", label: "Duplicate listing" },
+  { value: "suspected_fraud", label: "Suspected fraud" },
+  { value: "domain_mismatch", label: "Domain mismatch" },
+  { value: "license_missing", label: "License missing" },
+  { value: "other", label: "Other" },
+] as const;
+
+export const INTEREST_LEVELS = [
+  { value: "unknown", label: "Unknown" },
+  { value: "low", label: "Low" },
+  { value: "medium", label: "Medium" },
+  { value: "high", label: "High" },
+] as const;
+
+/** Stages in pipeline order — used to rank progress for funnel metrics and
+ * to guard against decide_verification_case()'s auto-advance ever moving a
+ * lead backward. Mirrors the array literal inside that RPC exactly. */
+export const PIPELINE_STAGE_ORDER = PIPELINE_STAGES.filter((s) => s.value !== "not_interested" && s.value !== "follow_up_later").map((s) => s.value);
+
+export const INVITATION_STATUS_FILTERS = [
+  { value: "active", label: "Active" },
+  { value: "accepted", label: "Accepted" },
+  { value: "expired", label: "Expired" },
+  { value: "revoked", label: "Revoked" },
+  { value: "none", label: "No invitation sent" },
+] as const;
+
+export const FOLLOW_UP_STATUS_FILTERS = [
+  { value: "overdue", label: "Overdue follow-up" },
+  { value: "upcoming", label: "Upcoming follow-up" },
+  { value: "none", label: "No follow-up set" },
 ] as const;
