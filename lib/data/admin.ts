@@ -558,3 +558,78 @@ export async function getAuditLog(limit = 100): Promise<AuditLogRow[]> {
   }
   return (data ?? []) as unknown as AuditLogRow[];
 }
+
+// ── Content moderation: opportunities / events / organizations ────────────
+// getAdminOpportunities/getAdminEvents rely on the opportunities_admin_read /
+// events_admin_read permissive SELECT policies (see
+// supabase/migrations/20260819171934_admin_content_read_and_moderation_rpcs.sql)
+// to see every row regardless of status or owner — the public-facing
+// getOpenOpportunities/getUpcomingEvents-style queries elsewhere only ever
+// see published, non-draft rows via the existing owner-or-published policy.
+// That migration has been written but is NOT YET APPLIED to production, so
+// these queries are correct against the schema it defines but will only
+// return the full unfiltered set (including drafts and other admins' rows)
+// once it ships — until then they fall back to whatever the pre-existing
+// owner-or-published policy already exposes.
+//
+// getAdminOrganizations needs no new policy at all — orgs_public_read is
+// already `using (true)`, fully public, so this is a plain query gated only
+// by requireSecureAdmin() at the page/action layer.
+
+export interface AdminOpportunityRow extends Tables<"opportunities"> {
+  organization: Pick<Tables<"organizations">, "id" | "name"> | null;
+}
+
+export async function getAdminOpportunities(status?: string): Promise<AdminOpportunityRow[]> {
+  const supabase = await createClient();
+  let query = supabase
+    .from("opportunities")
+    .select("*, organization:organizations(id, name)")
+    .order("created_at", { ascending: false });
+  if (status) query = query.eq("status", status);
+
+  const { data, error } = await query;
+  if (error) {
+    console.error("[getAdminOpportunities] query failed:", error.message);
+    throw new Error("Unable to load opportunities.");
+  }
+  return (data ?? []) as unknown as AdminOpportunityRow[];
+}
+
+export interface AdminEventRow extends Tables<"events"> {
+  organization: Pick<Tables<"organizations">, "id" | "name"> | null;
+}
+
+export async function getAdminEvents(status?: string): Promise<AdminEventRow[]> {
+  const supabase = await createClient();
+  let query = supabase
+    .from("events")
+    .select("*, organization:organizations(id, name)")
+    .order("created_at", { ascending: false });
+  if (status) query = query.eq("status", status);
+
+  const { data, error } = await query;
+  if (error) {
+    console.error("[getAdminEvents] query failed:", error.message);
+    throw new Error("Unable to load events.");
+  }
+  return (data ?? []) as unknown as AdminEventRow[];
+}
+
+export interface AdminOrganizationRow extends Tables<"organizations"> {
+  owner: Pick<Tables<"profiles">, "id" | "full_name" | "username"> | null;
+}
+
+export async function getAdminOrganizations(): Promise<AdminOrganizationRow[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("organizations")
+    .select("*, owner:profiles!organizations_owner_id_fkey(id, full_name, username)")
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("[getAdminOrganizations] query failed:", error.message);
+    throw new Error("Unable to load organizations.");
+  }
+  return (data ?? []) as unknown as AdminOrganizationRow[];
+}

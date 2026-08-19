@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Users, Kanban, ListTodo, FileText, ShieldCheck, BadgeCheck, ScrollText, Upload, Download, ArrowLeft, Radar } from "lucide-react";
+import { LayoutDashboard, Users, Kanban, ListTodo, FileText, ShieldCheck, BadgeCheck, ScrollText, Upload, Download, ArrowLeft, Radar, Briefcase, CalendarDays, Building2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const LINKS = [
@@ -14,6 +14,9 @@ const LINKS = [
   { href: "/admin/templates", label: "Templates", icon: FileText, exact: false },
   { href: "/admin/verification", label: "Verification", icon: ShieldCheck, exact: false },
   { href: "/admin/evidence", label: "Evidence", icon: BadgeCheck, exact: false },
+  { href: "/admin/opportunities", label: "Jobs", icon: Briefcase, exact: false },
+  { href: "/admin/events", label: "Events", icon: CalendarDays, exact: false },
+  { href: "/admin/organizations", label: "Organizations", icon: Building2, exact: false },
   { href: "/admin/import", label: "Import", icon: Upload, exact: false },
   { href: "/admin/audit", label: "Audit log", icon: ScrollText, exact: false },
 ] as const;

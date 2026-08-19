@@ -638,3 +638,52 @@ export async function grantFoundingClassAction(profileId: string, reason: string
   revalidatePath("/admin/evidence");
   return {};
 }
+
+// ── Content moderation: opportunities / events ─────────────────────────────
+// admin_set_opportunity_status / admin_set_event_status (see
+// supabase/migrations/20260819171934_admin_content_read_and_moderation_rpcs.sql)
+// are the only path either table's status ever changes through when an
+// admin — not the row's creator — makes the change. Both RPCs re-check
+// is_flow_admin(true) inside the function itself and audit-log every call
+// to admin_audit_log, mirroring change_lead_stage/decide_verification_case
+// exactly: requireSecureAdmin() here is defense in depth, not the only gate.
+//
+// NOTE: that migration has been written but is NOT YET APPLIED to
+// production, so these two function names don't exist yet in the generated
+// lib/database.types.ts Functions map (regeneration only happens once a
+// migration is actually live — see supabase-backend's ownership of that
+// file). PendingAdminRpc lets this code be correct today against the schema
+// the migration defines; once it ships and types are regenerated, drop the
+// cast and call supabase.rpc(...) directly like every other RPC in this file.
+type PendingAdminRpc = (
+  fn: "admin_set_opportunity_status" | "admin_set_event_status",
+  args: Record<string, string>,
+) => Promise<{ data: unknown; error: { message: string } | null }>;
+
+export async function adminSetOpportunityStatusAction(opportunityId: string, status: string): Promise<{ error?: string }> {
+  await requireSecureAdmin();
+  const supabase = await createClient();
+
+  const rpc = supabase.rpc.bind(supabase) as unknown as PendingAdminRpc;
+  const { data, error } = await rpc("admin_set_opportunity_status", { p_opportunity_id: opportunityId, p_status: status });
+  if (error) return { error: sanitizeDbError("adminSetOpportunityStatus", error) };
+  const result = data as { ok?: boolean } | null;
+  if (!result?.ok) return { error: "Unable to change status." };
+
+  revalidatePath("/admin/opportunities");
+  return {};
+}
+
+export async function adminSetEventStatusAction(eventId: string, status: string): Promise<{ error?: string }> {
+  await requireSecureAdmin();
+  const supabase = await createClient();
+
+  const rpc = supabase.rpc.bind(supabase) as unknown as PendingAdminRpc;
+  const { data, error } = await rpc("admin_set_event_status", { p_event_id: eventId, p_status: status });
+  if (error) return { error: sanitizeDbError("adminSetEventStatus", error) };
+  const result = data as { ok?: boolean } | null;
+  if (!result?.ok) return { error: "Unable to change status." };
+
+  revalidatePath("/admin/events");
+  return {};
+}

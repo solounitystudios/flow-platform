@@ -133,3 +133,30 @@ export const EVIDENCE_METHODS = [
   { value: "third_party_confirmation", label: "Third-party confirmation" },
   { value: "document_review", label: "Document review" },
 ] as const;
+
+// ── Content moderation: opportunities / events ─────────────────────────────
+// Values match each table's existing check constraint exactly
+// (opportunities_status_check / events_status_check — see
+// supabase/migrations/20260819171934_admin_content_read_and_moderation_rpcs.sql,
+// which does not add or change any status value, only read/write access to
+// the existing column). Opportunities and events deliberately keep their own
+// pre-existing status vocabulary here rather than the general
+// Draft → Review → Published → Paused → Expired → Archived lifecycle used
+// elsewhere in the admin surface, because that vocabulary is what the live
+// schema's check constraints actually enforce — introducing new values is
+// out of scope for this batch.
+
+export const OPPORTUNITY_STATUSES = [
+  { value: "draft", label: "Draft" },
+  { value: "open", label: "Open" },
+  { value: "filled", label: "Filled" },
+  { value: "completed", label: "Completed" },
+  { value: "cancelled", label: "Cancelled" },
+] as const;
+
+export const EVENT_STATUSES = [
+  { value: "draft", label: "Draft" },
+  { value: "published", label: "Published" },
+  { value: "cancelled", label: "Cancelled" },
+  { value: "completed", label: "Completed" },
+] as const;
