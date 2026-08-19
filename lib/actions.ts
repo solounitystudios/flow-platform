@@ -624,8 +624,19 @@ const CONNECTION_ERROR_TEXT: Record<string, string> = {
   unknown_state: "Something went wrong. Try again.",
 };
 
+/**
+ * Logs the real error server-side (visible in server/function logs) and
+ * returns a generic message safe to show a user — raw Postgres/PostgREST
+ * errors (constraint names, column names, internal detail) should never
+ * reach the client directly.
+ */
+function sanitizeDbError(context: string, error: { message: string }): string {
+  console.error(`[${context}]`, error.message);
+  return "Something went wrong. Try again.";
+}
+
 function toConnectionResult(data: unknown, error: { message: string } | null): ConnectionActionResult {
-  if (error) return { error: error.message };
+  if (error) return { error: sanitizeDbError("connections", error) };
 
   const result = data as unknown as ConnectionRpcResult;
   if (!result.ok) return { error: CONNECTION_ERROR_TEXT[result.reason ?? ""] ?? "Something went wrong. Try again." };
@@ -707,7 +718,7 @@ const CONVERSATION_ERROR_TEXT: Record<string, string> = {
 };
 
 function toConversationResult(data: unknown, error: { message: string } | null): ConversationActionResult {
-  if (error) return { error: error.message };
+  if (error) return { error: sanitizeDbError("conversations", error) };
   const result = data as unknown as ConversationRpcResult;
   if (!result.ok) return { error: CONVERSATION_ERROR_TEXT[result.reason ?? ""] ?? "Something went wrong. Try again." };
   return { conversationId: result.conversation_id };
@@ -750,7 +761,7 @@ const MESSAGE_ERROR_TEXT: Record<string, string> = {
 export async function sendMessageAction(conversationId: string, body: string): Promise<MessageActionResult> {
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("send_message", { p_conversation_id: conversationId, p_body: body });
-  if (error) return { error: error.message };
+  if (error) return { error: sanitizeDbError("messages", error) };
 
   const result = data as unknown as MessageRpcResult;
   if (!result.ok) return { error: MESSAGE_ERROR_TEXT[result.reason ?? ""] ?? "Couldn't send that message." };
@@ -768,7 +779,7 @@ export async function markConversationReadAction(conversationId: string) {
 export async function deleteMessageAction(messageId: string): Promise<MessageActionResult> {
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("delete_message", { p_message_id: messageId });
-  if (error) return { error: error.message };
+  if (error) return { error: sanitizeDbError("messages", error) };
 
   const result = data as unknown as MessageRpcResult;
   if (!result.ok) return { error: MESSAGE_ERROR_TEXT[result.reason ?? ""] ?? "Couldn't delete that message." };
