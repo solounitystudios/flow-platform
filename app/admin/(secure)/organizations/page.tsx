@@ -25,15 +25,15 @@ export default async function AdminOrganizationsPage() {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-xl font-semibold text-ink-900 dark:text-white">Organizations</h1>
+        <h1 className="text-xl font-semibold text-ink-900 dark:text-white">Businesses</h1>
         <p className="text-sm text-ink-500 dark:text-ink-400">
-          {organizations.length} organization{organizations.length === 1 ? "" : "s"}. Read-only directory — decide verification at{" "}
+          {organizations.length} business{organizations.length === 1 ? "" : "es"}. Read-only directory — decide verification at{" "}
           <span className="font-medium">/admin/verification</span>.
         </p>
       </div>
 
       {organizations.length === 0 ? (
-        <EmptyState icon={<Building2 className="h-8 w-8" />} title="No organizations yet" />
+        <EmptyState icon={<Building2 className="h-8 w-8" />} title="No businesses yet" />
       ) : (
         <Card>
           <CardHeader>

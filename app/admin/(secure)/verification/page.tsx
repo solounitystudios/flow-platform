@@ -8,7 +8,7 @@ export default async function AdminVerificationPage() {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-xl font-semibold text-ink-900 dark:text-white">Verification queue</h1>
+        <h1 className="text-xl font-semibold text-ink-900 dark:text-white">Verification requests</h1>
         <p className="text-sm text-ink-500 dark:text-ink-400">{cases.length} case{cases.length === 1 ? "" : "s"}. Internal notes are never shown publicly.</p>
       </div>
 

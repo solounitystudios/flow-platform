@@ -8,15 +8,15 @@ import { cn } from "@/lib/utils";
 const LINKS = [
   { href: "/admin", label: "Overview", icon: LayoutDashboard, exact: true },
   { href: "/admin/command", label: "Command", icon: Radar, exact: false },
-  { href: "/admin/leads", label: "Leads", icon: Users, exact: false },
+  { href: "/admin/leads", label: "Prospects", icon: Users, exact: false },
   { href: "/admin/pipeline", label: "Pipeline", icon: Kanban, exact: false },
   { href: "/admin/tasks", label: "Tasks", icon: ListTodo, exact: false },
   { href: "/admin/templates", label: "Templates", icon: FileText, exact: false },
   { href: "/admin/verification", label: "Verification", icon: ShieldCheck, exact: false },
-  { href: "/admin/evidence", label: "Evidence", icon: BadgeCheck, exact: false },
+  { href: "/admin/evidence", label: "Proof & Evidence", icon: BadgeCheck, exact: false },
   { href: "/admin/opportunities", label: "Jobs", icon: Briefcase, exact: false },
   { href: "/admin/events", label: "Events", icon: CalendarDays, exact: false },
-  { href: "/admin/organizations", label: "Organizations", icon: Building2, exact: false },
+  { href: "/admin/organizations", label: "Businesses", icon: Building2, exact: false },
   { href: "/admin/import", label: "Import", icon: Upload, exact: false },
   { href: "/admin/audit", label: "Audit log", icon: ScrollText, exact: false },
 ] as const;

@@ -10,19 +10,19 @@ export default async function AdminHomePage() {
     { label: "Active prospects", value: m.totalLeads, sub: `${m.newThisWeek} new this week`, icon: Users, href: "/admin/leads" },
     { label: "Open tasks", value: m.openTasks, sub: m.overdueTasks ? `${m.overdueTasks} overdue` : `${m.dueToday} due today`, icon: ListTodo, href: "/admin/tasks" },
     { label: "Pending verification", value: m.pendingVerification, icon: ShieldCheck, href: "/admin/verification" },
-    { label: "Active invitations", value: m.activeInvitations, icon: Send, href: "/admin/leads" },
+    { label: "Open invitations", value: m.activeInvitations, icon: Send, href: "/admin/leads" },
   ];
 
   const funnelCards = [
     { label: "Contacted", value: m.contacted },
-    { label: "Decision-makers reached", value: m.decisionMakersReached },
-    { label: "Demos scheduled", value: m.demosScheduled },
-    { label: "Demos completed", value: m.demosCompleted },
-    { label: "Pilots offered", value: m.pilotsOffered },
+    { label: "Right contact reached", value: m.decisionMakersReached },
+    { label: "Meetings scheduled", value: m.demosScheduled },
+    { label: "Meetings completed", value: m.demosCompleted },
+    { label: "Pilot offers sent", value: m.pilotsOffered },
     { label: "Pilots accepted", value: m.pilotsAccepted },
     { label: "Onboarding started", value: m.onboardingStarted },
-    { label: "Organizations verified", value: m.organizationsVerified },
-    { label: "First opportunities posted", value: m.firstOpportunitiesPosted },
+    { label: "Businesses verified", value: m.organizationsVerified },
+    { label: "First jobs/gigs posted", value: m.firstOpportunitiesPosted },
     { label: "Repeat employers", value: m.repeatEmployers },
   ];
 
@@ -36,7 +36,7 @@ export default async function AdminHomePage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-xl font-semibold text-ink-900 dark:text-white">Command center</h1>
+        <h1 className="text-xl font-semibold text-ink-900 dark:text-white">Outreach overview</h1>
         <p className="text-sm text-ink-500 dark:text-ink-400">Employer outreach pipeline at a glance. Archived and not-interested prospects are excluded below.</p>
       </div>
 

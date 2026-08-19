@@ -44,7 +44,7 @@ export default async function AdminLeadsPage({ searchParams }: { searchParams: P
     <div className="space-y-5">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold text-ink-900 dark:text-white">Leads</h1>
+          <h1 className="text-xl font-semibold text-ink-900 dark:text-white">Business prospects</h1>
           <p className="text-sm text-ink-500 dark:text-ink-400">{leads.length} prospect{leads.length === 1 ? "" : "s"}</p>
         </div>
         <div className="flex gap-2">

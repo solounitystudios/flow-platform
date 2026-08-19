@@ -120,7 +120,7 @@ export default async function AdminTasksPage({ searchParams }: { searchParams: P
           <SignalList items={signals.noResponse} />
         </section>
         <section className="space-y-2">
-          <h2 className="text-sm font-semibold text-ink-700 dark:text-ink-200">Demonstrations this week</h2>
+          <h2 className="text-sm font-semibold text-ink-700 dark:text-ink-200">Meetings this week</h2>
           <SignalList items={signals.demosThisWeek} />
         </section>
         <section className="space-y-2">
