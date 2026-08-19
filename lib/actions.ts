@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { getRequestOrigin } from "@/lib/url";
+import { getRequestOrigin, isSafeInternalPath } from "@/lib/url";
 import type { CheckInResult, RedeemResult, ConnectionRpcResult, ConversationRpcResult, MessageRpcResult } from "@/lib/database.types";
 
 export interface ActionState {
@@ -21,6 +21,9 @@ export async function signUpAction(_prev: ActionState, formData: FormData): Prom
     .toLowerCase()
     .replace(/[^a-z0-9_]/g, "");
 
+  const rawNext = String(formData.get("next") ?? "");
+  const next = isSafeInternalPath(rawNext) ? rawNext : null;
+
   if (!email || !password || !fullName) {
     return { error: "Fill in your name, email, and password to continue." };
   }
@@ -30,12 +33,13 @@ export async function signUpAction(_prev: ActionState, formData: FormData): Prom
 
   const supabase = await createClient();
   const origin = await getRequestOrigin();
+  const callbackUrl = next ? `${origin}/auth/callback?next=${encodeURIComponent(next)}` : `${origin}/auth/callback`;
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
     options: {
       data: { full_name: fullName, username: username || undefined },
-      emailRedirectTo: `${origin}/auth/callback`,
+      emailRedirectTo: callbackUrl,
     },
   });
 
@@ -45,13 +49,14 @@ export async function signUpAction(_prev: ActionState, formData: FormData): Prom
   // there's nothing to redirect into yet, so tell the user to check their inbox.
   if (!data.session) return { success: true, needsEmailConfirmation: true };
 
-  redirect("/onboarding");
+  redirect(next ?? "/onboarding");
 }
 
 export async function signInAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
-  const next = String(formData.get("next") ?? "/dashboard");
+  const rawNext = String(formData.get("next") ?? "");
+  const next = isSafeInternalPath(rawNext) ? rawNext : "/dashboard";
 
   if (!email || !password) {
     return { error: "Enter your email and password." };
@@ -67,7 +72,7 @@ export async function signInAction(_prev: ActionState, formData: FormData): Prom
     return { error: "Incorrect email or password." };
   }
 
-  redirect(next || "/dashboard");
+  redirect(next);
 }
 
 export async function signOutAction() {

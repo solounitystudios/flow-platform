@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { getRequestOrigin } from "@/lib/url";
+import { getRequestOrigin, isSafeInternalPath } from "@/lib/url";
 
 // PKCE callback for Supabase Auth email links (signup confirmation, password
 // reset, etc.) — @supabase/ssr's browser/server clients are both hard-set to
@@ -9,7 +9,8 @@ import { getRequestOrigin } from "@/lib/url";
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
-  const next = searchParams.get("next") ?? "/onboarding";
+  const rawNext = searchParams.get("next");
+  const next = isSafeInternalPath(rawNext) ? rawNext : "/onboarding";
   const origin = await getRequestOrigin();
 
   if (code) {

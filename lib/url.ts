@@ -3,6 +3,16 @@ import { headers } from "next/headers";
 const CODESPACE_NAME_PATTERN = /^[a-z0-9-]+$/i;
 
 /**
+ * Guards every redirect that echoes a `next` query param (login, signup,
+ * the auth callback, the employer invitation path). Must be a same-origin,
+ * absolute path — `//evil.com` is scheme-relative and browsers treat it as
+ * an external URL, so it's rejected alongside any fully-qualified one.
+ */
+export function isSafeInternalPath(path: string | null | undefined): path is string {
+  return typeof path === "string" && path.startsWith("/") && !path.startsWith("//");
+}
+
+/**
  * The origin the current request should redirect back to — used for
  * Supabase Auth email links (emailRedirectTo) and this app's own auth
  * callback route.
