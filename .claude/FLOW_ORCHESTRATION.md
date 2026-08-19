@@ -129,3 +129,33 @@ in the same batch without an explicit handoff:
 
 See `.claude/FLOW_WORKFLOW.md` for the end-to-end request flow these rules
 operate inside of.
+
+## Status reporting (FLOW COMMAND)
+
+`.claude/flow-command-state.json` is the data source for the founder-facing
+FLOW COMMAND dashboard at `/admin/command`. It contains no secrets — it is
+safe to read from a Next.js Server Component and safe to have committed.
+
+`flow-lead` owns this file and should update it at meaningful milestones
+only, not on every tool call:
+
+- mission start (new `mission`, reset `checkpoints`, `agents` set to
+  `STANDBY`/`WORKING` as appropriate)
+- each agent delegation (that agent's `status`, `current_task`,
+  `waiting_on`)
+- a meaningful checkpoint completing (advance `checkpoints[].status` and
+  `phase`)
+- a blocker appearing (`blockers`, and the relevant agent's `status` set to
+  `BLOCKED`)
+- QA starting and QA PASS/FAIL (`qa_status`)
+- the release-check gate (`checkpoints` entry for "Release Check")
+- entering the founder-approval wait (`founder_approval_required: true`)
+- mission complete (`checkpoints` all `done`, `last_completed_mission`
+  populated, `production_touched` and `pushed` stated honestly)
+
+Never write a status this file can't actually support — `production_touched`
+must reflect a real check (e.g. no `apply_migration`/write `execute_sql` call
+was made), not an assumption. `usage_mode` is manually reported, never
+inferred from anything resembling real telemetry — see the field's own
+`usage_mode_note` for why. If a field can't be determined honestly, leave it
+`null`/`pending` rather than guessing.

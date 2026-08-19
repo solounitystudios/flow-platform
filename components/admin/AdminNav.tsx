@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Users, Kanban, ListTodo, FileText, ShieldCheck, BadgeCheck, ScrollText, Upload, Download, ArrowLeft } from "lucide-react";
+import { LayoutDashboard, Users, Kanban, ListTodo, FileText, ShieldCheck, BadgeCheck, ScrollText, Upload, Download, ArrowLeft, Radar } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const LINKS = [
   { href: "/admin", label: "Overview", icon: LayoutDashboard, exact: true },
+  { href: "/admin/command", label: "Command", icon: Radar, exact: false },
   { href: "/admin/leads", label: "Leads", icon: Users, exact: false },
   { href: "/admin/pipeline", label: "Pipeline", icon: Kanban, exact: false },
   { href: "/admin/tasks", label: "Tasks", icon: ListTodo, exact: false },
