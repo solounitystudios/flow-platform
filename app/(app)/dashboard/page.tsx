@@ -4,6 +4,7 @@ import { getCurrentUser, getFullProfile } from "@/lib/data/profile";
 import { getOpenOpportunities } from "@/lib/data/opportunities";
 import { getUpcomingEvents } from "@/lib/data/events";
 import { mockActivity } from "@/lib/mock/data";
+import { isDemoModeEnabled } from "@/lib/demo";
 import { SectionHeading } from "@/components/ui/SectionHeading";
 import { OpportunityCard } from "@/components/opportunities/OpportunityCard";
 import { EventCard } from "@/components/events/EventCard";
@@ -61,11 +62,17 @@ export default async function DashboardPage() {
       <section className="space-y-2">
         <SectionHeading title="Activity feed" subtitle="From your connections" />
         <Card>
-          <div className="divide-y divide-ink-100 px-4 dark:divide-ink-800">
-            {mockActivity.slice(0, 5).map((item) => (
-              <ActivityItem key={item.id} item={item} />
-            ))}
-          </div>
+          {isDemoModeEnabled() ? (
+            <div className="divide-y divide-ink-100 px-4 dark:divide-ink-800">
+              {mockActivity.slice(0, 5).map((item) => (
+                <ActivityItem key={item.id} item={item} />
+              ))}
+            </div>
+          ) : (
+            <p className="px-4 py-8 text-center text-sm text-ink-400">
+              No recent activity from your connections yet.
+            </p>
+          )}
           <Link href="/connections" className="flex items-center justify-center gap-1 border-t border-ink-100 py-3 text-sm font-medium text-flow-600 dark:border-ink-800">
             See more activity <ArrowRight className="h-3.5 w-3.5" />
           </Link>

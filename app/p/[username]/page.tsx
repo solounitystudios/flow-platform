@@ -7,6 +7,7 @@ import { getCurrentUser, getFullProfileByUsername } from "@/lib/data/profile";
 import { getReliabilityBreakdown } from "@/lib/data/reliability";
 import { getConnectionStatus, getSharedSkills } from "@/lib/data/connections";
 import { findMockPersonByUsername, mockPersonToPassportData, mockPersonToRecommendations, mockPersonToSkills } from "@/lib/mock/passport-adapter";
+import { isDemoModeEnabled } from "@/lib/demo";
 import { PassportCard } from "@/components/passport/PassportCard";
 import { SkillsList } from "@/components/passport/SkillsList";
 import { RecommendationsList } from "@/components/passport/RecommendationsList";
@@ -29,7 +30,10 @@ export default async function PublicPassportPage({ params }: { params: Promise<{
   const full = await getFullProfileByUsername(username);
 
   if (!full) {
-    const mockPerson = findMockPersonByUsername(username);
+    // A nonexistent Passport must 404 in production. Mock people only exist
+    // as a local-dev convenience so Discover/Connections/activity-feed demo
+    // links don't dead-end — never a stand-in for a real, unclaimed username.
+    const mockPerson = isDemoModeEnabled() ? findMockPersonByUsername(username) : null;
     if (!mockPerson) notFound();
 
     return (

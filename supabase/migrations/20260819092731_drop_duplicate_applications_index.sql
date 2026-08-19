@@ -1,0 +1,15 @@
+-- applications carries two identical unique indexes on (opportunity_id, applicant_id):
+--   applications_opportunity_id_applicant_id_key — auto-named, from the
+--     inline `unique(opportunity_id, applicant_id)` table constraint in
+--     flow_core_v1.
+--   applications_unique_applicant — added explicitly by
+--     phase2_opportunity_lifecycle's `add constraint
+--     applications_unique_applicant unique (...)`, same columns, same order.
+--
+-- Both enforce the exact same uniqueness; the second was redundant the
+-- moment it was created. Keep the intentionally-named one (it's what the
+-- app-lifecycle migrations and any FK/constraint references assume going
+-- forward) and drop the older auto-named duplicate. Uniqueness on
+-- (opportunity_id, applicant_id) remains enforced throughout by the
+-- surviving index/constraint.
+alter table public.applications drop constraint if exists applications_opportunity_id_applicant_id_key;

@@ -3223,6 +3223,10 @@ export type Database = {
       }
     }
     Functions: {
+      _award_founding_class: {
+        Args: { p_granted_by: string; p_profile_id: string; p_reason: string }
+        Returns: undefined
+      }
       accept_employer_invitation: {
         Args: { p_token_hash: string }
         Returns: Json
@@ -3575,7 +3579,7 @@ export interface RedeemResult {
 
 // ── Admin Batch 2 RPC result shapes ──────────────────────────────────────
 // Mirrors the jsonb each function actually returns (see
-// supabase/migrations/20260819050000_admin_batch2_operations.sql) — these
+// supabase/migrations/20260819061906_admin_batch2_operations.sql) — these
 // aren't in the Supabase-generated schema because Postgres only declares
 // the return type as `jsonb`/Json, not its internal shape.
 
