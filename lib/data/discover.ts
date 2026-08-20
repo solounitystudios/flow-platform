@@ -1,9 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
-import type { SupabaseClient } from "@supabase/supabase-js";
 import { mockPeople, mockOrganizations } from "@/lib/mock/data";
 import { dicebearAvatar } from "@/lib/utils";
 import { isDemoModeEnabled } from "@/lib/demo";
-import type { MockOrganization, MockPerson, OrganizationLocationVisibility } from "@/lib/types";
+import type { MockOrganization, MockPerson } from "@/lib/types";
 import type { Tables } from "@/lib/database.types";
 
 export type DiscoverPerson = Pick<MockPerson, "id" | "username" | "full_name" | "avatar_url" | "city" | "state" | "bio" | "reliability_score" | "available_now">;
@@ -45,56 +44,24 @@ export async function getDiscoverPeople(excludeId?: string): Promise<DiscoverPer
   return [...real, ...mockPeople];
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// organizations_public — TEMPORARY CAST NOTICE
-//
-// This view is defined in
-// supabase/migrations/20260820163442_organization_location_privacy.sql,
-// drafted by this batch but NOT YET APPLIED to production — waiting on
-// separate founder authorization (see that migration's own header).
-// Because of that, lib/database.types.ts (regenerated only from a live
-// schema) has no knowledge of it yet, so `supabase.from("organizations_public")`
-// fails to typecheck against the real `Database` type.
-//
-// `pendingOrganizationsPublicView()` is the same escape hatch already used
-// for `organization_members` before its migration was applied (see
-// lib/data/organization.ts's `pendingOrgMembersTable` for the sibling of
-// this exact situation) — re-casts the already-authenticated client to the
-// untyped `SupabaseClient` shape just for this one view, narrowed at the
-// call site with an explicit cast.
-//
-// Once the migration is applied and lib/database.types.ts is regenerated:
-// delete this helper and the manual `PublicOrganizationRow` type below,
-// replace with `Tables<"organizations_public">`, and call
-// `supabase.from("organizations_public")` directly.
-function pendingOrganizationsPublicView(supabase: Awaited<ReturnType<typeof createClient>>) {
-  const untyped = supabase as unknown as SupabaseClient;
-  return untyped.from("organizations_public");
-}
-
-interface PublicOrganizationRow {
-  id: string;
-  name: string;
-  description: string | null;
-  city: string | null;
-  state: string | null;
-  org_type: string;
-  verified: boolean;
-  created_at: string;
-  location_visibility: OrganizationLocationVisibility;
-  lat: number | null;
-  lng: number | null;
-}
+// organizations_public — redacts lat/lng per-row based on location_visibility
+// (see supabase/migrations/20260820163442_organization_location_privacy.sql,
+// live). location_visibility is `text` at the SQL level (a check constraint,
+// not a Postgres enum), so the generated type is `string | null` — narrowed
+// here to MockOrganization's literal union, same convention used throughout
+// this codebase for check-constrained columns (e.g. opportunities.ts's
+// `row.status as MockOpportunity["status"]`).
+type PublicOrganizationRow = Tables<"organizations_public">;
 
 function toOrgCard(row: PublicOrganizationRow): MockOrganization {
   return {
-    id: row.id,
-    name: row.name,
-    logo_url: dicebearAvatar(row.name),
+    id: row.id ?? "",
+    name: row.name ?? "",
+    logo_url: dicebearAvatar(row.name ?? ""),
     city: row.city ?? "Buffalo",
     state: row.state ?? "NY",
     description: row.description ?? "",
-    verified: row.verified,
+    verified: row.verified ?? false,
     industry: row.org_type ? row.org_type.charAt(0).toUpperCase() + row.org_type.slice(1) : "Business",
     member_perk: null,
     rating: null,
@@ -103,16 +70,15 @@ function toOrgCard(row: PublicOrganizationRow): MockOrganization {
     // to share.
     lat: row.lat,
     lng: row.lng,
-    location_visibility: row.location_visibility,
+    location_visibility: (row.location_visibility ?? "hidden") as MockOrganization["location_visibility"],
   };
 }
 
 export async function getDiscoverOrganizations(): Promise<MockOrganization[]> {
   const supabase = await createClient();
-  const view = pendingOrganizationsPublicView(supabase);
-  const { data } = await view.select("*").order("created_at", { ascending: false });
+  const { data } = await supabase.from("organizations_public").select("*").order("created_at", { ascending: false });
 
-  const real = ((data ?? []) as unknown as PublicOrganizationRow[]).map(toOrgCard);
+  const real = (data ?? []).map(toOrgCard);
   if (!isDemoModeEnabled()) return real;
   return [...real, ...mockOrganizations];
 }
@@ -123,9 +89,8 @@ export async function getDiscoverOrganizations(): Promise<MockOrganization[]> {
  * too, same convention as getFullProfileByUsername's mock fallback. */
 export async function getPublicOrganization(id: string): Promise<MockOrganization | null> {
   const supabase = await createClient();
-  const view = pendingOrganizationsPublicView(supabase);
-  const { data } = await view.select("*").eq("id", id).maybeSingle();
-  if (data) return toOrgCard(data as unknown as PublicOrganizationRow);
+  const { data } = await supabase.from("organizations_public").select("*").eq("id", id).maybeSingle();
+  if (data) return toOrgCard(data);
 
   if (!isDemoModeEnabled()) return null;
   return mockOrganizations.find((o) => o.id === id) ?? null;

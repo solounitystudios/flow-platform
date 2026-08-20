@@ -93,13 +93,7 @@ export default async function BusinessPage() {
       {isOwner && (
         <Card>
           <CardBody>
-            {/* `location_visibility` isn't in lib/database.types.ts yet — the
-                migration adding it is drafted but not applied (see
-                supabase/migrations/20260820163442_organization_location_privacy.sql).
-                Defaults to "hidden" client-side to match the column's own
-                DB default, so this never overstates what's actually shown
-                publicly before the migration lands. */}
-            <LocationVisibilityControl organizationId={org.id} current={(org as { location_visibility?: OrganizationLocationVisibility }).location_visibility ?? "hidden"} />
+            <LocationVisibilityControl organizationId={org.id} current={org.location_visibility as OrganizationLocationVisibility} />
           </CardBody>
         </Card>
       )}

@@ -458,6 +458,13 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "business_leads_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_public"
+            referencedColumns: ["id"]
+          },
         ]
       }
       connection_events: {
@@ -1190,6 +1197,13 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "events_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_public"
+            referencedColumns: ["id"]
+          },
         ]
       }
       flow_ledger: {
@@ -1394,6 +1408,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: true
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_organization_links_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "organizations_public"
             referencedColumns: ["id"]
           },
         ]
@@ -1872,6 +1893,13 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "opportunities_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_public"
+            referencedColumns: ["id"]
+          },
         ]
       }
       opportunity_skill_requirements: {
@@ -1974,6 +2002,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organization_members_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_public"
             referencedColumns: ["id"]
           },
           {
@@ -2102,6 +2137,13 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "organization_verification_cases_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_public"
+            referencedColumns: ["id"]
+          },
         ]
       }
       organizations: {
@@ -2112,6 +2154,7 @@ export type Database = {
           id: string
           lat: number | null
           lng: number | null
+          location_visibility: string
           name: string
           org_type: string
           owner_id: string
@@ -2126,6 +2169,7 @@ export type Database = {
           id?: string
           lat?: number | null
           lng?: number | null
+          location_visibility?: string
           name: string
           org_type?: string
           owner_id: string
@@ -2140,6 +2184,7 @@ export type Database = {
           id?: string
           lat?: number | null
           lng?: number | null
+          location_visibility?: string
           name?: string
           org_type?: string
           owner_id?: string
@@ -3259,6 +3304,48 @@ export type Database = {
       }
     }
     Views: {
+      organizations_public: {
+        Row: {
+          city: string | null
+          created_at: string | null
+          description: string | null
+          id: string | null
+          lat: number | null
+          lng: number | null
+          location_visibility: string | null
+          name: string | null
+          org_type: string | null
+          state: string | null
+          verified: boolean | null
+        }
+        Insert: {
+          city?: string | null
+          created_at?: string | null
+          description?: string | null
+          id?: string | null
+          lat?: never
+          lng?: never
+          location_visibility?: string | null
+          name?: string | null
+          org_type?: string | null
+          state?: string | null
+          verified?: boolean | null
+        }
+        Update: {
+          city?: string | null
+          created_at?: string | null
+          description?: string | null
+          id?: string | null
+          lat?: never
+          lng?: never
+          location_visibility?: string | null
+          name?: string | null
+          org_type?: string | null
+          state?: string | null
+          verified?: boolean | null
+        }
+        Relationships: []
+      }
       passport_summary: {
         Row: {
           available_now: boolean | null

@@ -3,7 +3,6 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import type { SupabaseClient } from "@supabase/supabase-js";
 import { getRequestOrigin, isSafeInternalPath } from "@/lib/url";
 import { getOrganizationByOwner } from "@/lib/data/organization";
 import { canAttributeToOrganization } from "@/lib/authz";
@@ -183,13 +182,7 @@ export async function setOrganizationLocationVisibilityAction(organizationId: st
   } = await supabase.auth.getUser();
   if (!user) return { error: "Your session expired. Please log in again." };
 
-  // `location_visibility` isn't in lib/database.types.ts yet — the migration
-  // adding it is drafted but not applied (see the function doc comment).
-  // Same untyped-cast escape hatch as pendingOrgMembersTable/
-  // pendingOrganizationsPublicView; delete this cast once the migration is
-  // applied and types are regenerated.
-  const untyped = supabase as unknown as SupabaseClient;
-  const { error } = await untyped.from("organizations").update({ location_visibility: visibility }).eq("id", organizationId).eq("owner_id", user.id);
+  const { error } = await supabase.from("organizations").update({ location_visibility: visibility }).eq("id", organizationId).eq("owner_id", user.id);
   if (error) return { error: "Something went wrong. Try again." };
 
   revalidatePath("/business");
