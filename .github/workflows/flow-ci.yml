@@ -1,0 +1,62 @@
+name: FLOW CI
+
+# Minimal, production-safe release gate. Runs the same commands the release
+# workflow requires locally before a PR (see .claude/FLOW_WORKFLOW.md and
+# tests/README.md): typecheck, lint, the credential-free test baseline, and
+# a production build. Deliberately does not touch live Supabase — the build
+# step uses fixed placeholder values, never real credentials, because none
+# of this repo's statically-generated routes call Supabase at build time
+# (verified: the build succeeds identically with placeholder values). See
+# tests/README.md for why tests/integration/ (the only suite that would
+# need real credentials) is excluded from this workflow on purpose.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches-ignore: [main]
+
+# Cancel a stale run on the same branch/PR when new commits land, so CI
+# doesn't queue up redundant work.
+concurrency:
+  group: flow-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    name: typecheck, lint, test, build
+    runs-on: ubuntu-latest
+    env:
+      # Fixed, non-production placeholders — never real credentials. Safe
+      # to commit: `sb_publishable_*` keys are publishable by design (the
+      # client-side-safe successor to the old anon key), and this URL
+      # points at nothing. Confirmed the build never reaches either value
+      # at build time — none of this repo's prerendered (static) routes
+      # call Supabase.
+      NEXT_PUBLIC_SUPABASE_URL: "https://placeholder.supabase.co"
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_placeholder0000000000000000"
+      NEXT_PUBLIC_FLOW_DEMO_MODE: "false"
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies (from lockfile)
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test (credential-free baseline — FLOW-SEC-001, map location-safety, redirect-safety)
+        run: npm run test
+
+      - name: Build
+        run: npm run build
