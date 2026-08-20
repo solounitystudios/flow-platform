@@ -3,13 +3,14 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getOrganizationByOwner, type OrganizationMemberRole, type OrganizationMemberStatus } from "@/lib/data/organization";
+import { canManageOrganizationMember, INVITABLE_ORGANIZATION_ROLES } from "@/lib/authz";
 
 export interface TeamActionState {
   error?: string;
   success?: string;
 }
 
-const INVITABLE_ROLES: OrganizationMemberRole[] = ["admin", "recruiter", "manager"];
+const INVITABLE_ROLES: OrganizationMemberRole[] = [...INVITABLE_ORGANIZATION_ROLES];
 
 /**
  * Owner-only. Looks up a FLOW member by username and creates an `invited`
@@ -84,8 +85,9 @@ export async function setOrganizationMemberStatusAction(
   const { data: target } = await supabase.from("organization_members").select("id, profile_id, role").eq("id", memberId).eq("organization_id", organizationId).maybeSingle();
 
   if (!target) return { error: "That team member no longer exists." };
-  if (target.role === "owner") return { error: "The business owner's access can't be changed here." };
-  if (target.profile_id === user.id) return { error: "You can't change your own membership." };
+  if (!canManageOrganizationMember(target, user.id)) {
+    return { error: target.role === "owner" ? "The business owner's access can't be changed here." : "You can't change your own membership." };
+  }
 
   const removedAt = status === "removed" ? new Date().toISOString() : null;
   const { error } = await supabase

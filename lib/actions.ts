@@ -4,6 +4,8 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getRequestOrigin, isSafeInternalPath } from "@/lib/url";
+import { getOrganizationByOwner } from "@/lib/data/organization";
+import { canAttributeToOrganization } from "@/lib/authz";
 import type { CheckInResult, RedeemResult, ConnectionRpcResult, ConversationRpcResult, MessageRpcResult } from "@/lib/database.types";
 
 export interface ActionState {
@@ -183,6 +185,17 @@ export async function createOpportunityAction(_prev: ActionState, formData: Form
   const instant_book = formData.get("instant_book") === "on";
 
   if (!title) return { error: "Give the opportunity a title." };
+
+  // FLOW-SEC-001: never trust a client-supplied organization_id — a Server
+  // Action is directly POST-able regardless of what the rendered form
+  // pre-fills. Only the organization's owner may attribute a posting to it
+  // (member posting rights are intentionally deferred, not granted here);
+  // the `opportunities_creator_manage` RLS policy enforces the identical
+  // rule independently, so this is defense-in-depth, not the only guard.
+  if (organization_id) {
+    const org = await getOrganizationByOwner(user.id);
+    if (!canAttributeToOrganization(org?.id ?? null, organization_id)) return { error: "You can only post on behalf of a business you own." };
+  }
 
   const { error } = await supabase.from("opportunities").insert({
     created_by: user.id,
@@ -537,6 +550,15 @@ export async function createEventAction(_prev: ActionState, formData: FormData):
 
   if (!title) return { error: "Give the event a title." };
   if (!starts_at) return { error: "Set a start date and time." };
+
+  // FLOW-SEC-001: same rule and same reasoning as createOpportunityAction
+  // above — never trust a client-supplied organization_id; only the
+  // organization's owner may attribute an event to it. The
+  // `events_creator_manage` RLS policy enforces this independently.
+  if (organization_id) {
+    const org = await getOrganizationByOwner(user.id);
+    if (!canAttributeToOrganization(org?.id ?? null, organization_id)) return { error: "You can only host an event on behalf of a business you own." };
+  }
 
   const { error } = await supabase.from("events").insert({
     created_by: user.id,
