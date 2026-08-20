@@ -72,6 +72,7 @@ function makeOrganization(overrides: Partial<MockOrganization> = {}): MockOrgani
     rating: null,
     lat: 42.8864,
     lng: -78.8784,
+    location_visibility: "exact",
     ...overrides,
   };
 }
@@ -137,5 +138,32 @@ describe("organizationsToMapItems: business coordinates are never fabricated", (
       makeOrganization({ id: "org-2", lat: null, lng: null }),
     ]);
     expect(items).toHaveLength(0);
+  });
+
+  it("a pin links to the public organization page, not /discover", () => {
+    const items = organizationsToMapItems([makeOrganization({ id: "org-42" })]);
+    expect(items[0].href).toBe("/o/org-42");
+  });
+});
+
+describe("organizationsToMapItems: location_visibility privacy", () => {
+  it("'hidden' produces no pin, even with real coordinates set", () => {
+    expect(organizationsToMapItems([makeOrganization({ location_visibility: "hidden" })])).toHaveLength(0);
+  });
+
+  it("'remote' produces no physical pin, even with real coordinates set", () => {
+    expect(organizationsToMapItems([makeOrganization({ location_visibility: "remote" })])).toHaveLength(0);
+  });
+
+  it("'exact' shows the real, unrounded coordinates", () => {
+    const items = organizationsToMapItems([makeOrganization({ location_visibility: "exact", lat: 42.88641234, lng: -78.87841234 })]);
+    expect(items[0].latitude).toBe(42.88641234);
+    expect(items[0].longitude).toBe(-78.87841234);
+  });
+
+  it("'approximate' rounds coordinates to 2 decimal places rather than showing the exact point", () => {
+    const items = organizationsToMapItems([makeOrganization({ location_visibility: "approximate", lat: 42.88641234, lng: -78.87841234 })]);
+    expect(items[0].latitude).toBe(42.89);
+    expect(items[0].longitude).toBe(-78.88);
   });
 });

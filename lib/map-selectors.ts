@@ -113,16 +113,29 @@ export function eventsToMapItems(events: MockEvent[]): MapItem[] {
  * fabricated, same as the opportunity/event selectors. It's expected and
  * acceptable for this to return `[]` until organizations actually have
  * coordinates set.
+ *
+ * Location privacy: only 'exact' and 'approximate' organizations can ever
+ * produce a pin — 'hidden' and 'remote' never do, regardless of whether
+ * lat/lng happen to be set. This selector re-enforces that rule itself
+ * (not just trusting the caller already redacted it) because it also runs
+ * against lib/mock/data.ts's demo-mode fixtures, which never go through
+ * the organizations_public view that redacts real Supabase rows — this is
+ * the one place both real and mock data are guaranteed to pass through the
+ * same check. 'approximate' rounds to 2 decimal places (~1.1km of fuzz) —
+ * matching supabase/migrations/20260820163442_organization_location_privacy.sql's
+ * own rounding, so a real row already redacted by that view and a mock row
+ * redacted here end up with the same precision either way.
  */
 export function organizationsToMapItems(organizations: MockOrganization[]): MapItem[] {
   return organizations
+    .filter((o) => o.location_visibility === "exact" || o.location_visibility === "approximate")
     .filter((o): o is MockOrganization & { lat: number; lng: number } => hasCoordinates(o.lat, o.lng))
     .map((o) => ({
       id: o.id,
       type: "business" as const,
       title: o.name,
-      latitude: o.lat,
-      longitude: o.lng,
+      latitude: o.location_visibility === "approximate" ? Math.round(o.lat * 100) / 100 : o.lat,
+      longitude: o.location_visibility === "approximate" ? Math.round(o.lng * 100) / 100 : o.lng,
       city: o.city,
       state: o.state,
       status: null,
@@ -130,11 +143,6 @@ export function organizationsToMapItems(organizations: MockOrganization[]): MapI
       verified: o.verified,
       starts_at: null,
       expires_at: null,
-      // No public per-organization detail page exists yet (organizations
-      // aren't individually linkable anywhere else in the app either —
-      // see components/social/OrganizationCard.tsx) — route to the
-      // existing organizations browse surface rather than fabricating a
-      // route.
-      href: "/discover",
+      href: `/o/${o.id}`,
     }));
 }

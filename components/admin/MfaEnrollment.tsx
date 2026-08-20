@@ -14,7 +14,7 @@ type Phase = "loading" | "enroll" | "verify-existing" | "error" | "done";
  * account already has a verified factor, this goes straight to the
  * challenge instead of enrolling a second one.
  */
-export function MfaEnrollment() {
+export function MfaEnrollment({ next = "/admin" }: { next?: string }) {
   const supabase = createClient();
   const [phase, setPhase] = useState<Phase>("loading");
   const [qrCode, setQrCode] = useState<string | null>(null);
@@ -84,8 +84,10 @@ export function MfaEnrollment() {
     }
 
     // Full reload so every server component re-reads the refreshed
-    // session cookie and sees aal2 immediately.
-    window.location.href = "/admin";
+    // session cookie and sees aal2 immediately. `next` was already
+    // validated server-side (isSafeInternalPath) by the page that passed
+    // it down, so it's safe to use directly here.
+    window.location.href = next;
   }
 
   if (phase === "loading") {

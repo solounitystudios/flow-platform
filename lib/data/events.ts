@@ -64,6 +64,23 @@ export async function getUpcomingEvents(): Promise<MockEvent[]> {
   return [...realShaped, ...mockEvents.filter((e) => e.status === "published")];
 }
 
+/** Upcoming published events for one organization — for the public
+ * organization page (app/o/[id]). Same shape/shaping as getUpcomingEvents,
+ * just scoped by organization_id. */
+export async function getEventsByOrganizationPublic(organizationId: string): Promise<MockEvent[]> {
+  const supabase = await createClient();
+  const { data: rows } = await supabase
+    .from("events")
+    .select("*, organization:organizations(id, name, verified)")
+    .eq("organization_id", organizationId)
+    .eq("status", "published")
+    .order("starts_at", { ascending: true });
+
+  const real = rows ?? [];
+  const counts = await getRegisteredCounts(real.map((r) => r.id));
+  return real.map((r) => toCardShape(r as RealEventRow, counts.get(r.id) ?? 0));
+}
+
 export async function getPastEvents(): Promise<MockEvent[]> {
   const supabase = await createClient();
   const { data: rows } = await supabase

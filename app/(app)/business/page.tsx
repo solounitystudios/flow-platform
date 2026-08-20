@@ -13,6 +13,8 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { OpportunityRow } from "@/components/business/OpportunityRow";
 import { EventRow } from "@/components/business/EventRow";
 import { CreateOrganizationForm } from "@/components/business/CreateOrganizationForm";
+import { LocationVisibilityControl } from "@/components/business/LocationVisibilityControl";
+import type { OrganizationLocationVisibility } from "@/lib/types";
 
 export default async function BusinessPage() {
   const user = await getCurrentUser();
@@ -87,6 +89,14 @@ export default async function BusinessPage() {
           </Button>
         )}
       </div>
+
+      {isOwner && (
+        <Card>
+          <CardBody>
+            <LocationVisibilityControl organizationId={org.id} current={org.location_visibility as OrganizationLocationVisibility} />
+          </CardBody>
+        </Card>
+      )}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatTile label="Open postings" value={openCount} icon={<Briefcase className="h-3.5 w-3.5" />} />

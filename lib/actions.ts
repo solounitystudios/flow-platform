@@ -162,6 +162,34 @@ export async function createOrganizationAction(_prev: ActionState, formData: For
   return {};
 }
 
+const LOCATION_VISIBILITY_VALUES = ["exact", "approximate", "hidden", "remote"] as const;
+
+/**
+ * Owner-only. Never touches lat/lng itself — this only changes how much of
+ * the organization's *existing* coordinates (if any) are shown publicly.
+ * `orgs_owner_manage` RLS (auth.uid() = owner_id) independently enforces
+ * the same ownership check — defense-in-depth, not the only guard, per
+ * this repo's convention. The public read path (organizations_public,
+ * supabase/migrations/20260820163442_organization_location_privacy.sql)
+ * is what actually redacts lat/lng based on this value.
+ */
+export async function setOrganizationLocationVisibilityAction(organizationId: string, visibility: (typeof LOCATION_VISIBILITY_VALUES)[number]): Promise<{ error?: string }> {
+  if (!LOCATION_VISIBILITY_VALUES.includes(visibility)) return { error: "Choose a valid location setting." };
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Your session expired. Please log in again." };
+
+  const { error } = await supabase.from("organizations").update({ location_visibility: visibility }).eq("id", organizationId).eq("owner_id", user.id);
+  if (error) return { error: "Something went wrong. Try again." };
+
+  revalidatePath("/business");
+  revalidatePath(`/o/${organizationId}`);
+  return {};
+}
+
 export async function createOpportunityAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const supabase = await createClient();
   const {

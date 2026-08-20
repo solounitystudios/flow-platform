@@ -49,3 +49,24 @@ export function canManageOrganizationMember(target: { role: string; profile_id: 
  * sync_organization_owner_membership() creates from organizations.owner_id.
  */
 export const INVITABLE_ORGANIZATION_ROLES = ["admin", "recruiter", "manager"] as const;
+
+export type AdminAccessState = "signed-out" | "not-admin" | "mfa-not-enrolled" | "aal1" | "aal2";
+
+/**
+ * Which of the 5 Admin Access Gateway states applies, given the raw signals
+ * lib/admin/auth.ts's getAdminAccessState() gathers from Supabase. Pure
+ * decision logic only — never itself a source of truth for whether access
+ * is actually granted (requireAdmin/requireSecureAdmin, both backed by the
+ * database's is_flow_admin(), remain the only real gates). Precedence
+ * matters: signed-out beats everything (nothing else can be known yet),
+ * not-admin beats the MFA checks (an MFA factor doesn't imply admin
+ * rights — see app/admin/access/page.tsx's copy for that same point made
+ * to the visitor), and aal2 only applies once both isAdmin and aal2 are
+ * true together.
+ */
+export function deriveAdminAccessState(signals: { hasUser: boolean; isAdmin: boolean; aal2: boolean; hasVerifiedMfaFactor: boolean }): AdminAccessState {
+  if (!signals.hasUser) return "signed-out";
+  if (!signals.isAdmin) return "not-admin";
+  if (signals.aal2) return "aal2";
+  return signals.hasVerifiedMfaFactor ? "aal1" : "mfa-not-enrolled";
+}

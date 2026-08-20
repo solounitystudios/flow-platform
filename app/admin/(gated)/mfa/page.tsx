@@ -1,12 +1,17 @@
 import { redirect } from "next/navigation";
 import { ShieldCheck } from "lucide-react";
 import { getAdminContext } from "@/lib/admin/auth";
+import { isSafeInternalPath } from "@/lib/redirect-safety";
 import { MfaEnrollment } from "@/components/admin/MfaEnrollment";
 
-export default async function AdminMfaPage() {
+export default async function AdminMfaPage({ searchParams }: { searchParams: Promise<{ next?: string }> }) {
   const ctx = await getAdminContext();
   if (!ctx) redirect("/dashboard");
-  if (ctx.aal2) redirect("/admin");
+
+  const { next: rawNext } = await searchParams;
+  const next = isSafeInternalPath(rawNext) ? rawNext : "/admin";
+
+  if (ctx.aal2) redirect(next);
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-md flex-col justify-center px-4 py-10">
@@ -18,7 +23,7 @@ export default async function AdminMfaPage() {
         <p className="mb-5 text-sm text-ink-600 dark:text-ink-300">
           FLOW Admin requires a second factor for every session. This device hasn&apos;t completed that step yet.
         </p>
-        <MfaEnrollment />
+        <MfaEnrollment next={next} />
       </div>
     </div>
   );
