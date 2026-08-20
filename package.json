@@ -7,7 +7,11 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run tests/unit tests/security",
+    "test:security": "vitest run tests/security",
+    "test:flow:quick": "vitest run tests/unit tests/security",
+    "test:integration": "vitest run tests/integration"
   },
   "dependencies": {
     "@supabase/ssr": "^0.7.0",
@@ -32,6 +36,7 @@
     "eslint-config-next": "^16.3.1",
     "postcss": "^8.5.1",
     "tailwindcss": "^3.4.17",
-    "typescript": "^5.7.3"
+    "typescript": "^5.7.3",
+    "vitest": "^3.2.7"
   }
 }
