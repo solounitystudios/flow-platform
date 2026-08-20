@@ -1,16 +1,11 @@
 import { headers } from "next/headers";
 
-const CODESPACE_NAME_PATTERN = /^[a-z0-9-]+$/i;
+// isSafeInternalPath moved to lib/redirect-safety.ts (pure, dependency-free
+// — see tests/security/redirect-safety.test.ts) — re-exported here so
+// existing call sites don't need to change their import path.
+export { isSafeInternalPath } from "@/lib/redirect-safety";
 
-/**
- * Guards every redirect that echoes a `next` query param (login, signup,
- * the auth callback, the employer invitation path). Must be a same-origin,
- * absolute path — `//evil.com` is scheme-relative and browsers treat it as
- * an external URL, so it's rejected alongside any fully-qualified one.
- */
-export function isSafeInternalPath(path: string | null | undefined): path is string {
-  return typeof path === "string" && path.startsWith("/") && !path.startsWith("//");
-}
+const CODESPACE_NAME_PATTERN = /^[a-z0-9-]+$/i;
 
 /**
  * The origin the current request should redirect back to — used for
