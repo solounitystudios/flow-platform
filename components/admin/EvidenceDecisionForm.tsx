@@ -1,8 +1,9 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useRef, useState } from "react";
 import { Select, Textarea, Input } from "@/components/ui/Input";
 import { SubmitButton } from "@/components/ui/SubmitButton";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { decideEvidenceAction, type AdminActionState } from "@/lib/admin/actions";
 import { EVIDENCE_STATUSES, EVIDENCE_REASON_CODES, EVIDENCE_METHODS } from "@/lib/admin/constants";
 import { formatDateTime } from "@/lib/utils";
@@ -10,12 +11,37 @@ import type { VerificationReviewRow } from "@/lib/data/verifications";
 
 const initialState: AdminActionState = {};
 
+/** Rejecting or revoking a claim removes a badge/verified skill the member
+ * may already be relying on elsewhere in their passport — confirm in plain
+ * English before saving, same as any other reject/revoke action here. */
+const CONFIRM_STATUSES = new Set(["rejected", "revoked"]);
+
 export function EvidenceDecisionForm({ verificationId, status, reviews }: { verificationId: string; status: string; reviews: VerificationReviewRow[] }) {
   const [state, formAction] = useActionState(decideEvidenceAction, initialState);
+  const formRef = useRef<HTMLFormElement>(null);
+  const confirmedRef = useRef(false);
+  const [pendingStatus, setPendingStatus] = useState<string | null>(null);
+
+  const pendingLabel = pendingStatus ? (EVIDENCE_STATUSES.find((s) => s.value === pendingStatus)?.label ?? pendingStatus) : "";
 
   return (
     <div className="space-y-4">
-      <form action={formAction} className="space-y-3">
+      <form
+        ref={formRef}
+        action={formAction}
+        className="space-y-3"
+        onSubmit={(e) => {
+          if (confirmedRef.current) {
+            confirmedRef.current = false;
+            return;
+          }
+          const nextStatus = String(new FormData(e.currentTarget).get("status") ?? "");
+          if (CONFIRM_STATUSES.has(nextStatus)) {
+            e.preventDefault();
+            setPendingStatus(nextStatus);
+          }
+        }}
+      >
         <input type="hidden" name="verification_id" value={verificationId} />
         <Select label="Status" name="status" defaultValue={status}>
           {EVIDENCE_STATUSES.map((s) => (
@@ -61,6 +87,21 @@ export function EvidenceDecisionForm({ verificationId, status, reviews }: { veri
           </ul>
         </div>
       )}
+
+      <ConfirmDialog
+        open={pendingStatus !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingStatus(null);
+        }}
+        title={`Set this claim to "${pendingLabel}"?`}
+        description={`This removes or denies the member's verified badge for this claim. Add clear internal notes above so the reason is on record.`}
+        confirmLabel={`Yes, mark ${pendingLabel}`}
+        onConfirm={() => {
+          confirmedRef.current = true;
+          setPendingStatus(null);
+          formRef.current?.requestSubmit();
+        }}
+      />
     </div>
   );
 }

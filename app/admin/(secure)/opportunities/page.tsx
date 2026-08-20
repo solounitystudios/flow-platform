@@ -92,7 +92,14 @@ export default async function AdminOpportunitiesPage({ searchParams }: { searchP
                     <td className="px-4 py-2.5">
                       <div className="flex items-center gap-2">
                         <Badge tone={STATUS_TONE[o.status] ?? "neutral"}>{o.status}</Badge>
-                        <ContentStatusSelect id={o.id} currentStatus={o.status} statuses={OPPORTUNITY_STATUSES} action={adminSetOpportunityStatusAction} />
+                        <ContentStatusSelect
+                          id={o.id}
+                          currentStatus={o.status}
+                          statuses={OPPORTUNITY_STATUSES}
+                          action={adminSetOpportunityStatusAction}
+                          confirmStatuses={["cancelled"]}
+                          confirmDescription={() => "This cancels the listing — it stops showing to job seekers right away. You can change the status again later if that was a mistake."}
+                        />
                       </div>
                     </td>
                   </tr>

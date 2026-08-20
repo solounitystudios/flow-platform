@@ -5,6 +5,8 @@ import { AlertCircle, Check, Copy, Plus, Trash2, Archive, RotateCcw, RefreshCw }
 import { Input, Textarea, Select } from "@/components/ui/Input";
 import { SubmitButton } from "@/components/ui/SubmitButton";
 import { Button } from "@/components/ui/Button";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { FormSection } from "@/components/ui/FormSection";
 import {
   createContactAction,
   createInvitationAction,
@@ -158,6 +160,7 @@ export function InvitationPanel({ leadId, invitations }: { leadId: string; invit
   const [copied, setCopied] = useState(false);
   const [revoking, startRevoke] = useTransition();
   const [replacingId, setReplacingId] = useState<string | null>(null);
+  const [revokeTarget, setRevokeTarget] = useState<string | null>(null);
 
   const active = invitations.filter((i) => invitationStatus(i) === "active");
   const history = invitations.filter((i) => invitationStatus(i) !== "active");
@@ -176,11 +179,7 @@ export function InvitationPanel({ leadId, invitations }: { leadId: string; invit
               <button
                 type="button"
                 disabled={revoking}
-                onClick={() =>
-                  startRevoke(async () => {
-                    await revokeInvitationAction(inv.id, leadId);
-                  })
-                }
+                onClick={() => setRevokeTarget(inv.id)}
                 className="flex items-center gap-1 text-red-500 hover:text-red-600"
               >
                 <Trash2 className="h-3.5 w-3.5" /> Revoke
@@ -245,6 +244,24 @@ export function InvitationPanel({ leadId, invitations }: { leadId: string; invit
           </SubmitButton>
         </form>
       )}
+
+      <ConfirmDialog
+        open={revokeTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setRevokeTarget(null);
+        }}
+        title="Revoke this invitation?"
+        description="The link stops working immediately and can never be used again — even by the person it was meant for. You can generate a new invitation afterward."
+        confirmLabel="Revoke invitation"
+        onConfirm={() => {
+          const id = revokeTarget;
+          if (!id) return;
+          startRevoke(async () => {
+            await revokeInvitationAction(id, leadId);
+          });
+          setRevokeTarget(null);
+        }}
+      />
     </div>
   );
 }
@@ -328,66 +345,82 @@ export function EditLeadForm({ lead, admins }: { lead: LeadDetail; admins: { pro
   const [state, formAction] = useActionState(action, initialAction);
 
   return (
-    <form action={formAction} className="space-y-4 rounded-xl border border-ink-200 bg-white p-4 dark:border-ink-800 dark:bg-ink-900">
+    <form action={formAction} className="space-y-6 rounded-xl border border-ink-200 bg-white p-4 dark:border-ink-800 dark:bg-ink-900">
       <p className="text-sm font-medium text-ink-700 dark:text-ink-200">Edit business profile</p>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Input label="Business name" name="business_name" defaultValue={lead.business_name} required />
-        <Input label="Category" name="category" defaultValue={lead.category} required />
-      </div>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Input label="Address" name="address" defaultValue={lead.address ?? ""} />
-        <Input label="Neighborhood" name="neighborhood" defaultValue={lead.neighborhood ?? ""} />
-      </div>
-      <div className="grid gap-3 sm:grid-cols-3">
-        <Input label="City" name="city" defaultValue={lead.city} />
-        <Input label="State" name="region" defaultValue={lead.region} />
-        <Input label="Postal code" name="postal_code" defaultValue={lead.postal_code ?? ""} />
-      </div>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Input label="Website" name="website_url" type="url" defaultValue={lead.website_url ?? ""} />
-        <Input label="Social URL" name="social_url" type="url" defaultValue={lead.social_url ?? ""} />
-      </div>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Input label="General email" name="general_email" type="email" defaultValue={lead.general_email ?? ""} />
-        <Input label="General phone" name="general_phone" type="tel" defaultValue={lead.general_phone ?? ""} />
-      </div>
-      <Textarea label="Staffing problems observed" name="staffing_problems" defaultValue={lead.staffing_problems ?? ""} />
-      <Input label="Typical roles" name="typical_roles" defaultValue={lead.typical_roles.join(", ")} hint="Comma-separated" />
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Input label="Hiring frequency" name="hiring_frequency" defaultValue={lead.hiring_frequency ?? ""} />
-        <Select label="Best contact method" name="best_contact_method" defaultValue={lead.best_contact_method ?? ""}>
-          <option value="">Unknown</option>
-          {CONTACT_METHODS.map((m) => (
-            <option key={m.value} value={m.value}>
-              {m.label}
-            </option>
-          ))}
-        </Select>
-      </div>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Select label="Interest level" name="interest_level" defaultValue={lead.interest_level}>
-          {INTEREST_LEVELS.map((i) => (
-            <option key={i.value} value={i.value}>
-              {i.label}
-            </option>
-          ))}
-        </Select>
-        <Select label="Assigned owner" name="assigned_to" defaultValue={lead.assigned_to ?? ""}>
-          <option value="">Unassigned</option>
-          {admins.map((a) => (
-            <option key={a.profile_id} value={a.profile_id}>
-              {a.full_name ?? a.username ?? a.profile_id.slice(0, 8)}
-            </option>
-          ))}
-        </Select>
-      </div>
-      <Input label="Source" name="source" defaultValue={lead.source ?? ""} />
-      <Textarea label="Consent notes" name="consent_notes" defaultValue={lead.consent_notes ?? ""} />
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Input label="Next action" name="next_action" defaultValue={lead.next_action ?? ""} />
-        <Input label="Next action at" name="next_action_at" type="datetime-local" defaultValue={lead.next_action_at?.slice(0, 16) ?? ""} />
-      </div>
-      <Textarea label="Internal notes" name="notes" defaultValue={lead.notes ?? ""} />
+
+      <FormSection title="Basics">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Input label="Business name" name="business_name" defaultValue={lead.business_name} required />
+          <Input label="Category" name="category" defaultValue={lead.category} required />
+        </div>
+      </FormSection>
+
+      <FormSection title="Location">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Input label="Address" name="address" defaultValue={lead.address ?? ""} />
+          <Input label="Neighborhood" name="neighborhood" defaultValue={lead.neighborhood ?? ""} />
+        </div>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Input label="City" name="city" defaultValue={lead.city} />
+          <Input label="State" name="region" defaultValue={lead.region} />
+          <Input label="Postal code" name="postal_code" defaultValue={lead.postal_code ?? ""} />
+        </div>
+      </FormSection>
+
+      <FormSection title="Online presence & contact">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Input label="Website" name="website_url" type="url" defaultValue={lead.website_url ?? ""} />
+          <Input label="Social URL" name="social_url" type="url" defaultValue={lead.social_url ?? ""} />
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Input label="General email" name="general_email" type="email" defaultValue={lead.general_email ?? ""} />
+          <Input label="General phone" name="general_phone" type="tel" defaultValue={lead.general_phone ?? ""} />
+        </div>
+      </FormSection>
+
+      <FormSection title="Hiring details" description="What we know about how and when this business hires.">
+        <Textarea label="Staffing problems observed" name="staffing_problems" defaultValue={lead.staffing_problems ?? ""} />
+        <Input label="Typical roles" name="typical_roles" defaultValue={lead.typical_roles.join(", ")} hint="Comma-separated" />
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Input label="Hiring frequency" name="hiring_frequency" defaultValue={lead.hiring_frequency ?? ""} />
+          <Select label="Best contact method" name="best_contact_method" defaultValue={lead.best_contact_method ?? ""}>
+            <option value="">Unknown</option>
+            {CONTACT_METHODS.map((m) => (
+              <option key={m.value} value={m.value}>
+                {m.label}
+              </option>
+            ))}
+          </Select>
+        </div>
+      </FormSection>
+
+      <FormSection title="Outreach tracking" description="Only your team sees this — it's never shown to the business.">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Select label="Interest level" name="interest_level" defaultValue={lead.interest_level}>
+            {INTEREST_LEVELS.map((i) => (
+              <option key={i.value} value={i.value}>
+                {i.label}
+              </option>
+            ))}
+          </Select>
+          <Select label="Assigned owner" name="assigned_to" defaultValue={lead.assigned_to ?? ""}>
+            <option value="">Unassigned</option>
+            {admins.map((a) => (
+              <option key={a.profile_id} value={a.profile_id}>
+                {a.full_name ?? a.username ?? a.profile_id.slice(0, 8)}
+              </option>
+            ))}
+          </Select>
+        </div>
+        <Input label="Source" name="source" defaultValue={lead.source ?? ""} hint="How this prospect first came onto your radar." />
+        <Textarea label="Consent notes" name="consent_notes" defaultValue={lead.consent_notes ?? ""} hint="How/when contact info was gathered and any consent given." />
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Input label="Next action" name="next_action" defaultValue={lead.next_action ?? ""} />
+          <Input label="Next action at" name="next_action_at" type="datetime-local" defaultValue={lead.next_action_at?.slice(0, 16) ?? ""} />
+        </div>
+        <Textarea label="Internal notes" name="notes" defaultValue={lead.notes ?? ""} />
+      </FormSection>
+
       {state.error && <p className="text-sm text-red-600">{state.error}</p>}
       <SubmitButton size="sm" pendingLabel="Saving…">
         Save changes

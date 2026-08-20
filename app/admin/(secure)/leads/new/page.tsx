@@ -4,6 +4,7 @@ import { useActionState } from "react";
 import { AlertCircle } from "lucide-react";
 import { Input, Textarea, Select } from "@/components/ui/Input";
 import { SubmitButton } from "@/components/ui/SubmitButton";
+import { FormSection } from "@/components/ui/FormSection";
 import { createLeadAction, type AdminActionState } from "@/lib/admin/actions";
 import { CONTACT_METHODS } from "@/lib/admin/constants";
 
@@ -19,44 +20,58 @@ export default function NewLeadPage() {
         <p className="text-sm text-ink-500 dark:text-ink-400">Publicly available business info only — no scraped personal data.</p>
       </div>
 
-      <form action={formAction} className="space-y-4 rounded-xl border border-ink-200 bg-white p-5 dark:border-ink-800 dark:bg-ink-900">
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Input label="Business name" name="business_name" required />
-          <Input label="Category" name="category" placeholder="Restaurant, nonprofit, event venue…" required />
-        </div>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Input label="Address" name="address" />
-          <Input label="Neighborhood" name="neighborhood" />
-        </div>
-        <div className="grid gap-4 sm:grid-cols-3">
-          <Input label="City" name="city" defaultValue="Buffalo" />
-          <Input label="State" name="region" defaultValue="NY" />
-          <Input label="Postal code" name="postal_code" />
-        </div>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Input label="Website" name="website_url" type="url" />
-          <Input label="Social URL" name="social_url" type="url" />
-        </div>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Input label="General email" name="general_email" type="email" />
-          <Input label="General phone" name="general_phone" type="tel" />
-        </div>
-        <Textarea label="Staffing problems observed" name="staffing_problems" />
-        <Input label="Typical roles" name="typical_roles" hint="Comma-separated, e.g. server, host, dishwasher" />
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Input label="Hiring frequency" name="hiring_frequency" placeholder="Weekly, seasonal…" />
-          <Select label="Best contact method" name="best_contact_method">
-            <option value="">Unknown</option>
-            {CONTACT_METHODS.map((m) => (
-              <option key={m.value} value={m.value}>
-                {m.label}
-              </option>
-            ))}
-          </Select>
-        </div>
-        <Input label="Source" name="source" placeholder="Walked by, referral, event…" />
-        <Textarea label="Consent notes" name="consent_notes" hint="How/when contact info was gathered and any consent given." />
-        <Textarea label="Notes" name="notes" />
+      <form action={formAction} className="space-y-6 rounded-xl border border-ink-200 bg-white p-5 dark:border-ink-800 dark:bg-ink-900">
+        <FormSection title="Basics">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Input label="Business name" name="business_name" required />
+            <Input label="Category" name="category" placeholder="Restaurant, nonprofit, event venue…" required />
+          </div>
+        </FormSection>
+
+        <FormSection title="Location">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Input label="Address" name="address" />
+            <Input label="Neighborhood" name="neighborhood" />
+          </div>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <Input label="City" name="city" defaultValue="Buffalo" />
+            <Input label="State" name="region" defaultValue="NY" />
+            <Input label="Postal code" name="postal_code" />
+          </div>
+        </FormSection>
+
+        <FormSection title="Online presence & contact">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Input label="Website" name="website_url" type="url" />
+            <Input label="Social URL" name="social_url" type="url" />
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Input label="General email" name="general_email" type="email" />
+            <Input label="General phone" name="general_phone" type="tel" />
+          </div>
+        </FormSection>
+
+        <FormSection title="Hiring details" description="What you know about how and when this business hires.">
+          <Textarea label="Staffing problems observed" name="staffing_problems" />
+          <Input label="Typical roles" name="typical_roles" hint="Comma-separated, e.g. server, host, dishwasher" />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Input label="Hiring frequency" name="hiring_frequency" placeholder="Weekly, seasonal…" />
+            <Select label="Best contact method" name="best_contact_method">
+              <option value="">Unknown</option>
+              {CONTACT_METHODS.map((m) => (
+                <option key={m.value} value={m.value}>
+                  {m.label}
+                </option>
+              ))}
+            </Select>
+          </div>
+        </FormSection>
+
+        <FormSection title="Outreach tracking" description="Only your team sees this — it's never shown to the business.">
+          <Input label="Source" name="source" placeholder="Walked by, referral, event…" />
+          <Textarea label="Consent notes" name="consent_notes" hint="How/when contact info was gathered and any consent given." />
+          <Textarea label="Notes" name="notes" />
+        </FormSection>
 
         {state.error && (
           <p className="flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600 dark:bg-red-950/40">

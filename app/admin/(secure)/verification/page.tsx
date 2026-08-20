@@ -1,6 +1,23 @@
 import { getVerificationQueue, getVerificationDecisions, getAssignableAdmins } from "@/lib/data/admin";
 import { formatDateTime } from "@/lib/utils";
 import { VerificationCaseForm } from "@/components/admin/VerificationCaseForm";
+import { Badge } from "@/components/ui/Badge";
+import { VERIFICATION_STATUSES } from "@/lib/admin/constants";
+
+const STATUS_TONE: Record<string, "neutral" | "flow" | "verified" | "danger"> = {
+  pending: "neutral",
+  in_review: "flow",
+  information_requested: "flow",
+  approved: "verified",
+  rejected: "danger",
+  suspicious_duplicate: "danger",
+  suspended: "danger",
+  closed: "neutral",
+};
+
+function verificationStatusLabel(status: string) {
+  return VERIFICATION_STATUSES.find((s) => s.value === status)?.label ?? status;
+}
 
 export default async function AdminVerificationPage() {
   const [cases, admins] = await Promise.all([getVerificationQueue(), getAssignableAdmins()]);
@@ -21,7 +38,7 @@ export default async function AdminVerificationPage() {
                 <div className="space-y-1">
                   <p className="font-medium text-ink-900 dark:text-white">{c.organization?.name ?? c.lead?.business_name ?? "Unknown"}</p>
                   <p className="text-xs text-ink-400">Opened {formatDateTime(c.created_at)}</p>
-                  <p className="text-xs text-ink-400">Status: {c.status}</p>
+                  <Badge tone={STATUS_TONE[c.status] ?? "neutral"}>{verificationStatusLabel(c.status)}</Badge>
                   {c.assigned_reviewer && <p className="text-xs text-ink-400">Assigned: {c.assigned_reviewer.full_name ?? c.assigned_reviewer.username}</p>}
                   {c.decided_at && <p className="text-xs text-ink-400">Decided {formatDateTime(c.decided_at)}</p>}
                   <div className="mt-2 flex flex-wrap gap-1.5">

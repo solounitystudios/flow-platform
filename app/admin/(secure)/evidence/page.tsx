@@ -2,6 +2,19 @@ import { getEvidenceQueue, getVerificationReviews, getCredentialTypes } from "@/
 import { formatDateTime } from "@/lib/utils";
 import { EvidenceDecisionForm } from "@/components/admin/EvidenceDecisionForm";
 import { EVIDENCE_STATUSES } from "@/lib/admin/constants";
+import { Badge } from "@/components/ui/Badge";
+
+const STATUS_TONE: Record<string, "neutral" | "flow" | "verified" | "danger"> = {
+  pending: "neutral",
+  verified: "verified",
+  rejected: "danger",
+  expired: "neutral",
+  revoked: "danger",
+};
+
+function evidenceStatusLabel(status: string) {
+  return EVIDENCE_STATUSES.find((s) => s.value === status)?.label ?? status;
+}
 
 export default async function AdminEvidencePage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
   const { status } = await searchParams;
@@ -54,7 +67,7 @@ export default async function AdminEvidencePage({ searchParams }: { searchParams
                     </p>
                   )}
                   {c.evidence_note && <p className="text-xs text-ink-600 dark:text-ink-300">{c.evidence_note}</p>}
-                  <p className="text-xs text-ink-400">Status: {c.status}</p>
+                  <Badge tone={STATUS_TONE[c.status] ?? "neutral"}>{evidenceStatusLabel(c.status)}</Badge>
                 </div>
                 <EvidenceDecisionForm verificationId={c.id} status={c.status} reviews={reviews} />
               </div>

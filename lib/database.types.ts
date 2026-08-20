@@ -3232,6 +3232,14 @@ export type Database = {
         Returns: Json
       }
       accept_referral: { Args: { p_token_hash: string }; Returns: Json }
+      admin_set_event_status: {
+        Args: { p_event_id: string; p_status: string }
+        Returns: Json
+      }
+      admin_set_opportunity_status: {
+        Args: { p_opportunity_id: string; p_status: string }
+        Returns: Json
+      }
       block_profile: { Args: { p_target_id: string }; Returns: Json }
       cancel_connection_request: {
         Args: { p_connection_id: string }

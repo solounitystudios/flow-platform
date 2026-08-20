@@ -88,7 +88,14 @@ export default async function AdminEventsPage({ searchParams }: { searchParams: 
                     <td className="px-4 py-2.5">
                       <div className="flex items-center gap-2">
                         <Badge tone={STATUS_TONE[e.status] ?? "neutral"}>{e.status}</Badge>
-                        <ContentStatusSelect id={e.id} currentStatus={e.status} statuses={EVENT_STATUSES} action={adminSetEventStatusAction} />
+                        <ContentStatusSelect
+                          id={e.id}
+                          currentStatus={e.status}
+                          statuses={EVENT_STATUSES}
+                          action={adminSetEventStatusAction}
+                          confirmStatuses={["cancelled"]}
+                          confirmDescription={() => "This cancels the event — it stops showing to members right away. You can change the status again later if that was a mistake."}
+                        />
                       </div>
                     </td>
                   </tr>

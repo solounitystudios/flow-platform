@@ -13,7 +13,9 @@ export default async function SecureAdminLayout({ children }: { children: React.
   return (
     <div>
       <AdminNav role={ctx.role} />
-      <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6">{children}</main>
+      <div className="lg:pl-72">
+        <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6">{children}</main>
+      </div>
     </div>
   );
 }

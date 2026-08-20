@@ -562,15 +562,11 @@ export async function getAuditLog(limit = 100): Promise<AuditLogRow[]> {
 // ── Content moderation: opportunities / events / organizations ────────────
 // getAdminOpportunities/getAdminEvents rely on the opportunities_admin_read /
 // events_admin_read permissive SELECT policies (see
-// supabase/migrations/20260819171934_admin_content_read_and_moderation_rpcs.sql)
+// supabase/migrations/20260819171934_admin_content_read_and_moderation_rpcs.sql,
+// live in production as 20260820053340_admin_content_read_and_moderation_rpcs)
 // to see every row regardless of status or owner — the public-facing
 // getOpenOpportunities/getUpcomingEvents-style queries elsewhere only ever
 // see published, non-draft rows via the existing owner-or-published policy.
-// That migration has been written but is NOT YET APPLIED to production, so
-// these queries are correct against the schema it defines but will only
-// return the full unfiltered set (including drafts and other admins' rows)
-// once it ships — until then they fall back to whatever the pre-existing
-// owner-or-published policy already exposes.
 //
 // getAdminOrganizations needs no new policy at all — orgs_public_read is
 // already `using (true)`, fully public, so this is a plain query gated only

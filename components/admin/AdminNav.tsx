@@ -1,60 +1,105 @@
-"use client";
-
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { LayoutDashboard, Users, Kanban, ListTodo, FileText, ShieldCheck, BadgeCheck, ScrollText, Upload, Download, ArrowLeft, Radar, Briefcase, CalendarDays, Building2 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import {
+  LayoutDashboard,
+  Radar,
+  Users,
+  Kanban,
+  ListTodo,
+  FileText,
+  ShieldCheck,
+  BadgeCheck,
+  ScrollText,
+  Upload,
+  Briefcase,
+  CalendarDays,
+  Building2,
+  ArrowLeft,
+  Download,
+} from "lucide-react";
+import { SidebarShell, type SidebarNavGroup } from "@/components/nav/SidebarShell";
 
-const LINKS = [
-  { href: "/admin", label: "Overview", icon: LayoutDashboard, exact: true },
-  { href: "/admin/command", label: "Command", icon: Radar, exact: false },
-  { href: "/admin/leads", label: "Prospects", icon: Users, exact: false },
-  { href: "/admin/pipeline", label: "Pipeline", icon: Kanban, exact: false },
-  { href: "/admin/tasks", label: "Tasks", icon: ListTodo, exact: false },
-  { href: "/admin/templates", label: "Templates", icon: FileText, exact: false },
-  { href: "/admin/verification", label: "Verification", icon: ShieldCheck, exact: false },
-  { href: "/admin/evidence", label: "Proof & Evidence", icon: BadgeCheck, exact: false },
-  { href: "/admin/opportunities", label: "Jobs", icon: Briefcase, exact: false },
-  { href: "/admin/events", label: "Events", icon: CalendarDays, exact: false },
-  { href: "/admin/organizations", label: "Businesses", icon: Building2, exact: false },
-  { href: "/admin/import", label: "Import", icon: Upload, exact: false },
-  { href: "/admin/audit", label: "Audit log", icon: ScrollText, exact: false },
-] as const;
+/**
+ * Admin Navigation V2 — grouped sidebar (via the shared SidebarShell), in
+ * place of the old horizontal scrolling bar. Only links to pages that
+ * actually exist under app/admin/(secure)/** — no placeholder/dead links.
+ * Passport, Map, Users, and Settings admin pages don't exist yet, so they're
+ * deliberately omitted rather than invented here.
+ */
+const GROUPS: SidebarNavGroup[] = [
+  {
+    id: "home",
+    label: "Home",
+    items: [
+      { href: "/admin", label: "Overview", icon: LayoutDashboard, exact: true },
+      { href: "/admin/command", label: "Command", icon: Radar },
+    ],
+  },
+  {
+    id: "operations",
+    label: "Operations",
+    items: [
+      { href: "/admin/tasks", label: "Tasks", icon: ListTodo },
+      { href: "/admin/audit", label: "Reports", icon: ScrollText },
+      { href: "/admin/verification", label: "Verification", icon: ShieldCheck },
+      { href: "/admin/evidence", label: "Proof & Evidence", icon: BadgeCheck },
+    ],
+  },
+  {
+    id: "growth",
+    label: "Growth",
+    items: [
+      { href: "/admin/leads", label: "Business Prospects", icon: Users },
+      { href: "/admin/pipeline", label: "Outreach Pipeline", icon: Kanban },
+      { href: "/admin/templates", label: "Templates", icon: FileText },
+      { href: "/admin/import", label: "Import", icon: Upload },
+    ],
+  },
+  {
+    id: "marketplace",
+    label: "Marketplace",
+    items: [{ href: "/admin/opportunities", label: "Jobs & Opportunities", icon: Briefcase }],
+  },
+  {
+    // Deliberately unlabeled — these are single top-level destinations, not
+    // a themed group, so a repeated heading above one link would be noise.
+    id: "content",
+    items: [
+      { href: "/admin/events", label: "Events", icon: CalendarDays },
+      { href: "/admin/organizations", label: "Businesses", icon: Building2 },
+    ],
+  },
+];
 
 export function AdminNav({ role }: { role: string }) {
-  const pathname = usePathname();
-
   return (
-    <nav className="border-b border-ink-200 bg-white dark:border-ink-800 dark:bg-ink-950">
-      <div className="mx-auto flex max-w-6xl items-center gap-1 overflow-x-auto px-4 py-2 sm:px-6">
-        <Link href="/dashboard" className="mr-2 flex shrink-0 items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-medium text-ink-400 hover:text-ink-700 dark:hover:text-ink-200">
-          <ArrowLeft className="h-3.5 w-3.5" /> FLOW
+    <SidebarShell
+      brand={
+        <Link href="/admin" className="flex items-center gap-2 text-sm font-bold text-ink-900 dark:text-white">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-flow-600 text-sm font-bold text-white">F</span>
+          FLOW Admin
         </Link>
-
-        {LINKS.map(({ href, label, icon: Icon, exact }) => {
-          const active = exact ? pathname === href : pathname.startsWith(href);
-          return (
-            <Link
-              key={href}
-              href={href}
-              className={cn(
-                "flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors",
-                active ? "bg-flow-600 text-white" : "text-ink-600 hover:bg-ink-100 dark:text-ink-300 dark:hover:bg-ink-800",
-              )}
-            >
-              <Icon className="h-4 w-4" /> {label}
-            </Link>
-          );
-        })}
-
-        <a
-          href="/admin/export/leads"
-          className="ml-auto flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-ink-600 hover:bg-ink-100 dark:text-ink-300 dark:hover:bg-ink-800"
-        >
-          <Download className="h-4 w-4" /> Export
-        </a>
-        <span className="shrink-0 rounded-full bg-ink-100 px-2.5 py-1 text-xs font-medium capitalize text-ink-500 dark:bg-ink-800 dark:text-ink-300">{role}</span>
-      </div>
-    </nav>
+      }
+      mobileTitle={<span className="text-sm font-bold text-ink-900 dark:text-white">FLOW Admin</span>}
+      groups={GROUPS}
+      footer={
+        <div className="space-y-1 px-2">
+          <a
+            href="/admin/export/leads"
+            className="flex min-h-11 items-center gap-2 rounded-lg px-1 text-xs font-medium text-ink-500 hover:text-ink-900 dark:text-ink-400 dark:hover:text-white"
+          >
+            <Download className="h-4 w-4 shrink-0" /> Export prospects (CSV)
+          </a>
+          <Link
+            href="/dashboard"
+            className="flex min-h-11 items-center gap-2 rounded-lg px-1 text-xs font-medium text-ink-400 hover:text-ink-700 dark:hover:text-ink-200"
+          >
+            <ArrowLeft className="h-4 w-4 shrink-0" /> Back to FLOW
+          </Link>
+          <span className="mt-1 inline-flex items-center rounded-full bg-ink-100 px-2.5 py-1 text-xs font-medium capitalize text-ink-500 dark:bg-ink-800 dark:text-ink-300">
+            {role}
+          </span>
+        </div>
+      }
+    />
   );
 }

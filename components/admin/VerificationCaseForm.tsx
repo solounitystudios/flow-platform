@@ -1,14 +1,20 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useRef, useState } from "react";
 import { Select, Textarea } from "@/components/ui/Input";
 import { SubmitButton } from "@/components/ui/SubmitButton";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { decideVerificationCaseAction, type AdminActionState } from "@/lib/admin/actions";
 import { VERIFICATION_STATUSES, DECISION_REASON_CODES } from "@/lib/admin/constants";
 import { formatDateTime } from "@/lib/utils";
 import type { VerificationDecisionRow } from "@/lib/data/admin";
 
 const initialState: AdminActionState = {};
+
+/** Status changes with real consequences for the business — asked to
+ * confirm in plain English before saving, same as any other reject/revoke
+ * action in the admin surface. */
+const CONFIRM_STATUSES = new Set(["rejected", "suspended", "suspicious_duplicate"]);
 
 export function VerificationCaseForm({
   caseId,
@@ -28,10 +34,30 @@ export function VerificationCaseForm({
   decisions: VerificationDecisionRow[];
 }) {
   const [state, formAction] = useActionState(decideVerificationCaseAction, initialState);
+  const formRef = useRef<HTMLFormElement>(null);
+  const confirmedRef = useRef(false);
+  const [pendingStatus, setPendingStatus] = useState<string | null>(null);
+
+  const pendingLabel = pendingStatus ? (VERIFICATION_STATUSES.find((s) => s.value === pendingStatus)?.label ?? pendingStatus) : "";
 
   return (
     <div className="space-y-4">
-      <form action={formAction} className="space-y-3">
+      <form
+        ref={formRef}
+        action={formAction}
+        className="space-y-3"
+        onSubmit={(e) => {
+          if (confirmedRef.current) {
+            confirmedRef.current = false;
+            return;
+          }
+          const nextStatus = String(new FormData(e.currentTarget).get("status") ?? "");
+          if (CONFIRM_STATUSES.has(nextStatus)) {
+            e.preventDefault();
+            setPendingStatus(nextStatus);
+          }
+        }}
+      >
         <input type="hidden" name="case_id" value={caseId} />
         <Select label="Status" name="status" defaultValue={status}>
           {VERIFICATION_STATUSES.map((s) => (
@@ -76,6 +102,21 @@ export function VerificationCaseForm({
           </ul>
         </div>
       )}
+
+      <ConfirmDialog
+        open={pendingStatus !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingStatus(null);
+        }}
+        title={`Set this business to "${pendingLabel}"?`}
+        description={`This tells the business their verification is "${pendingLabel}" — they may see this reflected on their account. Add clear internal notes above so the reason is on record.`}
+        confirmLabel={`Yes, mark ${pendingLabel}`}
+        onConfirm={() => {
+          confirmedRef.current = true;
+          setPendingStatus(null);
+          formRef.current?.requestSubmit();
+        }}
+      />
     </div>
   );
 }
