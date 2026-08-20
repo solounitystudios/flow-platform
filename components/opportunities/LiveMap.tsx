@@ -5,7 +5,7 @@ import MapGL, { GeolocateControl, Layer, NavigationControl, Source, type MapLaye
 import type { GeoJSONSource } from "maplibre-gl";
 import type { Feature, FeatureCollection, Point } from "geojson";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { Briefcase, Building2, CalendarDays, DollarSign, HandHeart, Loader2, MapPin as MapPinIcon, TriangleAlert, Users2, Zap } from "lucide-react";
+import { BadgeCheck, Briefcase, Building2, CalendarDays, DollarSign, HandHeart, Loader2, MapPin as MapPinIcon, TriangleAlert, Users2, Zap } from "lucide-react";
 import { CITY_CENTER } from "@/lib/mock/data";
 import { formatCents, formatDateTime, relativeTime } from "@/lib/utils";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -111,6 +111,15 @@ export function LiveMap({ items, layer }: { items: MapItem[]; layer: MapLayer })
   }, [items, layer]);
 
   const selected = useMemo(() => items.find((i) => i.id === selectedId) ?? null, [items, selectedId]);
+
+  // Selected-pin emphasis: a single-feature source/layer pair drawn after
+  // (so on top of) every category source below — same coordinates, larger
+  // radius, thicker white stroke, plus a soft category-colored ring. Static
+  // (no animation), shape/size-based rather than color-only, so it reads at
+  // a glance without competing with the base pin styling or clusters, which
+  // this never touches (clusters aren't individually selectable).
+  const selectedBucket = useMemo(() => (selected ? displayBucketFor(selected, layer) : null), [selected, layer]);
+  const selectedFeatureCollection = useMemo(() => (selected ? toFeatureCollection([selected]) : null), [selected]);
 
   // Best-effort, non-blocking geolocation: the map renders at the city
   // center immediately regardless of outcome, then flies to the user's
@@ -250,6 +259,32 @@ export function LiveMap({ items, layer }: { items: MapItem[]; layer: MapLayer })
                   </Source>
                 );
               })}
+
+              {selected && selectedFeatureCollection && selectedBucket && (
+                <Source id="flow-selected-source" type="geojson" data={selectedFeatureCollection}>
+                  <Layer
+                    id="flow-selected-ring"
+                    type="circle"
+                    paint={{
+                      "circle-radius": 16,
+                      "circle-color": "transparent",
+                      "circle-stroke-width": 2,
+                      "circle-stroke-color": DISPLAY_META[selectedBucket].hex,
+                      "circle-stroke-opacity": 0.55,
+                    }}
+                  />
+                  <Layer
+                    id="flow-selected-point"
+                    type="circle"
+                    paint={{
+                      "circle-radius": 11,
+                      "circle-color": DISPLAY_META[selectedBucket].hex,
+                      "circle-stroke-width": 3,
+                      "circle-stroke-color": "#ffffff",
+                    }}
+                  />
+                </Source>
+              )}
             </MapGL>
           </>
         )}
@@ -270,23 +305,19 @@ export function LiveMap({ items, layer }: { items: MapItem[]; layer: MapLayer })
           const Icon = displayMeta.icon;
           const locationLabel = [selected.city, selected.state].filter(Boolean).join(", ");
 
-          const tag = selected.isWorkNow ? (
-            <Badge tone="urgent">Urgent</Badge>
-          ) : selected.verified ? (
-            <Badge tone="verified">Verified</Badge>
-          ) : undefined;
-
           let subtitle: ReactNode;
-          let actionLabel = "View details";
-          let secondaryAction: DetailSheetAction | undefined;
+          let action: DetailSheetAction;
+          const tag: ReactNode[] = [];
           const meta: ReactNode[] = [];
 
           if (selected.entityType === "business") {
             // Business — name (title), verified (tag), industry (subtitle),
-            // public-safe location, member perk. Single "View organization"
-            // action; no secondary — there's no separate business action.
+            // public-safe location, member perk. "View organization" is the
+            // only action; there's no separate business flow to distinguish
+            // a second CTA from.
+            if (selected.verified) tag.push(<Badge key="verified" tone="verified">Verified</Badge>);
             subtitle = selected.industry ?? undefined;
-            actionLabel = "View organization";
+            action = { label: "View organization", href: selected.href };
             if (locationLabel) {
               meta.push(
                 <span key="loc" className="flex items-center gap-1">
@@ -303,13 +334,15 @@ export function LiveMap({ items, layer }: { items: MapItem[]; layer: MapLayer })
             }
           } else if (selected.entityType === "event") {
             // Event — title, host (subtitle), date/time, location, capacity.
-            // "View details" stays the safe universal action; "View &
-            // Register" is a secondary nudge toward the same detail page,
-            // since embedding the real RealRegisterButton/RegisterButton
-            // flow here would duplicate its auth/mutation logic rather than
-            // reuse it.
+            // A real registration flow (RegisterButton/RealRegisterButton)
+            // needs auth state and mutation logic this map component
+            // shouldn't duplicate, so "View & Register" routes straight to
+            // the event detail page — one strong CTA, not a second button
+            // that would resolve to the exact same URL with no distinct
+            // behavior.
+            if (selected.verified) tag.push(<Badge key="verified" tone="verified">Verified</Badge>);
             subtitle = selected.organizationName ?? undefined;
-            secondaryAction = { label: "View & Register", href: selected.href };
+            action = { label: "View & Register", href: selected.href };
             if (selected.starts_at) {
               meta.push(
                 <span key="time" className="flex items-center gap-1">
@@ -334,18 +367,30 @@ export function LiveMap({ items, layer }: { items: MapItem[]; layer: MapLayer })
             }
           } else {
             // Opportunity (gig/job/volunteer) — title, organization
-            // (subtitle), type badge, Work Now/Urgent (tag), compensation,
-            // timing, location, positions remaining. "View & Apply" is a
-            // secondary nudge toward the detail page for the same reason as
-            // events — the real Apply flow (ApplyButton/RealApplyButton)
-            // needs auth state and mutation logic this map component
-            // doesn't have and shouldn't duplicate.
-            subtitle = selected.organizationName ?? undefined;
-            secondaryAction = { label: "View & Apply", href: selected.href };
-            meta.push(
+            // (subtitle, with inline verification so it never has to
+            // compete with the Urgent badge for the single old tag slot),
+            // type + Work Now status badges, compensation, timing,
+            // location, positions remaining. Same one-strong-CTA reasoning
+            // as events: "View & Apply" routes to the detail page where the
+            // real ApplyButton/RealApplyButton flow lives, with no second
+            // button pointing at the same URL.
+            tag.push(
               <Badge key="type" tone="flow">
                 {OPPORTUNITY_TYPE_LABEL[selected.opportunityType ?? selected.entityType]}
               </Badge>,
+            );
+            if (selected.isWorkNow) tag.push(<Badge key="urgent" tone="urgent">Urgent</Badge>);
+            subtitle = selected.organizationName ? (
+              <>
+                {selected.organizationName}
+                {selected.verified && <BadgeCheck className="ml-1 inline h-3 w-3 align-text-bottom text-flow-600" />}
+              </>
+            ) : undefined;
+            action = { label: "View & Apply", href: selected.href };
+            meta.push(
+              <span key="pay" className="flex items-center gap-1">
+                <DollarSign className="h-3 w-3" /> {selected.payCents ? `${formatCents(selected.payCents)}/hr` : "Volunteer"}
+              </span>,
             );
             if (selected.starts_at) {
               meta.push(<span key="time">{relativeTime(selected.starts_at)}</span>);
@@ -357,11 +402,6 @@ export function LiveMap({ items, layer }: { items: MapItem[]; layer: MapLayer })
                 </span>,
               );
             }
-            meta.push(
-              <span key="pay" className="flex items-center gap-1">
-                <DollarSign className="h-3 w-3" /> {selected.payCents ? `${formatCents(selected.payCents)}/hr` : "Volunteer"}
-              </span>,
-            );
             if (selected.slots != null && selected.slotsFilled != null) {
               const spotsLeft = selected.slots - selected.slotsFilled;
               meta.push(
@@ -377,12 +417,11 @@ export function LiveMap({ items, layer }: { items: MapItem[]; layer: MapLayer })
               open={!!selected}
               onClose={() => setSelectedId(null)}
               icon={<Icon className="h-4 w-4" />}
-              tag={tag}
+              tag={tag.length > 0 ? tag : undefined}
               title={selected.title}
               subtitle={subtitle}
               meta={meta}
-              action={{ label: actionLabel, href: selected.href }}
-              secondaryAction={secondaryAction}
+              action={action}
               desktopPosition="bottom-left"
             />
           );

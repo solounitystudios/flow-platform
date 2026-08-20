@@ -1,22 +1,5 @@
 import Link from "next/link";
-import {
-  LayoutDashboard,
-  Radar,
-  Users,
-  Kanban,
-  ListTodo,
-  FileText,
-  ShieldCheck,
-  BadgeCheck,
-  ScrollText,
-  Upload,
-  Briefcase,
-  CalendarDays,
-  Building2,
-  ArrowLeft,
-  Download,
-  FlaskConical,
-} from "lucide-react";
+import { ArrowLeft, Download } from "lucide-react";
 import { SidebarShell, type SidebarNavGroup } from "@/components/nav/SidebarShell";
 
 /**
@@ -26,48 +9,48 @@ import { SidebarShell, type SidebarNavGroup } from "@/components/nav/SidebarShel
  * Passport, Map, Users, and Settings admin pages don't exist yet, so they're
  * deliberately omitted rather than invented here.
  */
-const GROUPS: SidebarNavGroup[] = [
+export const ADMIN_NAV_GROUPS: SidebarNavGroup[] = [
   {
     id: "home",
     label: "Home",
     items: [
-      { href: "/admin", label: "Overview", icon: LayoutDashboard, exact: true },
-      { href: "/admin/command", label: "Command", icon: Radar },
-      { href: "/admin/test-lab", label: "Test Lab", icon: FlaskConical },
+      { href: "/admin", label: "Overview", icon: "layout-dashboard", exact: true },
+      { href: "/admin/command", label: "Command", icon: "radar" },
+      { href: "/admin/test-lab", label: "Test Lab", icon: "flask-conical" },
     ],
   },
   {
     id: "operations",
     label: "Operations",
     items: [
-      { href: "/admin/tasks", label: "Tasks", icon: ListTodo },
-      { href: "/admin/audit", label: "Reports", icon: ScrollText },
-      { href: "/admin/verification", label: "Verification", icon: ShieldCheck },
-      { href: "/admin/evidence", label: "Proof & Evidence", icon: BadgeCheck },
+      { href: "/admin/tasks", label: "Tasks", icon: "list-todo" },
+      { href: "/admin/audit", label: "Reports", icon: "scroll-text" },
+      { href: "/admin/verification", label: "Verification", icon: "shield-check" },
+      { href: "/admin/evidence", label: "Proof & Evidence", icon: "badge-check" },
     ],
   },
   {
     id: "growth",
     label: "Growth",
     items: [
-      { href: "/admin/leads", label: "Business Prospects", icon: Users },
-      { href: "/admin/pipeline", label: "Outreach Pipeline", icon: Kanban },
-      { href: "/admin/templates", label: "Templates", icon: FileText },
-      { href: "/admin/import", label: "Import", icon: Upload },
+      { href: "/admin/leads", label: "Business Prospects", icon: "users" },
+      { href: "/admin/pipeline", label: "Outreach Pipeline", icon: "kanban" },
+      { href: "/admin/templates", label: "Templates", icon: "file-text" },
+      { href: "/admin/import", label: "Import", icon: "upload" },
     ],
   },
   {
     id: "marketplace",
     label: "Marketplace",
-    items: [{ href: "/admin/opportunities", label: "Jobs & Opportunities", icon: Briefcase }],
+    items: [{ href: "/admin/opportunities", label: "Jobs & Opportunities", icon: "briefcase" }],
   },
   {
     // Deliberately unlabeled — these are single top-level destinations, not
     // a themed group, so a repeated heading above one link would be noise.
     id: "content",
     items: [
-      { href: "/admin/events", label: "Events", icon: CalendarDays },
-      { href: "/admin/organizations", label: "Businesses", icon: Building2 },
+      { href: "/admin/events", label: "Events", icon: "calendar-days" },
+      { href: "/admin/organizations", label: "Businesses", icon: "building-2" },
     ],
   },
 ];
@@ -82,7 +65,7 @@ export function AdminNav({ role }: { role: string }) {
         </Link>
       }
       mobileTitle={<span className="text-sm font-bold text-ink-900 dark:text-white">FLOW Admin</span>}
-      groups={GROUPS}
+      groups={ADMIN_NAV_GROUPS}
       footer={
         <div className="space-y-1 px-2">
           <a

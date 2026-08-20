@@ -3,9 +3,52 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Menu, X, ChevronDown } from "lucide-react";
+import {
+  Menu,
+  X,
+  ChevronDown,
+  LayoutDashboard,
+  Radar,
+  FlaskConical,
+  ListTodo,
+  ScrollText,
+  ShieldCheck,
+  BadgeCheck,
+  Users,
+  Kanban,
+  FileText,
+  Upload,
+  Briefcase,
+  CalendarDays,
+  Building2,
+} from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+/**
+ * Icons are looked up by serializable key rather than passed as component
+ * references, because SidebarNavGroup/SidebarNavItem cross the Server ->
+ * Client boundary as props (this component is "use client"), and RSC can't
+ * serialize function/component values through that boundary.
+ */
+const ICONS = {
+  "layout-dashboard": LayoutDashboard,
+  radar: Radar,
+  "flask-conical": FlaskConical,
+  "list-todo": ListTodo,
+  "scroll-text": ScrollText,
+  "shield-check": ShieldCheck,
+  "badge-check": BadgeCheck,
+  users: Users,
+  kanban: Kanban,
+  "file-text": FileText,
+  upload: Upload,
+  briefcase: Briefcase,
+  "calendar-days": CalendarDays,
+  "building-2": Building2,
+} as const satisfies Record<string, LucideIcon>;
+
+export type SidebarIconName = keyof typeof ICONS;
 
 /**
  * Generic, reusable responsive sidebar/drawer navigation shell.
@@ -32,7 +75,7 @@ import { cn } from "@/lib/utils";
 export interface SidebarNavItem {
   href: string;
   label: string;
-  icon?: LucideIcon;
+  icon?: SidebarIconName;
   /** Match only the exact href instead of the href-or-prefix default. */
   exact?: boolean;
   /** Optional trailing content, e.g. a count badge. */
@@ -84,7 +127,7 @@ function NavList({
     <ul className="space-y-0.5">
       {items.map((item) => {
         const active = isActive(item, pathname);
-        const Icon = item.icon;
+        const Icon = item.icon ? ICONS[item.icon] : undefined;
         return (
           <li key={item.href}>
             <Link

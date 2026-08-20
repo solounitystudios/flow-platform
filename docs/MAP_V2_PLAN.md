@@ -96,10 +96,10 @@ Today: tap pin → `DetailSheet` shows icon, urgency/verified badge, title, laye
 
 - [x] All 7 layer chips (`All/Work Now/Gigs/Jobs/Volunteer/Events/Businesses`) exist in exactly one place, driving both map and list identically.
 - [x] No pin ever appears for a hidden/remote business or a coordinate-less opportunity/event — regression tests must cover this for every layer, not just organizations.
-- [x] Tapping a pin shows enough to act on (org, compensation if applicable, timing, positions remaining) without leaving the map, with a direct Apply/Register CTA plus a secondary "view full detail" path.
+- [x] Tapping a pin shows enough to act on (org, compensation if applicable, timing, positions remaining) without leaving the map, with a direct Apply/Register CTA. (Batch 2 note: this shipped in Batch 1 as a primary CTA plus a same-URL "secondary" nudge; Batch 2 removed the fake second button — see Batch 2 Status.)
 - [x] `ChipToggleGroup` touch targets meet a real minimum (44px) at the density Map V2 needs.
 - [x] `./node_modules/.bin/tsc --noEmit` and `./node_modules/.bin/vitest run tests/unit tests/security` pass (53/53).
-- [ ] `npm run build` — locally blocked by Codespace resource exhaustion (exit 143), not by a source-level failure. **GitHub Actions CI is the authoritative build gate for this batch** — see Batch 1 Status below.
+- [x] `npm run build` — confirmed green via GitHub Actions CI on PR #6 (local Codespace build remained resource-blocked, exit 143, but was never a source-level failure). PR #6 merged to `main` at `abb1b0ebbfca04372b58e749d6fafb55d859e9cf`.
 
 ## Batch 1 Status — Map V2 foundation
 
@@ -143,3 +143,111 @@ is what determines whether this acceptance criterion is actually met. This
 plan will not mark the build criterion `[x]` until that CI run reports
 green on the PR — a local resource failure is not being papered over as a
 pass.
+
+**Batch 1 shipped**: PR #6, merged to `main` at commit `abb1b0e` after GitHub
+Actions CI reported green (`typecheck, lint, test, build` all `SUCCESS`).
+
+## Batch 2 Status — Rich Pin Detail + Direct Action Polish
+
+Scope: interaction and visual-hierarchy polish on the pin `DetailSheet` that
+Batch 1 shipped — no new backend systems, no schema changes, no radius
+search / geocoding / Search This Area / true user-relative distance (those
+remain out of scope, tracked under Batch 3 below).
+
+**Selected-pin emphasis** (`LiveMap.tsx`): the selected pin now renders with
+a larger radius (11 vs 8), a thicker white stroke (3px vs 2px), and a soft
+outer ring in the pin's own category color (16px radius, 55% stroke
+opacity, no fill) — a second, always-on-top GeoJSON source/layer pair keyed
+to the single selected feature. Static, no animation. Shape/size-based, not
+color-only, so it doesn't rely on color alone to be readable. Clusters are
+untouched — this only ever targets one already-selected, non-clustered
+point.
+
+**Duplicate same-URL actions removed** (Phase 8 finding from the prior
+report): Batch 1's opportunity and event pins each showed two buttons
+("View details" + "View & Apply"/"View & Register") that resolved to the
+exact same href with no behavioral difference. Confirmed no safe way to
+give either a truly distinct action without duplicating
+`ApplyButton`/`RealApplyButton` (and their event equivalents) auth/mutation
+logic inside the map, so each entity type now shows exactly **one** primary,
+full-width CTA: "View & Apply" (opportunities), "View & Register" (events),
+"View organization" (businesses, unchanged — was already single).
+
+**Verification badge no longer competes with Urgent**: Batch 1's single
+`tag` slot meant an urgent *and* verified opportunity could only show one
+badge. The pin sheet's `tag` now holds a small cluster of status badges
+(type badge + Urgent, for opportunities) via `DetailSheet`'s `tag` prop
+widened to accept multiple badges; organization/business verification moved
+inline next to the org name (opportunities) or stays in `tag` where it
+never competed with anything (events/businesses, unchanged).
+
+**Priority-ordered, denser-but-bounded metadata**: opportunity meta now
+reads compensation → timing → location → positions remaining (matching the
+priority order this batch specified), capped at 4 items; events and
+businesses were already within the 2–4 item target and are unchanged in
+ordering.
+
+**`DetailSheet` primitive** (`components/ui/DetailSheet.tsx`, the map pin
+sheet's only current consumer — confirmed via repo-wide grep before
+touching a shared primitive): title changed from single-line `truncate` to
+`line-clamp-2` so a long opportunity/event title wraps up to two lines
+instead of silently clipping; subtitle got the same treatment for long
+organization/host names. Both stay bounded (2 lines max) rather than
+growing the sheet unbounded, preserving Batch 1's "compact, not a mini
+full-page screen" intent. No other primitive behavior changed — mobile
+bottom-sheet/swipe-to-dismiss, desktop floating-card positioning, focus
+trap, and Escape-to-close are all untouched from Batch 1.
+
+**Map context preservation** (Phase 12): audited, not rebuilt. The selected
+`MapLayer` lives in `LiveBrowser`, not `LiveMap`, so selecting/closing a pin
+never touches it. `MapGL` is uncontrolled after its initial view state, and
+selecting/closing a pin only changes `LiveMap`'s local `selectedId` state —
+it does not unmount `MapGL` — so viewport/zoom already survive pin
+select/deselect with no code change needed. Navigating away to a full
+opportunity/event/organization detail page and back is a real page
+navigation with no URL-state persistence today (layer resets to "All",
+viewport resets to city-center) — this was true before Batch 2 too, no
+"tiny safe improvement" was obvious without adding URL state, so it's
+deferred rather than half-built. Flagging for a future batch, not fixing
+here.
+
+**Privacy**: unchanged. Business pins still only ever go through
+`organizationsToMapItems`'s `location_visibility` gate; no owner id, team
+roster, or raw hidden coordinate is exposed anywhere in the sheet.
+
+**Tests**: no new pure logic was extracted from the pin-detail/selected-pin
+work itself (the changes are JSX/formatting inside a client component,
+matching Batch 1's own convention, and the repo has no component-rendering
+test infrastructure — confirmed via `package.json`/`tests/` audit), so no
+new test file was added for that part. `lib/map-selectors.ts` was not
+touched this batch, so its existing coverage is unchanged. A new test file
+*was* added this batch for the unrelated admin-nav fix below
+(`tests/unit/admin-nav-serialization.test.ts`), bringing the suite to
+**56/56 passing** (`./node_modules/.bin/vitest run tests/unit
+tests/security`).
+
+**Runtime repair bundled into this batch (unrelated to pin detail):**
+manual preview surfaced a pre-existing admin navigation Server Component
+serialization bug on `main` — Lucide icon component references were being
+passed as props from the server `AdminNav` into the client `SidebarShell`,
+which React cannot serialize across that boundary, producing HTTP 500s on
+`/admin` and `/admin/evidence`. Fixed by passing plain string icon keys
+(e.g. `"layout-dashboard"`) instead of component references, with
+`SidebarShell` resolving keys to Lucide components entirely client-side.
+Admin authorization/MFA/AAL2 behavior is unchanged. Covered by the new
+`tests/unit/admin-nav-serialization.test.ts` (asserts every nav item
+survives a JSON round-trip and `icon` is always a string). This bug
+pre-dates Batch 2 and is unrelated to the map/pin-detail work — it's
+included in this PR because manual QA exposed it before merge, not because
+it's part of the Map V2 plan.
+
+**Not done / explicitly out of scope for Batch 2**: radius search,
+"Search This Area", true user-relative distance, geocoding/address
+collection, Work Now V2, Events V2, Passport V2, Wallet. None of these were
+touched, per the batch's own scope lock.
+
+**Local build**: verified this session — `npm run build` succeeded locally
+(37.7s compile), in addition to GitHub CI (`typecheck, lint, test, build`)
+reporting green on PR #7. Both the local Codespace resource constraints
+noted in Batch 1 and the earlier "not re-verified" note for this batch are
+superseded by that successful local run.
