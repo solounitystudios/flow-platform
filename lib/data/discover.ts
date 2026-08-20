@@ -96,10 +96,7 @@ export async function getPublicOrganization(id: string): Promise<MockOrganizatio
   return mockOrganizations.find((o) => o.id === id) ?? null;
 }
 
-// Map V2 pin contract + selectors moved to lib/map-selectors.ts (pure,
-// dependency-free — see tests/unit/map-selectors.test.ts) — re-exported here
-// so existing call sites (app/(app)/live/page.tsx,
-// components/opportunities/LiveBrowser.tsx) don't need to change their
-// import path.
-export type { MapItemType, MapItem } from "@/lib/map-selectors";
-export { opportunitiesToMapItems, eventsToMapItems, organizationsToMapItems } from "@/lib/map-selectors";
+// Map V2 pin contract, canonical layer model, and selectors all live in
+// lib/map-selectors.ts (pure, dependency-free — see
+// tests/unit/map-selectors.test.ts). Import from there directly rather than
+// through this file.

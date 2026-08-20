@@ -1,18 +1,28 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import MapGL, { GeolocateControl, Layer, NavigationControl, Source, type MapLayerMouseEvent, type MapRef } from "react-map-gl/maplibre";
 import type { GeoJSONSource } from "maplibre-gl";
 import type { Feature, FeatureCollection, Point } from "geojson";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { Briefcase, Building2, CalendarDays, HandHeart, Loader2, MapPin as MapPinIcon, TriangleAlert, Zap } from "lucide-react";
+import { Briefcase, Building2, CalendarDays, DollarSign, HandHeart, Loader2, MapPin as MapPinIcon, TriangleAlert, Users2, Zap } from "lucide-react";
 import { CITY_CENTER } from "@/lib/mock/data";
-import { cn, relativeTime } from "@/lib/utils";
+import { formatCents, formatDateTime, relativeTime } from "@/lib/utils";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Badge } from "@/components/ui/Badge";
-import { ChipToggleGroup, type ChipOption } from "@/components/ui/ChipToggleGroup";
-import { DetailSheet } from "@/components/ui/DetailSheet";
-import type { MapItem, MapItemType } from "@/lib/data/discover";
+import { DetailSheet, type DetailSheetAction } from "@/components/ui/DetailSheet";
+import { MAP_LAYER_EMPTY_COPY, type MapEntityType, type MapItem, type MapLayer } from "@/lib/map-selectors";
+import type { OpportunityType } from "@/lib/types";
+
+/** Raw opportunity-type label for the detail sheet's type badge — kept
+ * separate from MAP_LAYER_LABEL because that one buckets "project" under
+ * "Gigs" for layer purposes; this preserves the exact underlying label. */
+const OPPORTUNITY_TYPE_LABEL: Record<OpportunityType, string> = {
+  gig: "Gig",
+  job: "Job",
+  project: "Project",
+  volunteer: "Volunteer",
+};
 
 /**
  * Free, no-API-key vector basemap (OpenFreeMap — donation-supported, no rate
@@ -27,71 +37,80 @@ const MAP_STYLE_URL = process.env.NEXT_PUBLIC_MAP_STYLE_URL || DEFAULT_MAP_STYLE
 const DEFAULT_ZOOM = 11.5;
 const USER_LOCATION_ZOOM = 12.5;
 
-const LAYER_META: Record<MapItemType, { label: string; icon: typeof Briefcase; hex: string; tone: NonNullable<ChipOption["tone"]> }> = {
-  opportunity: { label: "Jobs", icon: Briefcase, hex: "#4a2af5", tone: "flow" },
-  work_now: { label: "Work Now", icon: Zap, hex: "#ef4444", tone: "danger" },
-  event: { label: "Events", icon: CalendarDays, hex: "#f5b731", tone: "gold" },
-  community: { label: "Community", icon: HandHeart, hex: "#22c55e", tone: "verified" },
-  business: { label: "Businesses", icon: Building2, hex: "#707a90", tone: "neutral" },
+/** Which color/icon a pin renders with. Keyed by entityType plus a special
+ * "work_now" bucket — see displayBucketFor below for when each applies. */
+const DISPLAY_META: Record<MapEntityType | "work_now", { icon: typeof Briefcase; hex: string }> = {
+  gig: { icon: Briefcase, hex: "#4a2af5" },
+  job: { icon: Briefcase, hex: "#2a6ff5" },
+  volunteer: { icon: HandHeart, hex: "#22c55e" },
+  event: { icon: CalendarDays, hex: "#f5b731" },
+  business: { icon: Building2, hex: "#707a90" },
+  work_now: { icon: Zap, hex: "#ef4444" },
 };
 
-const LAYER_ORDER: MapItemType[] = ["opportunity", "work_now", "event", "community", "business"];
+const DISPLAY_BUCKETS: (MapEntityType | "work_now")[] = ["gig", "job", "volunteer", "event", "business", "work_now"];
 
-function toFeatureCollection(items: MapItem[]): FeatureCollection<Point, { id: string; type: MapItemType }> {
+/**
+ * Which visual bucket a given (already layer-filtered) item renders under.
+ * Viewing "Work Now" specifically: every visible item is by definition
+ * isWorkNow already (mapItemMatchesLayer guaranteed that), so they all get
+ * the shared urgent/red treatment regardless of whether they're a gig or a
+ * job underneath — the point of that view is "what's urgent right now",
+ * not "what category is it". Viewing anything else (including "all"):
+ * each item keeps its own entityType's color, so a mixed "all" view still
+ * visually distinguishes a gig pin from a job pin from an event pin.
+ */
+function displayBucketFor(item: MapItem, layer: MapLayer): MapEntityType | "work_now" {
+  return layer === "work_now" ? "work_now" : item.entityType;
+}
+
+function toFeatureCollection(items: MapItem[]): FeatureCollection<Point, { id: string }> {
   return {
     type: "FeatureCollection",
     features: items.map(
-      (item): Feature<Point, { id: string; type: MapItemType }> => ({
+      (item): Feature<Point, { id: string }> => ({
         type: "Feature",
         id: item.id,
         geometry: { type: "Point", coordinates: [item.longitude, item.latitude] },
-        properties: { id: item.id, type: item.type },
+        properties: { id: item.id },
       }),
     ),
   };
 }
 
-function sourceId(type: MapItemType) {
-  return `flow-${type}-source`;
+function sourceId(bucket: string) {
+  return `flow-${bucket}-source`;
 }
-function clusterLayerId(type: MapItemType) {
-  return `flow-${type}-clusters`;
+function clusterLayerId(bucket: string) {
+  return `flow-${bucket}-clusters`;
 }
-function clusterCountLayerId(type: MapItemType) {
-  return `flow-${type}-cluster-count`;
+function clusterCountLayerId(bucket: string) {
+  return `flow-${bucket}-cluster-count`;
 }
-function pointLayerId(type: MapItemType) {
-  return `flow-${type}-point`;
+function pointLayerId(bucket: string) {
+  return `flow-${bucket}-point`;
 }
 
-export function LiveMap({ items, businessesAvailable = false }: { items: MapItem[]; businessesAvailable?: boolean }) {
+/**
+ * Renders map pins for `items` — the caller (LiveBrowser) has already
+ * filtered `items` down to the currently-selected `layer` via
+ * mapItemMatchesLayer, so this component has no filtering state of its
+ * own: one layer selection, owned by the parent, drives both this and the
+ * results list identically.
+ */
+export function LiveMap({ items, layer }: { items: MapItem[]; layer: MapLayer }) {
   const mapRef = useRef<MapRef>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [activeLayers, setActiveLayers] = useState<string[]>(LAYER_ORDER);
 
-  const itemsByType = useMemo(() => {
-    const map = new Map<MapItemType, MapItem[]>();
-    for (const type of LAYER_ORDER) map.set(type, []);
-    for (const item of items) map.get(item.type)?.push(item);
+  const itemsByBucket = useMemo(() => {
+    const map = new Map<MapEntityType | "work_now", MapItem[]>();
+    for (const bucket of DISPLAY_BUCKETS) map.set(bucket, []);
+    for (const item of items) map.get(displayBucketFor(item, layer))?.push(item);
     return map;
-  }, [items]);
+  }, [items, layer]);
 
   const selected = useMemo(() => items.find((i) => i.id === selectedId) ?? null, [items, selectedId]);
-
-  const layerOptions: ChipOption[] = LAYER_ORDER.map((type) => {
-    const meta = LAYER_META[type];
-    const Icon = meta.icon;
-    const deferred = type === "business" && !businessesAvailable;
-    const count = itemsByType.get(type)?.length ?? 0;
-    return {
-      id: type,
-      label: `${meta.label} · ${deferred ? "soon" : count}`,
-      icon: <Icon className="h-3.5 w-3.5" />,
-      tone: meta.tone,
-      disabled: deferred,
-    };
-  });
 
   // Best-effort, non-blocking geolocation: the map renders at the city
   // center immediately regardless of outcome, then flies to the user's
@@ -116,50 +135,51 @@ export function LiveMap({ items, businessesAvailable = false }: { items: MapItem
 
   const interactiveLayerIds = useMemo(
     () =>
-      LAYER_ORDER.filter((t) => activeLayers.includes(t) && (itemsByType.get(t)?.length ?? 0) > 0).flatMap((t) => [
-        clusterLayerId(t),
-        pointLayerId(t),
+      DISPLAY_BUCKETS.filter((b) => (itemsByBucket.get(b)?.length ?? 0) > 0).flatMap((b) => [
+        clusterLayerId(b),
+        pointLayerId(b),
       ]),
-    [activeLayers, itemsByType],
+    [itemsByBucket],
   );
 
-  const handleClick = useCallback((event: MapLayerMouseEvent) => {
-    const feature = event.features?.[0];
-    if (!feature) {
-      setSelectedId(null);
-      return;
-    }
-    const layerId = feature.layer?.id ?? "";
-    const type = LAYER_ORDER.find((t) => layerId === clusterLayerId(t));
+  const handleClick = useCallback(
+    (event: MapLayerMouseEvent) => {
+      const feature = event.features?.[0];
+      if (!feature) {
+        setSelectedId(null);
+        return;
+      }
+      const layerId = feature.layer?.id ?? "";
+      const bucket = DISPLAY_BUCKETS.find((b) => layerId === clusterLayerId(b));
 
-    if (type) {
-      // Clicked a cluster bubble — zoom in toward its expansion zoom rather
-      // than trying to pick an individual pin out of the cluster.
-      const clusterId = feature.properties?.cluster_id;
-      const map = mapRef.current?.getMap();
-      const source = map?.getSource(sourceId(type)) as GeoJSONSource | undefined;
-      if (!source || clusterId === undefined) return;
-      source
-        .getClusterExpansionZoom(clusterId)
-        .then((zoom) => {
-          if (!map) return;
-          const geometry = feature.geometry as Point;
-          map.easeTo({ center: geometry.coordinates as [number, number], zoom: zoom ?? map.getZoom() + 2, duration: 500 });
-        })
-        .catch(() => {
-          // Cluster expansion lookup failed — leave the viewport as-is rather than erroring the map.
-        });
-      return;
-    }
+      if (bucket) {
+        // Clicked a cluster bubble — zoom in toward its expansion zoom rather
+        // than trying to pick an individual pin out of the cluster.
+        const clusterId = feature.properties?.cluster_id;
+        const map = mapRef.current?.getMap();
+        const source = map?.getSource(sourceId(bucket)) as GeoJSONSource | undefined;
+        if (!source || clusterId === undefined) return;
+        source
+          .getClusterExpansionZoom(clusterId)
+          .then((zoom) => {
+            if (!map) return;
+            const geometry = feature.geometry as Point;
+            map.easeTo({ center: geometry.coordinates as [number, number], zoom: zoom ?? map.getZoom() + 2, duration: 500 });
+          })
+          .catch(() => {
+            // Cluster expansion lookup failed — leave the viewport as-is rather than erroring the map.
+          });
+        return;
+      }
 
-    const id = feature.properties?.id as string | undefined;
-    setSelectedId(id ?? null);
-  }, []);
+      const id = feature.properties?.id as string | undefined;
+      setSelectedId(id ?? null);
+    },
+    [],
+  );
 
   return (
     <div className="space-y-3">
-      <ChipToggleGroup aria-label="Map layers" options={layerOptions} value={activeLayers} onChange={setActiveLayers} />
-
       <div className="relative aspect-[4/3] w-full overflow-hidden rounded-2xl border border-ink-100 bg-flow-50 dark:border-ink-800 dark:bg-ink-900 sm:aspect-[16/9]">
         {status === "error" ? (
           <div className="absolute inset-0 flex items-center justify-center p-6">
@@ -190,15 +210,15 @@ export function LiveMap({ items, businessesAvailable = false }: { items: MapItem
               <NavigationControl position="bottom-right" showCompass={false} />
               <GeolocateControl position="bottom-right" positionOptions={{ enableHighAccuracy: false }} trackUserLocation={false} />
 
-              {LAYER_ORDER.map((type) => {
-                const typeItems = itemsByType.get(type) ?? [];
-                if (!activeLayers.includes(type) || typeItems.length === 0) return null;
-                const collection = toFeatureCollection(typeItems);
-                const color = LAYER_META[type].hex;
+              {DISPLAY_BUCKETS.map((bucket) => {
+                const bucketItems = itemsByBucket.get(bucket) ?? [];
+                if (bucketItems.length === 0) return null;
+                const collection = toFeatureCollection(bucketItems);
+                const color = DISPLAY_META[bucket].hex;
                 return (
-                  <Source key={type} id={sourceId(type)} type="geojson" data={collection} cluster clusterMaxZoom={14} clusterRadius={50}>
+                  <Source key={bucket} id={sourceId(bucket)} type="geojson" data={collection} cluster clusterMaxZoom={14} clusterRadius={50}>
                     <Layer
-                      id={clusterLayerId(type)}
+                      id={clusterLayerId(bucket)}
                       type="circle"
                       filter={["has", "point_count"]}
                       paint={{
@@ -210,14 +230,14 @@ export function LiveMap({ items, businessesAvailable = false }: { items: MapItem
                       }}
                     />
                     <Layer
-                      id={clusterCountLayerId(type)}
+                      id={clusterCountLayerId(bucket)}
                       type="symbol"
                       filter={["has", "point_count"]}
                       layout={{ "text-field": "{point_count_abbreviated}", "text-size": 12, "text-font": ["Noto Sans Bold"] }}
                       paint={{ "text-color": "#ffffff" }}
                     />
                     <Layer
-                      id={pointLayerId(type)}
+                      id={pointLayerId(bucket)}
                       type="circle"
                       filter={["!", ["has", "point_count"]]}
                       paint={{
@@ -237,7 +257,7 @@ export function LiveMap({ items, businessesAvailable = false }: { items: MapItem
         {status === "ready" && items.length === 0 && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-6">
             <div className="pointer-events-auto">
-              <EmptyState title="Nothing live nearby yet" body="Check back soon, or widen your filters — new gigs, events, and opportunities post throughout the day." />
+              <EmptyState title={MAP_LAYER_EMPTY_COPY[layer]} />
             </div>
           </div>
         )}
@@ -245,26 +265,124 @@ export function LiveMap({ items, businessesAvailable = false }: { items: MapItem
 
       {selected &&
         (() => {
-          const meta = LAYER_META[selected.type];
-          const Icon = meta.icon;
+          const bucket = displayBucketFor(selected, layer);
+          const displayMeta = DISPLAY_META[bucket];
+          const Icon = displayMeta.icon;
           const locationLabel = [selected.city, selected.state].filter(Boolean).join(", ");
+
+          const tag = selected.isWorkNow ? (
+            <Badge tone="urgent">Urgent</Badge>
+          ) : selected.verified ? (
+            <Badge tone="verified">Verified</Badge>
+          ) : undefined;
+
+          let subtitle: ReactNode;
+          let actionLabel = "View details";
+          let secondaryAction: DetailSheetAction | undefined;
+          const meta: ReactNode[] = [];
+
+          if (selected.entityType === "business") {
+            // Business — name (title), verified (tag), industry (subtitle),
+            // public-safe location, member perk. Single "View organization"
+            // action; no secondary — there's no separate business action.
+            subtitle = selected.industry ?? undefined;
+            actionLabel = "View organization";
+            if (locationLabel) {
+              meta.push(
+                <span key="loc" className="flex items-center gap-1">
+                  <MapPinIcon className="h-3 w-3" /> {locationLabel}
+                </span>,
+              );
+            }
+            if (selected.memberPerk) {
+              meta.push(
+                <span key="perk" className="font-medium text-flow-600 dark:text-flow-400">
+                  {selected.memberPerk}
+                </span>,
+              );
+            }
+          } else if (selected.entityType === "event") {
+            // Event — title, host (subtitle), date/time, location, capacity.
+            // "View details" stays the safe universal action; "View &
+            // Register" is a secondary nudge toward the same detail page,
+            // since embedding the real RealRegisterButton/RegisterButton
+            // flow here would duplicate its auth/mutation logic rather than
+            // reuse it.
+            subtitle = selected.organizationName ?? undefined;
+            secondaryAction = { label: "View & Register", href: selected.href };
+            if (selected.starts_at) {
+              meta.push(
+                <span key="time" className="flex items-center gap-1">
+                  <CalendarDays className="h-3 w-3" /> {formatDateTime(selected.starts_at)}
+                </span>,
+              );
+            }
+            if (locationLabel) {
+              meta.push(
+                <span key="loc" className="flex items-center gap-1">
+                  <MapPinIcon className="h-3 w-3" /> {locationLabel}
+                </span>,
+              );
+            }
+            if (selected.capacity != null && selected.registered != null) {
+              const spotsLeft = selected.capacity - selected.registered;
+              meta.push(
+                <span key="attend" className="flex items-center gap-1">
+                  <Users2 className="h-3 w-3" /> {selected.registered} going{spotsLeft > 0 ? ` · ${spotsLeft} spots left` : ""}
+                </span>,
+              );
+            }
+          } else {
+            // Opportunity (gig/job/volunteer) — title, organization
+            // (subtitle), type badge, Work Now/Urgent (tag), compensation,
+            // timing, location, positions remaining. "View & Apply" is a
+            // secondary nudge toward the detail page for the same reason as
+            // events — the real Apply flow (ApplyButton/RealApplyButton)
+            // needs auth state and mutation logic this map component
+            // doesn't have and shouldn't duplicate.
+            subtitle = selected.organizationName ?? undefined;
+            secondaryAction = { label: "View & Apply", href: selected.href };
+            meta.push(
+              <Badge key="type" tone="flow">
+                {OPPORTUNITY_TYPE_LABEL[selected.opportunityType ?? selected.entityType]}
+              </Badge>,
+            );
+            if (selected.starts_at) {
+              meta.push(<span key="time">{relativeTime(selected.starts_at)}</span>);
+            }
+            if (locationLabel) {
+              meta.push(
+                <span key="loc" className="flex items-center gap-1">
+                  <MapPinIcon className="h-3 w-3" /> {locationLabel}
+                </span>,
+              );
+            }
+            meta.push(
+              <span key="pay" className="flex items-center gap-1">
+                <DollarSign className="h-3 w-3" /> {selected.payCents ? `${formatCents(selected.payCents)}/hr` : "Volunteer"}
+              </span>,
+            );
+            if (selected.slots != null && selected.slotsFilled != null) {
+              const spotsLeft = selected.slots - selected.slotsFilled;
+              meta.push(
+                <span key="spots" className="flex items-center gap-1">
+                  <Users2 className="h-3 w-3" /> {spotsLeft > 0 ? `${spotsLeft} spot${spotsLeft === 1 ? "" : "s"} left` : "Full"}
+                </span>,
+              );
+            }
+          }
+
           return (
             <DetailSheet
               open={!!selected}
               onClose={() => setSelectedId(null)}
               icon={<Icon className="h-4 w-4" />}
-              tag={selected.urgency === "urgent" ? <Badge tone="urgent">Urgent</Badge> : selected.verified ? <Badge tone="verified">Verified</Badge> : undefined}
+              tag={tag}
               title={selected.title}
-              subtitle={meta.label}
-              meta={[
-                locationLabel && (
-                  <span key="loc" className="flex items-center gap-1">
-                    <MapPinIcon className="h-3 w-3" /> {locationLabel}
-                  </span>
-                ),
-                selected.starts_at && <span key="time">{relativeTime(selected.starts_at)}</span>,
-              ].filter(Boolean)}
-              action={{ label: "View details", href: selected.href }}
+              subtitle={subtitle}
+              meta={meta}
+              action={{ label: actionLabel, href: selected.href }}
+              secondaryAction={secondaryAction}
               desktopPosition="bottom-left"
             />
           );

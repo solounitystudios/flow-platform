@@ -5,74 +5,67 @@ import { List, Map as MapIcon } from "lucide-react";
 import { LiveMap } from "@/components/opportunities/LiveMap";
 import { OpportunityCard } from "@/components/opportunities/OpportunityCard";
 import { EventCard } from "@/components/events/EventCard";
+import { OrganizationCard } from "@/components/social/OrganizationCard";
+import { ChipToggleGroup, type ChipOption } from "@/components/ui/ChipToggleGroup";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { cn } from "@/lib/utils";
-import type { MockEvent, MockOpportunity } from "@/lib/types";
+import type { MockEvent, MockOpportunity, MockOrganization } from "@/lib/types";
 // Type-only import — erased at compile time, so this never pulls
 // lib/data/discover.ts's server-only Supabase client into the client bundle.
-import type { MapItem } from "@/lib/data/discover";
+import {
+  MAP_LAYERS,
+  MAP_LAYER_EMPTY_COPY,
+  MAP_LAYER_LABEL,
+  filterEventsForLayer,
+  filterOpportunitiesForLayer,
+  filterOrganizationsForLayer,
+  mapItemMatchesLayer,
+  type MapItem,
+  type MapLayer,
+} from "@/lib/map-selectors";
 
-const FILTERS = ["All", "Gigs", "Jobs", "Volunteer", "Events"] as const;
-
+/**
+ * Owns the ONE selected Map V2 layer and derives everything downstream
+ * from it — LiveMap's pins and this component's own result cards are both
+ * filtered through the exact same lib/map-selectors.ts functions, so they
+ * can never disagree about what's currently visible. There is no second,
+ * competing filter/layer state anywhere in this tree.
+ */
 export function LiveBrowser({
   opportunities,
   events,
+  organizations,
   mapItems,
-  businessesAvailable = false,
 }: {
   opportunities: MockOpportunity[];
   events: MockEvent[];
+  organizations: MockOrganization[];
   mapItems: MapItem[];
-  businessesAvailable?: boolean;
 }) {
-  const [filter, setFilter] = useState<(typeof FILTERS)[number]>("All");
+  const [layer, setLayer] = useState<MapLayer>("all");
   const [view, setView] = useState<"map" | "list">("map");
 
-  const liveEvents = events;
+  const visibleMapItems = useMemo(() => mapItems.filter((item) => mapItemMatchesLayer(item, layer)), [mapItems, layer]);
+  const visibleOpportunities = useMemo(() => filterOpportunitiesForLayer(opportunities, layer), [opportunities, layer]);
+  const visibleEvents = useMemo(() => filterEventsForLayer(events, layer), [events, layer]);
+  const visibleOrganizations = useMemo(() => filterOrganizationsForLayer(organizations, layer), [organizations, layer]);
 
-  const filteredOpportunities = opportunities.filter((o) => {
-    if (filter === "All") return true;
-    if (filter === "Gigs") return o.opportunity_type === "gig" || o.opportunity_type === "project";
-    if (filter === "Jobs") return o.opportunity_type === "job";
-    if (filter === "Volunteer") return o.opportunity_type === "volunteer";
-    return false;
-  });
-  const filteredEvents = filter === "All" || filter === "Events" ? liveEvents : [];
+  const layerOptions: ChipOption[] = MAP_LAYERS.map((l) => ({ id: l, label: MAP_LAYER_LABEL[l] }));
 
-  // Map pins follow the same top-level filter as the list below (a business
-  // pin, once real, stays visible regardless — it isn't part of this
-  // gig/job/volunteer/event taxonomy). Which *types* of pin render at all is
-  // then further controlled by LiveMap's own layer toggles.
-  const filteredMapItems = useMemo(() => {
-    if (filter === "All") return mapItems;
-    const visibleIds = new Set<string>();
-    for (const o of opportunities) {
-      const included =
-        filter === "Gigs" ? o.opportunity_type === "gig" || o.opportunity_type === "project" : filter === "Jobs" ? o.opportunity_type === "job" : filter === "Volunteer" ? o.opportunity_type === "volunteer" : false;
-      if (included) visibleIds.add(o.id);
-    }
-    if (filter === "Events") for (const e of events) visibleIds.add(e.id);
-    return mapItems.filter((item) => item.type === "business" || visibleIds.has(item.id));
-  }, [mapItems, filter, opportunities, events]);
+  const hasResults = visibleOpportunities.length > 0 || visibleEvents.length > 0 || visibleOrganizations.length > 0;
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
-        <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
-          {FILTERS.map((f) => (
-            <button
-              key={f}
-              onClick={() => setFilter(f)}
-              className={cn(
-                "shrink-0 rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors",
-                filter === f
-                  ? "border-flow-600 bg-flow-600 text-white"
-                  : "border-ink-200 text-ink-500 hover:border-flow-300 dark:border-ink-700 dark:text-ink-400",
-              )}
-            >
-              {f}
-            </button>
-          ))}
-        </div>
+        <ChipToggleGroup
+          aria-label="Map layer"
+          options={layerOptions}
+          value={[layer]}
+          onChange={([next]) => next && setLayer(next as MapLayer)}
+          multiple={false}
+          showSummary={false}
+          className="min-w-0 flex-1"
+        />
         <div className="flex shrink-0 gap-1 rounded-lg bg-ink-100 p-1 dark:bg-ink-800">
           <button onClick={() => setView("map")} className={cn("rounded-md p-1.5", view === "map" && "bg-white shadow-sm dark:bg-ink-900")} aria-label="Map view">
             <MapIcon className="h-4 w-4" />
@@ -83,19 +76,22 @@ export function LiveBrowser({
         </div>
       </div>
 
-      {view === "map" && <LiveMap items={filteredMapItems} businessesAvailable={businessesAvailable} />}
+      {view === "map" && <LiveMap items={visibleMapItems} layer={layer} />}
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        {filteredOpportunities.map((o) => (
-          <OpportunityCard key={o.id} opportunity={o} />
-        ))}
-        {filteredEvents.map((e) => (
-          <EventCard key={e.id} event={e} />
-        ))}
-      </div>
-
-      {filteredOpportunities.length === 0 && filteredEvents.length === 0 && (
-        <p className="py-10 text-center text-sm text-ink-400">Nothing matches that filter right now. Check back soon.</p>
+      {hasResults ? (
+        <div className="grid gap-3 sm:grid-cols-2">
+          {visibleOpportunities.map((o) => (
+            <OpportunityCard key={o.id} opportunity={o} />
+          ))}
+          {visibleEvents.map((e) => (
+            <EventCard key={e.id} event={e} />
+          ))}
+          {visibleOrganizations.map((org) => (
+            <OrganizationCard key={org.id} org={org} />
+          ))}
+        </div>
+      ) : (
+        <EmptyState title={MAP_LAYER_EMPTY_COPY[layer]} />
       )}
     </div>
   );

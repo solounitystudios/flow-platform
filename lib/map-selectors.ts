@@ -1,4 +1,4 @@
-// Map V2 — normalized pin contract.
+// Map V2 — canonical layer model + normalized pin contract.
 //
 // A single shape any pinnable item (opportunity, event, business, ...) can be
 // reduced to so components/opportunities/LiveMap.tsx never has to know the
@@ -9,33 +9,144 @@
 // `opportunities`/`events`/`organizations` directly, per this repo's
 // ownership rules. Kept dependency-free deliberately so this file is safe to
 // unit test in isolation — see tests/unit/map-selectors.test.ts.
-import type { MockEvent, MockOpportunity, MockOrganization } from "@/lib/types";
+//
+// This is also the SINGLE source of truth for FLOW's layer/category rules —
+// components/opportunities/LiveMap.tsx (map pins) and
+// components/opportunities/LiveBrowser.tsx (result cards) both filter
+// through the same functions here, so the map can never show one thing
+// while the results list shows another. Do not reimplement any of this
+// bucketing logic inside a component.
+import type { MockEvent, MockOpportunity, MockOrganization, OpportunityType } from "@/lib/types";
 
 /**
- * "work_now" is derived from the same `urgent` flag opportunities.ts already
- * computes (on-site + starts within 6h) — there is no dedicated
- * `is_work_now` column/flag yet. "community" is derived from
- * `opportunity_type === "volunteer"`, the closest existing real category to
- * "community opportunities" (there is no separate community-opportunities
- * table or type in the schema). An urgent volunteer opportunity is bucketed
- * under "work_now", not "community" — time-sensitivity wins.
+ * The underlying kind of thing a pin represents — independent of whether
+ * it currently also satisfies Work Now. A job that starts in the next 6
+ * hours is still entityType "job"; it does not stop being a job just
+ * because it's also urgent. This is deliberately a *different axis* from
+ * `isWorkNow` on `MapItem` below, so nothing has to choose between "this is
+ * a job" and "this is Work Now" — both stay true when both are true, and
+ * the underlying opportunity is represented exactly once either way, never
+ * duplicated into a second pin/card.
  */
-export type MapItemType = "opportunity" | "work_now" | "event" | "business" | "community";
+export type MapEntityType = "gig" | "job" | "volunteer" | "event" | "business";
+
+/**
+ * The canonical, user-facing Map V2 category. Exactly one of these is
+ * selected at a time (single-select — "All" only makes sense as a member
+ * of this set if the rest are mutually exclusive with it). This is the ONE
+ * type components/opportunities/LiveBrowser.tsx owns as state and passes
+ * into both the map and the results list — see mapItemMatchesLayer and the
+ * filterXForLayer functions below, which are how that single piece of
+ * state actually determines what's visible.
+ */
+export type MapLayer = "all" | "work_now" | MapEntityType;
+
+export const MAP_LAYERS: MapLayer[] = ["all", "work_now", "gig", "job", "volunteer", "event", "business"];
+
+export const MAP_LAYER_LABEL: Record<MapLayer, string> = {
+  all: "All",
+  work_now: "Work Now",
+  gig: "Gigs",
+  job: "Jobs",
+  volunteer: "Volunteer",
+  event: "Events",
+  business: "Businesses",
+};
+
+/**
+ * Layer-accurate empty-state copy — never implies "nothing exists in
+ * Buffalo" when the real reason is a narrower filter, a missing
+ * coordinate, or a business that hasn't opted into public location
+ * sharing. Shared between the map (no pins) and the results list (no
+ * cards) so the two surfaces never contradict each other about *why*
+ * something looks empty.
+ */
+export const MAP_LAYER_EMPTY_COPY: Record<MapLayer, string> = {
+  all: "Nothing live nearby yet. Check back soon, or try a different category.",
+  work_now: "No Work Now opportunities nearby right now — those are on-site listings starting within the next few hours.",
+  gig: "No gigs available right now.",
+  job: "No jobs available right now.",
+  volunteer: "No volunteer opportunities available right now.",
+  event: "No upcoming events with a mappable location right now.",
+  business: "No businesses sharing a public location yet.",
+};
+
+/**
+ * Single source of truth for "which of the three opportunity layers does
+ * this row belong to" — the exact rule components/opportunities/LiveBrowser.tsx's
+ * old standalone filter already used (a "project" buckets under Gigs), now
+ * shared instead of duplicated. Not affected by urgency — see MapEntityType's
+ * doc comment above for why that's a separate axis.
+ */
+export function opportunityEntityType(o: Pick<MockOpportunity, "opportunity_type">): "gig" | "job" | "volunteer" {
+  if (o.opportunity_type === "job") return "job";
+  if (o.opportunity_type === "volunteer") return "volunteer";
+  return "gig"; // "gig" or "project"
+}
 
 export interface MapItem {
   id: string;
-  type: MapItemType;
+  entityType: MapEntityType;
+  /** True when this opportunity currently satisfies Work Now semantics
+   * (on-site, starts within 6h — computed by lib/data/opportunities.ts's
+   * `urgent` field). Always false for events/businesses — Work Now is an
+   * opportunity-only concept. */
+  isWorkNow: boolean;
   title: string;
   latitude: number;
   longitude: number;
   city?: string | null;
   state?: string | null;
   status?: string | null;
-  urgency?: "urgent" | null;
   verified?: boolean;
   starts_at?: string | null;
   expires_at?: string | null;
   href: string;
+
+  // ── Detail-sheet enrichment ──────────────────────────────────────────
+  // Additive, optional, populated only for the entity kinds they apply to.
+  // Every value here is copied straight from the already-fetched
+  // opportunity/event/organization row — never derived or guessed — so a
+  // missing value renders as "not shown", never a fabricated placeholder.
+
+  /** Organization/host name. Opportunities and events only — a business
+   * pin's `title` already IS the organization name, so this stays unset
+   * for entityType "business" rather than duplicating it. */
+  organizationName?: string | null;
+
+  /** Opportunities only — the raw underlying type (job/gig/project/
+   * volunteer), kept separate from `entityType` because `entityType`
+   * buckets "project" under "gig" for layer purposes; this preserves the
+   * exact label for the detail sheet. */
+  opportunityType?: OpportunityType | null;
+  /** Opportunities only, cents/hour — null means unpaid/volunteer. */
+  payCents?: number | null;
+  /** Opportunities only. */
+  slots?: number | null;
+  slotsFilled?: number | null;
+
+  /** Events only. */
+  capacity?: number | null;
+  registered?: number | null;
+
+  /** Businesses only. */
+  industry?: string | null;
+  memberPerk?: string | null;
+}
+
+/**
+ * Does this map item belong to the given canonical layer? The one rule
+ * both the map and the results list filter through (see the filterXForLayer
+ * functions below for the equivalent on raw, not-yet-map-item-shaped
+ * entities). "all" is a strict superset — every eligible item passes
+ * regardless of entityType/isWorkNow, and since a MapItem represents its
+ * underlying opportunity/event/organization exactly once, "all" can never
+ * double-count an urgent gig as two pins.
+ */
+export function mapItemMatchesLayer(item: Pick<MapItem, "entityType" | "isWorkNow">, layer: MapLayer): boolean {
+  if (layer === "all") return true;
+  if (layer === "work_now") return item.isWorkNow;
+  return item.entityType === layer;
 }
 
 export function hasCoordinates(lat: number | null | undefined, lng: number | null | undefined): lat is number {
@@ -61,18 +172,23 @@ export function opportunitiesToMapItems(opportunities: MockOpportunity[]): MapIt
     )
     .map((o) => ({
       id: o.id,
-      type: o.urgent ? "work_now" : o.opportunity_type === "volunteer" ? "community" : "opportunity",
+      entityType: opportunityEntityType(o),
+      isWorkNow: o.urgent,
       title: o.title,
       latitude: o.lat,
       longitude: o.lng,
       city: o.city,
       state: o.state,
       status: o.status,
-      urgency: o.urgent ? "urgent" : null,
       verified: o.organization.verified,
       starts_at: o.starts_at,
       expires_at: o.ends_at,
       href: `/gigs/${o.id}`,
+      organizationName: o.organization.name,
+      opportunityType: o.opportunity_type,
+      payCents: o.pay_cents,
+      slots: o.slots,
+      slotsFilled: o.slots_filled,
     }));
 }
 
@@ -90,19 +206,28 @@ export function eventsToMapItems(events: MockEvent[]): MapItem[] {
     )
     .map((e) => ({
       id: e.id,
-      type: "event" as const,
+      entityType: "event" as const,
+      isWorkNow: false,
       title: e.title,
       latitude: e.lat,
       longitude: e.lng,
       city: e.city,
       state: e.state,
       status: e.status,
-      urgency: null,
       verified: e.organization?.verified ?? false,
       starts_at: e.starts_at,
       expires_at: e.ends_at,
       href: `/events/${e.id}`,
+      organizationName: e.organization?.name ?? null,
+      capacity: e.capacity,
+      registered: e.registered,
     }));
+}
+
+/** Is this organization's location_visibility eligible for any public
+ * surface at all (map or list)? 'hidden'/'remote' never are. */
+export function isPublicMapEligible(o: Pick<MockOrganization, "location_visibility">): boolean {
+  return o.location_visibility === "exact" || o.location_visibility === "approximate";
 }
 
 /**
@@ -128,21 +253,59 @@ export function eventsToMapItems(events: MockEvent[]): MapItem[] {
  */
 export function organizationsToMapItems(organizations: MockOrganization[]): MapItem[] {
   return organizations
-    .filter((o) => o.location_visibility === "exact" || o.location_visibility === "approximate")
+    .filter(isPublicMapEligible)
     .filter((o): o is MockOrganization & { lat: number; lng: number } => hasCoordinates(o.lat, o.lng))
     .map((o) => ({
       id: o.id,
-      type: "business" as const,
+      entityType: "business" as const,
+      isWorkNow: false,
       title: o.name,
       latitude: o.location_visibility === "approximate" ? Math.round(o.lat * 100) / 100 : o.lat,
       longitude: o.location_visibility === "approximate" ? Math.round(o.lng * 100) / 100 : o.lng,
       city: o.city,
       state: o.state,
       status: null,
-      urgency: null,
       verified: o.verified,
       starts_at: null,
       expires_at: null,
+      // No public per-organization detail page exists yet (organizations
+      // aren't individually linkable anywhere else in the app either —
+      // see components/social/OrganizationCard.tsx) — route to the
+      // existing organizations browse surface rather than fabricating a
+      // route.
       href: `/o/${o.id}`,
+      industry: o.industry,
+      memberPerk: o.member_perk,
     }));
+}
+
+// ── Result-list filtering ────────────────────────────────────────────────
+//
+// The map-item selectors above additionally require real coordinates
+// (a pin needs a point to render at). The results list has never had that
+// requirement — it's the "see everything matching this category,
+// mappable or not" view, which is why a separate List/Map toggle exists at
+// all — so these operate on the raw, not-yet-map-item-shaped entities and
+// deliberately do NOT filter on hasCoordinates. They DO apply the same
+// category rule as mapItemMatchesLayer, and for organizations, the same
+// location_visibility privacy gate as organizationsToMapItems — a
+// hidden/remote org must never appear in the results list either, pin or
+// no pin.
+
+export function filterOpportunitiesForLayer(opportunities: MockOpportunity[], layer: MapLayer): MockOpportunity[] {
+  return opportunities.filter((o) => {
+    if (layer === "all") return true;
+    if (layer === "work_now") return o.urgent;
+    if (layer === "event" || layer === "business") return false;
+    return opportunityEntityType(o) === layer;
+  });
+}
+
+export function filterEventsForLayer(events: MockEvent[], layer: MapLayer): MockEvent[] {
+  return layer === "all" || layer === "event" ? events : [];
+}
+
+export function filterOrganizationsForLayer(organizations: MockOrganization[], layer: MapLayer): MockOrganization[] {
+  if (layer !== "all" && layer !== "business") return [];
+  return organizations.filter(isPublicMapEligible);
 }
