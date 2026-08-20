@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { getRequestOrigin, isSafeInternalPath } from "@/lib/url";
 import { getOrganizationByOwner } from "@/lib/data/organization";
 import { canAttributeToOrganization } from "@/lib/authz";
@@ -159,6 +160,40 @@ export async function createOrganizationAction(_prev: ActionState, formData: For
   if (error) return { error: error.message };
 
   revalidatePath("/business");
+  return {};
+}
+
+const LOCATION_VISIBILITY_VALUES = ["exact", "approximate", "hidden", "remote"] as const;
+
+/**
+ * Owner-only. Never touches lat/lng itself — this only changes how much of
+ * the organization's *existing* coordinates (if any) are shown publicly.
+ * `orgs_owner_manage` RLS (auth.uid() = owner_id) independently enforces
+ * the same ownership check — defense-in-depth, not the only guard, per
+ * this repo's convention. The public read path (organizations_public,
+ * supabase/migrations/20260820163442_organization_location_privacy.sql)
+ * is what actually redacts lat/lng based on this value.
+ */
+export async function setOrganizationLocationVisibilityAction(organizationId: string, visibility: (typeof LOCATION_VISIBILITY_VALUES)[number]): Promise<{ error?: string }> {
+  if (!LOCATION_VISIBILITY_VALUES.includes(visibility)) return { error: "Choose a valid location setting." };
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Your session expired. Please log in again." };
+
+  // `location_visibility` isn't in lib/database.types.ts yet — the migration
+  // adding it is drafted but not applied (see the function doc comment).
+  // Same untyped-cast escape hatch as pendingOrgMembersTable/
+  // pendingOrganizationsPublicView; delete this cast once the migration is
+  // applied and types are regenerated.
+  const untyped = supabase as unknown as SupabaseClient;
+  const { error } = await untyped.from("organizations").update({ location_visibility: visibility }).eq("id", organizationId).eq("owner_id", user.id);
+  if (error) return { error: "Something went wrong. Try again." };
+
+  revalidatePath("/business");
+  revalidatePath(`/o/${organizationId}`);
   return {};
 }
 

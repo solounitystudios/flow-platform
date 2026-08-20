@@ -26,6 +26,8 @@ export interface MockPerson {
   member_since: string;
 }
 
+export type OrganizationLocationVisibility = "exact" | "approximate" | "hidden" | "remote";
+
 export interface MockOrganization {
   id: string;
   name: string;
@@ -39,6 +41,7 @@ export interface MockOrganization {
   rating: number | null;
   lat: number | null;
   lng: number | null;
+  location_visibility: OrganizationLocationVisibility;
 }
 
 export interface MockOpportunity {

@@ -77,6 +77,37 @@ export async function getOpenOpportunities(): Promise<MockOpportunity[]> {
   return [...realShaped, ...mockOpportunities.filter((o) => o.status === "open")];
 }
 
+/** Open opportunities for one organization — for the public organization
+ * page (app/o/[id]). Same shape/shaping as getOpenOpportunities, just
+ * scoped by organization_id instead of returning every open listing. */
+export async function getOpportunitiesByOrganizationPublic(organizationId: string): Promise<MockOpportunity[]> {
+  const supabase = await createClient();
+  const { data: rows } = await supabase
+    .from("opportunities")
+    .select("*, organization:organizations(id, name, verified)")
+    .eq("organization_id", organizationId)
+    .eq("status", "open")
+    .order("created_at", { ascending: false });
+
+  const real = rows ?? [];
+  if (real.length === 0) return [];
+
+  const { data: apps } = await supabase
+    .from("applications")
+    .select("opportunity_id, status")
+    .in(
+      "opportunity_id",
+      real.map((o) => o.id),
+    )
+    .in("status", ["accepted", "completed"]);
+  const filledCounts = new Map<string, number>();
+  for (const a of apps ?? []) {
+    filledCounts.set(a.opportunity_id, (filledCounts.get(a.opportunity_id) ?? 0) + 1);
+  }
+
+  return real.map((o) => toCardShape(o as RealOpportunityRow, filledCounts.get(o.id) ?? 0));
+}
+
 export interface OpportunityDetail extends MockOpportunity {
   source: "real" | "mock";
   isOwner: boolean;
