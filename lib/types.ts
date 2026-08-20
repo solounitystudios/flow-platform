@@ -37,6 +37,8 @@ export interface MockOrganization {
   industry: string;
   member_perk: string | null;
   rating: number | null;
+  lat: number | null;
+  lng: number | null;
 }
 
 export interface MockOpportunity {

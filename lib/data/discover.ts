@@ -56,6 +56,10 @@ function toOrgCard(row: Tables<"organizations">): MockOrganization {
     industry: row.org_type ? row.org_type.charAt(0).toUpperCase() + row.org_type.slice(1) : "Business",
     member_perk: null,
     rating: null,
+    // Never fabricate a location: only expose real, geocoded coordinates.
+    // A missing lat/lng must render as "no pin", not a silent city-center guess.
+    lat: row.lat,
+    lng: row.lng,
   };
 }
 
@@ -174,15 +178,35 @@ export function eventsToMapItems(events: MockEvent[]): MapItem[] {
 }
 
 /**
- * Businesses layer — deferred by design. `organizations` has no lat/lng
- * columns (confirmed against lib/database.types.ts); schema-auditor is
- * auditing whether/how to add them in parallel with this batch. Do not
- * fabricate coordinates for businesses. Once that schema change lands and
- * lib/data/discover.ts's getDiscoverOrganizations (or a follow-up export)
- * exposes real lat/lng, wire this up the same way as the selectors above —
- * LiveMap.tsx already renders a "coming soon" empty state for this layer in
- * the meantime rather than guessing at a location.
+ * Converts already-fetched organizations (the shape returned by
+ * getDiscoverOrganizations, above) into map pins. `organizations.lat/lng`
+ * are plain nullable columns with no backfill/geocoding step yet, so most
+ * orgs will have none — those are filtered out by `hasCoordinates` rather
+ * than fabricated, same as the opportunity/event selectors. It's expected
+ * and acceptable for this to return `[]` until organizations actually have
+ * coordinates set.
  */
-export function getBusinessMapItems(): MapItem[] {
-  return [];
+export function organizationsToMapItems(organizations: MockOrganization[]): MapItem[] {
+  return organizations
+    .filter((o): o is MockOrganization & { lat: number; lng: number } => hasCoordinates(o.lat, o.lng))
+    .map((o) => ({
+      id: o.id,
+      type: "business" as const,
+      title: o.name,
+      latitude: o.lat,
+      longitude: o.lng,
+      city: o.city,
+      state: o.state,
+      status: null,
+      urgency: null,
+      verified: o.verified,
+      starts_at: null,
+      expires_at: null,
+      // No public per-organization detail page exists yet (organizations
+      // aren't individually linkable anywhere else in the app either —
+      // see components/social/OrganizationCard.tsx) — route to the
+      // existing organizations browse surface rather than fabricating a
+      // route.
+      href: "/discover",
+    }));
 }

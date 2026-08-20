@@ -17,10 +17,12 @@ export function LiveBrowser({
   opportunities,
   events,
   mapItems,
+  businessesAvailable = false,
 }: {
   opportunities: MockOpportunity[];
   events: MockEvent[];
   mapItems: MapItem[];
+  businessesAvailable?: boolean;
 }) {
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>("All");
   const [view, setView] = useState<"map" | "list">("map");
@@ -81,7 +83,7 @@ export function LiveBrowser({
         </div>
       </div>
 
-      {view === "map" && <LiveMap items={filteredMapItems} />}
+      {view === "map" && <LiveMap items={filteredMapItems} businessesAvailable={businessesAvailable} />}
 
       <div className="grid gap-3 sm:grid-cols-2">
         {filteredOpportunities.map((o) => (

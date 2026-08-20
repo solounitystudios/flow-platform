@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { getOrganizationByOwner, pendingOrgMembersTable, type OrganizationMemberRole, type OrganizationMemberStatus } from "@/lib/data/organization";
+import { getOrganizationByOwner, type OrganizationMemberRole, type OrganizationMemberStatus } from "@/lib/data/organization";
 
 export interface TeamActionState {
   error?: string;
@@ -42,8 +42,7 @@ export async function inviteOrganizationMemberAction(_prev: TeamActionState, for
   if (!targetProfile) return { error: `No FLOW member found with the username "${username}".` };
   if (targetProfile.id === user.id) return { error: "You're already the owner of this business." };
 
-  const membersTable = pendingOrgMembersTable(supabase);
-  const { error } = await membersTable.insert({
+  const { error } = await supabase.from("organization_members").insert({
     organization_id: organizationId,
     profile_id: targetProfile.id,
     role,
@@ -82,16 +81,15 @@ export async function setOrganizationMemberStatusAction(
   const org = await getOrganizationByOwner(user.id);
   if (!org || org.id !== organizationId) return { error: "Only the business owner can manage the team." };
 
-  const membersTable = pendingOrgMembersTable(supabase);
-  const { data: target } = await membersTable.select("id, profile_id, role").eq("id", memberId).eq("organization_id", organizationId).maybeSingle();
-  const targetRow = target as unknown as { id: string; profile_id: string; role: OrganizationMemberRole } | null;
+  const { data: target } = await supabase.from("organization_members").select("id, profile_id, role").eq("id", memberId).eq("organization_id", organizationId).maybeSingle();
 
-  if (!targetRow) return { error: "That team member no longer exists." };
-  if (targetRow.role === "owner") return { error: "The business owner's access can't be changed here." };
-  if (targetRow.profile_id === user.id) return { error: "You can't change your own membership." };
+  if (!target) return { error: "That team member no longer exists." };
+  if (target.role === "owner") return { error: "The business owner's access can't be changed here." };
+  if (target.profile_id === user.id) return { error: "You can't change your own membership." };
 
   const removedAt = status === "removed" ? new Date().toISOString() : null;
-  const { error } = await membersTable
+  const { error } = await supabase
+    .from("organization_members")
     .update({ status, removed_at: removedAt })
     .eq("id", memberId)
     .eq("organization_id", organizationId);

@@ -1907,6 +1907,98 @@ export type Database = {
           },
         ]
       }
+      organization_members: {
+        Row: {
+          created_at: string
+          id: string
+          invited_at: string
+          invited_by: string | null
+          joined_at: string | null
+          organization_id: string
+          profile_id: string
+          removed_at: string | null
+          role: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          invited_at?: string
+          invited_by?: string | null
+          joined_at?: string | null
+          organization_id: string
+          profile_id: string
+          removed_at?: string | null
+          role?: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          invited_at?: string
+          invited_by?: string | null
+          joined_at?: string | null
+          organization_id?: string
+          profile_id?: string
+          removed_at?: string | null
+          role?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_members_invited_by_fkey"
+            columns: ["invited_by"]
+            isOneToOne: false
+            referencedRelation: "passport_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organization_members_invited_by_fkey"
+            columns: ["invited_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organization_members_invited_by_fkey"
+            columns: ["invited_by"]
+            isOneToOne: false
+            referencedRelation: "reliability_breakdown"
+            referencedColumns: ["profile_id"]
+          },
+          {
+            foreignKeyName: "organization_members_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organization_members_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "passport_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organization_members_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organization_members_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "reliability_breakdown"
+            referencedColumns: ["profile_id"]
+          },
+        ]
+      }
       organization_verification_cases: {
         Row: {
           assigned_to: string | null
@@ -2018,6 +2110,8 @@ export type Database = {
           created_at: string
           description: string | null
           id: string
+          lat: number | null
+          lng: number | null
           name: string
           org_type: string
           owner_id: string
@@ -2030,6 +2124,8 @@ export type Database = {
           created_at?: string
           description?: string | null
           id?: string
+          lat?: number | null
+          lng?: number | null
           name: string
           org_type?: string
           owner_id: string
@@ -2042,6 +2138,8 @@ export type Database = {
           created_at?: string
           description?: string | null
           id?: string
+          lat?: number | null
+          lng?: number | null
           name?: string
           org_type?: string
           owner_id?: string
@@ -3322,6 +3420,10 @@ export type Database = {
         Args: { p_profile_id: string; p_reason: string }
         Returns: Json
       }
+      has_organization_role: {
+        Args: { p_organization_id: string; p_role: string }
+        Returns: boolean
+      }
       import_business_leads: { Args: { p_rows: Json }; Returns: Json }
       is_blocked_between: { Args: { a: string; b: string }; Returns: boolean }
       is_conversation_member: {
@@ -3329,6 +3431,10 @@ export type Database = {
         Returns: boolean
       }
       is_flow_admin: { Args: { require_aal2?: boolean }; Returns: boolean }
+      is_organization_member: {
+        Args: { p_min_role?: string; p_organization_id: string }
+        Returns: boolean
+      }
       mark_conversation_read: {
         Args: { p_conversation_id: string }
         Returns: Json
