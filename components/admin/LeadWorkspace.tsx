@@ -256,10 +256,12 @@ export function InvitationPanel({ leadId, invitations }: { leadId: string; invit
         onConfirm={() => {
           const id = revokeTarget;
           if (!id) return;
-          startRevoke(async () => {
-            await revokeInvitationAction(id, leadId);
+          return new Promise<{ error?: string } | void>((resolve) => {
+            startRevoke(async () => {
+              const result = await revokeInvitationAction(id, leadId);
+              resolve(result.error ? result : undefined);
+            });
           });
-          setRevokeTarget(null);
         }}
       />
     </div>

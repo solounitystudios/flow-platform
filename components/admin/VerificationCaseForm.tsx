@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useRef, useState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { Select, Textarea } from "@/components/ui/Input";
 import { SubmitButton } from "@/components/ui/SubmitButton";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
@@ -35,31 +35,38 @@ export function VerificationCaseForm({
 }) {
   const [state, formAction] = useActionState(decideVerificationCaseAction, initialState);
   const formRef = useRef<HTMLFormElement>(null);
-  const confirmedRef = useRef(false);
+  const submitOnUpdateRef = useRef(false);
+  const [statusValue, setStatusValue] = useState(status);
   const [pendingStatus, setPendingStatus] = useState<string | null>(null);
 
   const pendingLabel = pendingStatus ? (VERIFICATION_STATUSES.find((s) => s.value === pendingStatus)?.label ?? pendingStatus) : "";
 
+  // Submitting the confirmed status has to wait for the controlled <select>
+  // to actually re-render with the new value before the form reads it.
+  useEffect(() => {
+    if (submitOnUpdateRef.current) {
+      submitOnUpdateRef.current = false;
+      formRef.current?.requestSubmit();
+    }
+  }, [statusValue]);
+
   return (
     <div className="space-y-4">
-      <form
-        ref={formRef}
-        action={formAction}
-        className="space-y-3"
-        onSubmit={(e) => {
-          if (confirmedRef.current) {
-            confirmedRef.current = false;
-            return;
-          }
-          const nextStatus = String(new FormData(e.currentTarget).get("status") ?? "");
-          if (CONFIRM_STATUSES.has(nextStatus)) {
-            e.preventDefault();
-            setPendingStatus(nextStatus);
-          }
-        }}
-      >
+      <form ref={formRef} action={formAction} className="space-y-3">
         <input type="hidden" name="case_id" value={caseId} />
-        <Select label="Status" name="status" defaultValue={status}>
+        <Select
+          label="Status"
+          name="status"
+          value={statusValue}
+          onChange={(e) => {
+            const next = e.target.value;
+            if (CONFIRM_STATUSES.has(next)) {
+              setPendingStatus(next);
+              return;
+            }
+            setStatusValue(next);
+          }}
+        >
           {VERIFICATION_STATUSES.map((s) => (
             <option key={s.value} value={s.value}>
               {s.label}
@@ -112,9 +119,11 @@ export function VerificationCaseForm({
         description={`This tells the business their verification is "${pendingLabel}" — they may see this reflected on their account. Add clear internal notes above so the reason is on record.`}
         confirmLabel={`Yes, mark ${pendingLabel}`}
         onConfirm={() => {
-          confirmedRef.current = true;
+          if (pendingStatus) {
+            submitOnUpdateRef.current = true;
+            setStatusValue(pendingStatus);
+          }
           setPendingStatus(null);
-          formRef.current?.requestSubmit();
         }}
       />
     </div>

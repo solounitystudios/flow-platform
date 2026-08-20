@@ -1,3 +1,4 @@
+import { requireSecureAdmin } from "@/lib/admin/auth";
 import { getEvidenceQueue, getVerificationReviews, getCredentialTypes } from "@/lib/data/verifications";
 import { formatDateTime } from "@/lib/utils";
 import { EvidenceDecisionForm } from "@/components/admin/EvidenceDecisionForm";
@@ -17,6 +18,11 @@ function evidenceStatusLabel(status: string) {
 }
 
 export default async function AdminEvidencePage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
+  // (secure) layout already calls requireSecureAdmin(), but every page and
+  // Server Action under this route group re-checks it directly too —
+  // defense in depth for page rendering, not reliance on the layout alone.
+  await requireSecureAdmin();
+
   const { status } = await searchParams;
   const [claims, credentialTypes] = await Promise.all([getEvidenceQueue(status), getCredentialTypes()]);
   const typeLabel = new Map(credentialTypes.map((c) => [c.key, c.label]));

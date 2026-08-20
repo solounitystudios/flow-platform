@@ -49,8 +49,8 @@ export interface MockOpportunity {
   city: string;
   state: string;
   location_name: string;
-  lat: number;
-  lng: number;
+  lat: number | null;
+  lng: number | null;
   starts_at: string;
   ends_at: string | null;
   pay_cents: number | null;
@@ -70,8 +70,8 @@ export interface MockEvent {
   city: string;
   state: string;
   venue: string;
-  lat: number;
-  lng: number;
+  lat: number | null;
+  lng: number | null;
   starts_at: string;
   ends_at: string;
   capacity: number;

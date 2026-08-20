@@ -21,8 +21,10 @@ function toCardShape(row: RealEventRow, registered: number): MockEvent {
     city: row.city,
     state: row.state,
     venue: row.venue ?? row.address ?? row.city,
-    lat: row.lat ?? 42.8864,
-    lng: row.lng ?? -78.8784,
+    // Never fabricate a location: only expose real, geocoded coordinates.
+    // A missing lat/lng must render as "no pin", not a silent city-center guess.
+    lat: row.lat ?? null,
+    lng: row.lng ?? null,
     starts_at: row.starts_at,
     ends_at: row.ends_at ?? row.starts_at,
     capacity: row.capacity ?? 999999,

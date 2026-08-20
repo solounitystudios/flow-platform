@@ -27,8 +27,10 @@ function toCardShape(row: RealOpportunityRow, slotsFilled: number): MockOpportun
     city: row.city,
     state: row.state,
     location_name: row.is_remote ? "Remote" : row.location_name ?? row.city,
-    lat: row.lat ?? 42.8864,
-    lng: row.lng ?? -78.8784,
+    // Never fabricate a location: only expose real, geocoded coordinates.
+    // A missing lat/lng must render as "no pin", not a silent city-center guess.
+    lat: row.lat,
+    lng: row.lng,
     starts_at: row.starts_at ?? row.created_at,
     ends_at: row.ends_at,
     pay_cents: row.pay_cents,

@@ -1,3 +1,4 @@
+import { requireSecureAdmin } from "@/lib/admin/auth";
 import { getVerificationQueue, getVerificationDecisions, getAssignableAdmins } from "@/lib/data/admin";
 import { formatDateTime } from "@/lib/utils";
 import { VerificationCaseForm } from "@/components/admin/VerificationCaseForm";
@@ -20,6 +21,11 @@ function verificationStatusLabel(status: string) {
 }
 
 export default async function AdminVerificationPage() {
+  // (secure) layout already calls requireSecureAdmin(), but every page and
+  // Server Action under this route group re-checks it directly too —
+  // defense in depth for page rendering, not reliance on the layout alone.
+  await requireSecureAdmin();
+
   const [cases, admins] = await Promise.all([getVerificationQueue(), getAssignableAdmins()]);
 
   return (
