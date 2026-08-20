@@ -1,14 +1,10 @@
 import type {
   MockActivityItem,
-  MockConnection,
   MockEvent,
-  MockLedgerEntry,
-  MockNotification,
   MockOpportunity,
   MockOrganization,
   MockPerson,
   MockRecommendation,
-  MockTicket,
 } from "@/lib/types";
 
 // All content below is realistic seed/demo data for Buffalo, NY — FLOW's pilot city.
@@ -26,14 +22,14 @@ export const CITY_CENTER = { lat: 42.8864, lng: -78.8784, city: "Buffalo", state
 export const SKILL_CATEGORIES = ["Hospitality", "Creative", "Trades", "Events", "Tech", "Care", "Logistics"];
 
 export const mockOrganizations: MockOrganization[] = [
-  { id: "org-1", name: "The Dockside Tavern", logo_url: avatar("dockside"), city: "Buffalo", state: "NY", description: "Waterfront restaurant & event space on the Buffalo River.", verified: true, industry: "Hospitality", member_perk: "15% off for FLOW members", rating: 4.7 },
-  { id: "org-2", name: "Queen City Studios", logo_url: avatar("queencity"), city: "Buffalo", state: "NY", description: "Photo & video production studio serving WNY brands.", verified: true, industry: "Creative", member_perk: null, rating: 4.9 },
-  { id: "org-3", name: "Larkin Square Events", logo_url: avatar("larkin"), city: "Buffalo", state: "NY", description: "Community events and markets in the Larkin District.", verified: true, industry: "Events", member_perk: "Free entry to summer series", rating: 4.8 },
-  { id: "org-4", name: "Elmwood Fitness Collective", logo_url: avatar("elmwood"), city: "Buffalo", state: "NY", description: "Independent gym and training studio on Elmwood Ave.", verified: true, industry: "Fitness", member_perk: "$10 FLOW member day pass", rating: 4.6 },
-  { id: "org-5", name: "BuffState Stagehands Union Local 5", logo_url: avatar("stagehands"), city: "Buffalo", state: "NY", description: "Live event production crew placement.", verified: true, industry: "Trades", member_perk: null, rating: 4.5 },
-  { id: "org-6", name: "Root & Bloom Cleanup Crew", logo_url: avatar("rootbloom"), city: "Buffalo", state: "NY", description: "Neighborhood beautification nonprofit.", verified: false, industry: "Nonprofit", member_perk: null, rating: 4.9 },
-  { id: "org-7", name: "Canalside Markets", logo_url: avatar("canalside"), city: "Buffalo", state: "NY", description: "Seasonal vendor markets at Canalside.", verified: true, industry: "Retail", member_perk: "Vendor fee waived first market", rating: 4.4 },
-  { id: "org-8", name: "Pearl Street Grill Group", logo_url: avatar("pearlstreet"), city: "Buffalo", state: "NY", description: "Downtown restaurant group, 3 locations.", verified: true, industry: "Hospitality", member_perk: "10% off for FLOW members", rating: 4.3 },
+  { id: "org-1", name: "The Dockside Tavern", logo_url: avatar("dockside"), city: "Buffalo", state: "NY", description: "Waterfront restaurant & event space on the Buffalo River.", verified: true, industry: "Hospitality", member_perk: "15% off for FLOW members", rating: 4.7, lat: 42.8749, lng: -78.8748 },
+  { id: "org-2", name: "Queen City Studios", logo_url: avatar("queencity"), city: "Buffalo", state: "NY", description: "Photo & video production studio serving WNY brands.", verified: true, industry: "Creative", member_perk: null, rating: 4.9, lat: 42.9021, lng: -78.8935 },
+  { id: "org-3", name: "Larkin Square Events", logo_url: avatar("larkin"), city: "Buffalo", state: "NY", description: "Community events and markets in the Larkin District.", verified: true, industry: "Events", member_perk: "Free entry to summer series", rating: 4.8, lat: 42.8721, lng: -78.8586 },
+  { id: "org-4", name: "Elmwood Fitness Collective", logo_url: avatar("elmwood"), city: "Buffalo", state: "NY", description: "Independent gym and training studio on Elmwood Ave.", verified: true, industry: "Fitness", member_perk: "$10 FLOW member day pass", rating: 4.6, lat: 42.9058, lng: -78.8677 },
+  { id: "org-5", name: "BuffState Stagehands Union Local 5", logo_url: avatar("stagehands"), city: "Buffalo", state: "NY", description: "Live event production crew placement.", verified: true, industry: "Trades", member_perk: null, rating: 4.5, lat: 42.8874, lng: -78.8745 },
+  { id: "org-6", name: "Root & Bloom Cleanup Crew", logo_url: avatar("rootbloom"), city: "Buffalo", state: "NY", description: "Neighborhood beautification nonprofit.", verified: false, industry: "Nonprofit", member_perk: null, rating: 4.9, lat: 42.8991, lng: -78.9106 },
+  { id: "org-7", name: "Canalside Markets", logo_url: avatar("canalside"), city: "Buffalo", state: "NY", description: "Seasonal vendor markets at Canalside.", verified: true, industry: "Retail", member_perk: "Vendor fee waived first market", rating: 4.4, lat: 42.8797, lng: -78.8756 },
+  { id: "org-8", name: "Pearl Street Grill Group", logo_url: avatar("pearlstreet"), city: "Buffalo", state: "NY", description: "Downtown restaurant group, 3 locations.", verified: true, industry: "Hospitality", member_perk: "10% off for FLOW members", rating: 4.3, lat: 42.8858, lng: -78.8767 },
 ];
 
 function org(id: string) {
@@ -77,13 +73,6 @@ export const mockEvents: MockEvent[] = [
   { id: "evt-7", organization: org("org-3"), title: "FLOW Passport Launch Party", description: "Celebrate the launch of FLOW in Buffalo — meet the founding members.", city: "Buffalo", state: "NY", venue: "Larkin Square", lat: 42.8721, lng: -78.8586, starts_at: agoDays(18), ends_at: agoDays(18), capacity: 300, registered: 300, status: "completed", cover_url: avatar("flow-launch"), price_cents: 0, category: "Community" },
 ];
 
-export const mockTickets: MockTicket[] = [
-  { id: "tix-1", event: mockEvents[0], ticket_code: "FLOW-8832-KQ", tier: "General Admission", purchased_at: agoDays(2), status: "valid" },
-  { id: "tix-2", event: mockEvents[1], ticket_code: "FLOW-1190-VZ", tier: "General Admission", purchased_at: agoDays(1), status: "valid" },
-  { id: "tix-3", event: mockEvents[5], ticket_code: "FLOW-4471-LP", tier: "General Admission", purchased_at: agoDays(6), status: "used" },
-  { id: "tix-4", event: mockEvents[6], ticket_code: "FLOW-0021-AA", tier: "Founding Member", purchased_at: agoDays(20), status: "used" },
-];
-
 const skillSet = (names: [string, boolean, string][]) => names.map(([name, verified, category]) => ({ name, verified, category }));
 
 export const mockPeople: MockPerson[] = [
@@ -106,16 +95,6 @@ export const mockRecommendations: MockRecommendation[] = [
   { id: "rec-3", author: { id: "p-4", full_name: "Riley Washington", avatar_url: avatar("riley"), username: "rwashington" }, body: "Covered a shift for me with two hours notice and didn't miss a beat.", context: "Bartending — The Dockside Tavern", created_at: agoDays(41) },
 ];
 
-export const mockConnections: MockConnection[] = [
-  { person: { id: "p-2", full_name: "Amara Okafor", avatar_url: avatar("amara"), username: "aokafor", city: "Buffalo", state: "NY", reliability_score: 100 }, mutuals: 6, connected_since: agoDays(120), status: "connected" },
-  { person: { id: "p-4", full_name: "Riley Washington", avatar_url: avatar("riley"), username: "rwashington", city: "Buffalo", state: "NY", reliability_score: 99 }, mutuals: 3, connected_since: agoDays(80), status: "connected" },
-  { person: { id: "p-6", full_name: "Lena Nowak", avatar_url: avatar("lena"), username: "lnowak", city: "Buffalo", state: "NY", reliability_score: 100 }, mutuals: 9, connected_since: agoDays(200), status: "connected" },
-  { person: { id: "p-3", full_name: "Theo Chen", avatar_url: avatar("theo"), username: "tchen", city: "Buffalo", state: "NY", reliability_score: 96 }, mutuals: 2, connected_since: "", status: "pending_incoming" },
-  { person: { id: "p-8", full_name: "Maya Ferreira", avatar_url: avatar("maya"), username: "mferreira", city: "Buffalo", state: "NY", reliability_score: 97 }, mutuals: 1, connected_since: "", status: "pending_outgoing" },
-  { person: { id: "p-5", full_name: "Kiran Patel", avatar_url: avatar("kiran"), username: "kpatel", city: "Buffalo", state: "NY", reliability_score: 94 }, mutuals: 4, connected_since: "", status: "suggested" },
-  { person: { id: "p-7", full_name: "Diego Santos", avatar_url: avatar("diego"), username: "dsantos", city: "Buffalo", state: "NY", reliability_score: 91 }, mutuals: 2, connected_since: "", status: "suggested" },
-];
-
 export const mockActivity: MockActivityItem[] = [
   { id: "act-1", type: "gig_completed", actor: { id: "p-2", full_name: "Amara Okafor", avatar_url: avatar("amara"), username: "aokafor" }, summary: "completed a stagehand gig at Shea's Theatre", created_at: agoHrs(6), points: 40 },
   { id: "act-2", type: "recommendation", actor: { id: "p-6", full_name: "Lena Nowak", avatar_url: avatar("lena"), username: "lnowak" }, summary: "left you a recommendation", detail: "\"Organized the whole photo wall...\"", created_at: agoDays(1) },
@@ -124,27 +103,6 @@ export const mockActivity: MockActivityItem[] = [
   { id: "act-5", type: "project", actor: { id: "p-3", full_name: "Theo Chen", avatar_url: avatar("theo"), username: "tchen" }, summary: "started a community video project", created_at: agoDays(3) },
   { id: "act-6", type: "connection", actor: { id: "p-8", full_name: "Maya Ferreira", avatar_url: avatar("maya"), username: "mferreira" }, summary: "connected with Kiran Patel", created_at: agoDays(4) },
   { id: "act-7", type: "points_earned", actor: { id: "p-1", full_name: "Jordan Martinez", avatar_url: avatar("jordan"), username: "jmartinez" }, summary: "earned FLOW Points for a completed gig", created_at: agoDays(5), points: 60 },
-];
-
-export const mockNotifications: MockNotification[] = [
-  { id: "notif-1", type: "opportunity", title: "New gig near you", body: "Two servers needed tonight at The Dockside Tavern — 1.2 mi away.", created_at: agoHrs(1), read: false, href: "/gigs/opp-1" },
-  { id: "notif-2", type: "social", title: "New recommendation", body: "Lena Nowak left you a recommendation.", created_at: agoDays(1), read: false, href: "/passport" },
-  { id: "notif-3", type: "event", title: "Event starting soon", body: "Front Park Cleanup + Cookout starts in 45 minutes.", created_at: agoMinAbs(50), read: false, href: "/events/evt-5" },
-  { id: "notif-4", type: "payment", title: "Payout sent", body: "$140.00 was deposited for your Dockside Tavern bartending gig.", created_at: agoDays(2), read: true, href: "/rewards" },
-  { id: "notif-5", type: "system", title: "Skill verified", body: "Your Photography skill was verified by Queen City Studios.", created_at: agoDays(3), read: true, href: "/passport" },
-  { id: "notif-6", type: "opportunity", title: "Application accepted", body: "You're confirmed for the Larkin Square networking mixer host role.", created_at: agoDays(4), read: true, href: "/gigs/opp-6" },
-];
-
-function agoMinAbs(min: number) {
-  return new Date(Date.now() - min * 60_000).toISOString();
-}
-
-export const mockLedger: MockLedgerEntry[] = [
-  { id: "led-1", entry_type: "earning", amount_cents: 14000, points: 60, description: "Bartending — The Dockside Tavern", created_at: agoDays(2) },
-  { id: "led-2", entry_type: "reward", amount_cents: 0, points: 25, description: "Skill verified: Photography", created_at: agoDays(3) },
-  { id: "led-3", entry_type: "earning", amount_cents: 22000, points: 40, description: "Product shoot — Queen City Studios", created_at: agoDays(8) },
-  { id: "led-4", entry_type: "reward", amount_cents: 0, points: 15, description: "Event attended: Sunrise Community Workout", created_at: agoDays(9) },
-  { id: "led-5", entry_type: "adjustment", amount_cents: 0, points: 100, description: "Founding member bonus", created_at: agoDays(20) },
 ];
 
 export const REWARDS_CATALOG = [

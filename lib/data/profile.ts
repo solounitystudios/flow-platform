@@ -6,6 +6,7 @@ export interface FullProfile {
   passport: PassportSummary;
   skills: (Tables<"profile_skills"> & { skill: Tables<"skills"> })[];
   recommendations: (Tables<"recommendations"> & { author: Tables<"profiles"> })[];
+  credentials: Tables<"profile_credentials">[];
 }
 
 export async function getCurrentUser() {
@@ -19,7 +20,7 @@ export async function getCurrentUser() {
 export async function getFullProfile(profileId: string): Promise<FullProfile | null> {
   const supabase = await createClient();
 
-  const [{ data: profile }, { data: passport }, { data: skills }, { data: recommendations }] = await Promise.all([
+  const [{ data: profile }, { data: passport }, { data: skills }, { data: recommendations }, { data: credentials }] = await Promise.all([
     supabase.from("profiles").select("*").eq("id", profileId).maybeSingle(),
     supabase.from("passport_summary").select("*").eq("id", profileId).maybeSingle(),
     supabase.from("profile_skills").select("*, skill:skills(*)").eq("profile_id", profileId),
@@ -28,6 +29,7 @@ export async function getFullProfile(profileId: string): Promise<FullProfile | n
       .select("*, author:profiles!recommendations_author_id_fkey(*)")
       .eq("recipient_id", profileId)
       .order("created_at", { ascending: false }),
+    supabase.from("profile_credentials").select("*").eq("profile_id", profileId).is("revoked_at", null).order("granted_at", { ascending: false }),
   ]);
 
   if (!profile) return null;
@@ -51,6 +53,7 @@ export async function getFullProfile(profileId: string): Promise<FullProfile | n
     },
     skills: (skills ?? []) as FullProfile["skills"],
     recommendations: (recommendations ?? []) as FullProfile["recommendations"],
+    credentials: credentials ?? [],
   };
 }
 

@@ -3,16 +3,22 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { Lock } from "lucide-react";
-import { getFullProfileByUsername } from "@/lib/data/profile";
+import { getCurrentUser, getFullProfileByUsername } from "@/lib/data/profile";
 import { getReliabilityBreakdown } from "@/lib/data/reliability";
+import { getConnectionStatus, getSharedSkills } from "@/lib/data/connections";
 import { findMockPersonByUsername, mockPersonToPassportData, mockPersonToRecommendations, mockPersonToSkills } from "@/lib/mock/passport-adapter";
+import { isDemoModeEnabled } from "@/lib/demo";
 import { PassportCard } from "@/components/passport/PassportCard";
 import { SkillsList } from "@/components/passport/SkillsList";
 import { RecommendationsList } from "@/components/passport/RecommendationsList";
 import { ReliabilityCard } from "@/components/passport/ReliabilityCard";
+import { ConnectionControl } from "@/components/social/ConnectionControl";
+import { ConnectionMoreMenu } from "@/components/social/ConnectionMoreMenu";
+import { MessageButton } from "@/components/messages/MessageButton";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { flowIdFromUuid } from "@/lib/passport";
+import { startDirectConversationAction } from "@/lib/actions";
 
 export async function generateMetadata({ params }: { params: Promise<{ username: string }> }): Promise<Metadata> {
   const { username } = await params;
@@ -24,7 +30,10 @@ export default async function PublicPassportPage({ params }: { params: Promise<{
   const full = await getFullProfileByUsername(username);
 
   if (!full) {
-    const mockPerson = findMockPersonByUsername(username);
+    // A nonexistent Passport must 404 in production. Mock people only exist
+    // as a local-dev convenience so Discover/Connections/activity-feed demo
+    // links don't dead-end — never a stand-in for a real, unclaimed username.
+    const mockPerson = isDemoModeEnabled() ? findMockPersonByUsername(username) : null;
     if (!mockPerson) notFound();
 
     return (
@@ -61,6 +70,12 @@ export default async function PublicPassportPage({ params }: { params: Promise<{
 
   const { profile, passport, skills, recommendations } = full;
   const breakdown = await getReliabilityBreakdown(profile.id);
+  const viewer = await getCurrentUser();
+  const isSelf = viewer?.id === profile.id;
+  const [connectionState, sharedSkills] = await Promise.all([
+    viewer && !isSelf ? getConnectionStatus(viewer.id, profile.id) : Promise.resolve(null),
+    viewer && !isSelf ? getSharedSkills(viewer.id, profile.id) : Promise.resolve([]),
+  ]);
 
   if (!profile.public_passport) {
     return (
@@ -99,6 +114,35 @@ export default async function PublicPassportPage({ params }: { params: Promise<{
           verified: (passport.skills_verified ?? 0) > 0,
         }}
       />
+
+      {connectionState && (
+        <Card>
+          <CardBody className="space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="font-semibold text-ink-900 dark:text-white">{profile.full_name || "This member"}</p>
+                {sharedSkills.length > 0 && <p className="text-xs text-ink-400">{sharedSkills.length} shared skill{sharedSkills.length === 1 ? "" : "s"}: {sharedSkills.join(", ")}</p>}
+              </div>
+              <div className="flex items-center gap-2">
+                {connectionState.status === "connected" && (
+                  <MessageButton start={startDirectConversationAction.bind(null, profile.id)} />
+                )}
+                <ConnectionControl
+                  personId={profile.id}
+                  personName={profile.full_name || "this member"}
+                  initialStatus={connectionState.status}
+                  initialConnectionId={connectionState.connectionId}
+                />
+              </div>
+            </div>
+            {connectionState.status !== "blocked" && (
+              <div className="border-t border-ink-100 pt-3 dark:border-ink-800">
+                <ConnectionMoreMenu personId={profile.id} personName={profile.full_name || "this member"} isBlocked={false} />
+              </div>
+            )}
+          </CardBody>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>

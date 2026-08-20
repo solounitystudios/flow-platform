@@ -1,7 +1,8 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, Suspense } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { AlertCircle, MailCheck } from "lucide-react";
 import { AuthShell } from "@/components/marketing/AuthShell";
 import { Input } from "@/components/ui/Input";
@@ -10,8 +11,11 @@ import { signUpAction, type ActionState } from "@/lib/actions";
 
 const initialState: ActionState = {};
 
-export default function SignUpPage() {
+function SignUpForm() {
   const [state, formAction] = useActionState(signUpAction, initialState);
+  const searchParams = useSearchParams();
+  const next = searchParams.get("next") ?? "";
+  const loginHref = next ? `/login?next=${encodeURIComponent(next)}` : "/login";
 
   if (state.needsEmailConfirmation) {
     return (
@@ -20,14 +24,14 @@ export default function SignUpPage() {
         subtitle="Almost there."
         footer={
           <>
-            Already confirmed? <Link href="/login" className="font-medium text-flow-600">Log in</Link>
+            Already confirmed? <Link href={loginHref} className="font-medium text-flow-600">Log in</Link>
           </>
         }
       >
         <div className="flex flex-col items-center gap-3 py-4 text-center">
           <MailCheck className="h-10 w-10 text-flow-600" />
           <p className="text-sm text-ink-600 dark:text-ink-300">
-            We sent a confirmation link to your email. Click it to activate your FLOW account, then log in to finish setting up your Passport.
+            We sent a confirmation link to your email. Click it to activate your FLOW account — it will pick up right where you left off.
           </p>
         </div>
       </AuthShell>
@@ -40,11 +44,12 @@ export default function SignUpPage() {
       subtitle="Free forever. Takes about a minute."
       footer={
         <>
-          Already on FLOW? <Link href="/login" className="font-medium text-flow-600">Log in</Link>
+          Already on FLOW? <Link href={loginHref} className="font-medium text-flow-600">Log in</Link>
         </>
       }
     >
       <form action={formAction} className="space-y-4">
+        <input type="hidden" name="next" value={next} />
         <Input label="Full name" name="full_name" placeholder="Jordan Martinez" required autoComplete="name" />
         <Input label="Username" name="username" placeholder="jmartinez" hint="Letters, numbers, underscores only." autoComplete="username" />
         <Input label="Email" name="email" type="email" placeholder="you@example.com" required autoComplete="email" />
@@ -65,5 +70,13 @@ export default function SignUpPage() {
         </p>
       </form>
     </AuthShell>
+  );
+}
+
+export default function SignUpPage() {
+  return (
+    <Suspense fallback={null}>
+      <SignUpForm />
+    </Suspense>
   );
 }

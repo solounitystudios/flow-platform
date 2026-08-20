@@ -36,7 +36,9 @@ export interface MockOrganization {
   verified: boolean;
   industry: string;
   member_perk: string | null;
-  rating: number;
+  rating: number | null;
+  lat: number | null;
+  lng: number | null;
 }
 
 export interface MockOpportunity {
@@ -49,8 +51,8 @@ export interface MockOpportunity {
   city: string;
   state: string;
   location_name: string;
-  lat: number;
-  lng: number;
+  lat: number | null;
+  lng: number | null;
   starts_at: string;
   ends_at: string | null;
   pay_cents: number | null;
@@ -70,8 +72,8 @@ export interface MockEvent {
   city: string;
   state: string;
   venue: string;
-  lat: number;
-  lng: number;
+  lat: number | null;
+  lng: number | null;
   starts_at: string;
   ends_at: string;
   capacity: number;
@@ -82,28 +84,12 @@ export interface MockEvent {
   category: string;
 }
 
-export interface MockTicket {
-  id: string;
-  event: MockEvent;
-  ticket_code: string;
-  tier: string;
-  purchased_at: string;
-  status: "valid" | "used" | "refunded";
-}
-
 export interface MockRecommendation {
   id: string;
   author: Pick<MockPerson, "id" | "full_name" | "avatar_url" | "username">;
   body: string;
   context: string;
   created_at: string;
-}
-
-export interface MockConnection {
-  person: Pick<MockPerson, "id" | "full_name" | "avatar_url" | "username" | "city" | "state" | "reliability_score">;
-  mutuals: number;
-  connected_since: string;
-  status: "connected" | "pending_incoming" | "pending_outgoing" | "suggested";
 }
 
 export interface MockActivityItem {
@@ -114,23 +100,4 @@ export interface MockActivityItem {
   detail?: string;
   created_at: string;
   points?: number;
-}
-
-export interface MockNotification {
-  id: string;
-  type: "opportunity" | "event" | "social" | "system" | "payment";
-  title: string;
-  body: string;
-  created_at: string;
-  read: boolean;
-  href?: string;
-}
-
-export interface MockLedgerEntry {
-  id: string;
-  entry_type: "earning" | "reward" | "adjustment";
-  amount_cents: number;
-  points: number;
-  description: string;
-  created_at: string;
 }

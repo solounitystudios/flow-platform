@@ -5,7 +5,8 @@ import { useState, useTransition } from "react";
 import { AlertCircle, Calendar, Check, MapPin, X } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { acknowledgeCompletionAction, cancelAcceptedApplicationAction } from "@/lib/actions";
+import { acknowledgeCompletionAction, cancelAcceptedApplicationAction, startOpportunityConversationAction } from "@/lib/actions";
+import { MessageButton } from "@/components/messages/MessageButton";
 import { formatCents, formatDateTime } from "@/lib/utils";
 import type { MyApplicationRow } from "@/lib/data/applications";
 
@@ -66,7 +67,7 @@ export function WorkCard({ application }: { application: MyApplicationRow }) {
 
       {application.status === "accepted" && !cancelled && (
         <div className="mt-3 flex items-center justify-between gap-2 border-t border-ink-100 pt-3 dark:border-ink-800">
-          <p className="text-xs text-ink-400">Contact the business through the opportunity page if plans change.</p>
+          <MessageButton start={startOpportunityConversationAction.bind(null, application.opportunity_id)} label="Message business" />
           <Button size="sm" variant="ghost" onClick={handleCancel} disabled={pending} className="shrink-0 text-red-500">
             <X className="h-3.5 w-3.5" /> Cancel
           </Button>

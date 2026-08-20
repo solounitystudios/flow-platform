@@ -3,12 +3,16 @@ import Link from "next/link";
 import { Settings } from "lucide-react";
 import { getCurrentUser, getFullProfile } from "@/lib/data/profile";
 import { getReliabilityBreakdown } from "@/lib/data/reliability";
+import { getAllAchievements, getEarnedAchievements } from "@/lib/data/achievements";
+import { getCredentialTypes } from "@/lib/data/verifications";
+import { getFoundingClassStatus } from "@/lib/data/referrals";
 import { PassportCard } from "@/components/passport/PassportCard";
 import { PassportActions } from "@/components/passport/PassportActions";
 import { SkillsList } from "@/components/passport/SkillsList";
 import { RecommendationsList } from "@/components/passport/RecommendationsList";
 import { ReliabilityCard } from "@/components/passport/ReliabilityCard";
 import { Achievements } from "@/components/passport/Achievements";
+import { CredentialBadges } from "@/components/passport/CredentialBadges";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { flowIdFromUuid } from "@/lib/passport";
 
@@ -19,9 +23,15 @@ export default async function PassportPage() {
   const full = await getFullProfile(user.id);
   if (!full) redirect("/onboarding");
 
-  const { profile, passport, skills, recommendations } = full;
+  const { profile, passport, skills, recommendations, credentials } = full;
   const username = profile.username ?? user.id.slice(0, 8);
   const breakdown = await getReliabilityBreakdown(user.id);
+  const [allAchievements, earnedAchievements, credentialTypes, foundingClass] = await Promise.all([
+    getAllAchievements(),
+    getEarnedAchievements(user.id),
+    getCredentialTypes(),
+    getFoundingClassStatus(user.id),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -47,6 +57,12 @@ export default async function PassportPage() {
         }}
       />
 
+      {foundingClass && (
+        <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm font-medium text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300">
+          Founding member — joined during FLOW&apos;s founding class.
+        </p>
+      )}
+
       <Card>
         <CardBody>
           <PassportActions username={username} initialPublic={profile.public_passport} />
@@ -55,15 +71,24 @@ export default async function PassportPage() {
 
       <Card>
         <CardHeader>
-          <h2 className="font-bold text-ink-900 dark:text-white">Achievements</h2>
+          <h2 className="font-bold text-ink-900 dark:text-white">Credentials</h2>
         </CardHeader>
         <CardBody>
-          <Achievements
-            gigsCompleted={passport.gigs_completed ?? 0}
-            skillsVerified={passport.skills_verified ?? 0}
-            recommendationsCount={passport.recommendations ?? 0}
-            reliabilityScore={passport.reliability_score ?? 100}
-          />
+          <CredentialBadges credentials={credentials} credentialTypes={credentialTypes} />
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <h2 className="font-bold text-ink-900 dark:text-white">Achievements</h2>
+          {allAchievements.length > 0 && (
+            <span className="text-sm text-ink-400">
+              {earnedAchievements.length} of {allAchievements.length} unlocked
+            </span>
+          )}
+        </CardHeader>
+        <CardBody>
+          <Achievements all={allAchievements} earned={earnedAchievements} />
         </CardBody>
       </Card>
 

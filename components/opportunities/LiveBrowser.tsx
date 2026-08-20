@@ -1,21 +1,33 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { List, Map as MapIcon } from "lucide-react";
-import { mockEvents } from "@/lib/mock/data";
-import { LiveMap, type MapPin } from "@/components/opportunities/LiveMap";
+import { LiveMap } from "@/components/opportunities/LiveMap";
 import { OpportunityCard } from "@/components/opportunities/OpportunityCard";
 import { EventCard } from "@/components/events/EventCard";
 import { cn } from "@/lib/utils";
-import type { MockOpportunity } from "@/lib/types";
+import type { MockEvent, MockOpportunity } from "@/lib/types";
+// Type-only import — erased at compile time, so this never pulls
+// lib/data/discover.ts's server-only Supabase client into the client bundle.
+import type { MapItem } from "@/lib/data/discover";
 
 const FILTERS = ["All", "Gigs", "Jobs", "Volunteer", "Events"] as const;
 
-export function LiveBrowser({ opportunities }: { opportunities: MockOpportunity[] }) {
+export function LiveBrowser({
+  opportunities,
+  events,
+  mapItems,
+  businessesAvailable = false,
+}: {
+  opportunities: MockOpportunity[];
+  events: MockEvent[];
+  mapItems: MapItem[];
+  businessesAvailable?: boolean;
+}) {
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>("All");
   const [view, setView] = useState<"map" | "list">("map");
 
-  const liveEvents = mockEvents.filter((e) => e.status === "published");
+  const liveEvents = events;
 
   const filteredOpportunities = opportunities.filter((o) => {
     if (filter === "All") return true;
@@ -26,29 +38,21 @@ export function LiveBrowser({ opportunities }: { opportunities: MockOpportunity[
   });
   const filteredEvents = filter === "All" || filter === "Events" ? liveEvents : [];
 
-  const pins: MapPin[] = [
-    ...filteredOpportunities.map((o) => ({
-      id: o.id,
-      kind: "opportunity" as const,
-      title: o.title,
-      subtitle: o.location_name,
-      lat: o.lat,
-      lng: o.lng,
-      urgent: o.urgent,
-      startsAt: o.starts_at,
-      href: `/gigs/${o.id}`,
-    })),
-    ...filteredEvents.map((e) => ({
-      id: e.id,
-      kind: "event" as const,
-      title: e.title,
-      subtitle: e.venue,
-      lat: e.lat,
-      lng: e.lng,
-      startsAt: e.starts_at,
-      href: `/events/${e.id}`,
-    })),
-  ];
+  // Map pins follow the same top-level filter as the list below (a business
+  // pin, once real, stays visible regardless — it isn't part of this
+  // gig/job/volunteer/event taxonomy). Which *types* of pin render at all is
+  // then further controlled by LiveMap's own layer toggles.
+  const filteredMapItems = useMemo(() => {
+    if (filter === "All") return mapItems;
+    const visibleIds = new Set<string>();
+    for (const o of opportunities) {
+      const included =
+        filter === "Gigs" ? o.opportunity_type === "gig" || o.opportunity_type === "project" : filter === "Jobs" ? o.opportunity_type === "job" : filter === "Volunteer" ? o.opportunity_type === "volunteer" : false;
+      if (included) visibleIds.add(o.id);
+    }
+    if (filter === "Events") for (const e of events) visibleIds.add(e.id);
+    return mapItems.filter((item) => item.type === "business" || visibleIds.has(item.id));
+  }, [mapItems, filter, opportunities, events]);
 
   return (
     <div className="space-y-4">
@@ -79,7 +83,7 @@ export function LiveBrowser({ opportunities }: { opportunities: MockOpportunity[
         </div>
       </div>
 
-      {view === "map" && <LiveMap pins={pins} />}
+      {view === "map" && <LiveMap items={filteredMapItems} businessesAvailable={businessesAvailable} />}
 
       <div className="grid gap-3 sm:grid-cols-2">
         {filteredOpportunities.map((o) => (
