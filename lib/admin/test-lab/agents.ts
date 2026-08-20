@@ -15,7 +15,7 @@
 // All Phase 1 agents are SuiteSafety: SAFE_PRODUCTION — pure in-memory
 // computation, zero database reads or writes, safe to run against the live
 // app at any time (including in production) by a signed-in AAL2 admin.
-import { canAttributeToOrganization, canManageOrganizationMember, INVITABLE_ORGANIZATION_ROLES } from "@/lib/authz";
+import { canAttributeToOrganization, canManageOrganizationMember, deriveAdminAccessState, INVITABLE_ORGANIZATION_ROLES } from "@/lib/authz";
 import { isSafeInternalPath } from "@/lib/redirect-safety";
 import { opportunitiesToMapItems, eventsToMapItems, organizationsToMapItems } from "@/lib/map-selectors";
 import type { MockEvent, MockOpportunity, MockOrganization } from "@/lib/types";
@@ -95,6 +95,20 @@ function runSecurityAgent(): TestResult[] {
       evidence: 'isSafeInternalPath("https://evil.com")',
       suggestedNextAction: "STOP — same open-redirect exposure as above.",
     }),
+    check(deriveAdminAccessState({ hasUser: true, isAdmin: false, aal2: false, hasVerifiedMfaFactor: true }) === "not-admin", {
+      scenario: "Admin Access Gateway: a verified second factor does not, by itself, imply admin rights",
+      agent, category: "admin-access-gateway", severity: "HIGH",
+      expected: "not-admin", actualIfFail: "some admin-implying state (privilege escalation via MFA enrollment alone)",
+      evidence: "deriveAdminAccessState({hasUser:true, isAdmin:false, aal2:false, hasVerifiedMfaFactor:true})",
+      suggestedNextAction: "STOP — review lib/authz.ts's deriveAdminAccessState precedence order.",
+    }),
+    check(deriveAdminAccessState({ hasUser: true, isAdmin: true, aal2: false, hasVerifiedMfaFactor: false }) === "mfa-not-enrolled", {
+      scenario: "Admin Access Gateway: an admin with no second factor is never treated as verified",
+      agent, category: "admin-access-gateway", severity: "HIGH",
+      expected: "mfa-not-enrolled", actualIfFail: "aal2 (AAL2 gate would be bypassed)",
+      evidence: "deriveAdminAccessState({hasUser:true, isAdmin:true, aal2:false, hasVerifiedMfaFactor:false})",
+      suggestedNextAction: "STOP — this would mean an unverified admin session is treated as fully secure. Review deriveAdminAccessState and requireSecureAdmin.",
+    }),
   ];
 }
 
@@ -159,7 +173,7 @@ function baseEvent(overrides: Partial<MockEvent> = {}): MockEvent {
 function baseOrganization(overrides: Partial<MockOrganization> = {}): MockOrganization {
   return {
     id: "org-1", name: "t", logo_url: "", city: "Buffalo", state: "NY", description: "", verified: true,
-    industry: "Business", member_perk: null, rating: null, lat: 42.8864, lng: -78.8784, ...overrides,
+    industry: "Business", member_perk: null, rating: null, lat: 42.8864, lng: -78.8784, location_visibility: "exact", ...overrides,
   };
 }
 
@@ -200,6 +214,27 @@ function runMapAgent(): TestResult[] {
       expected: "1 pin", actualIfFail: "0 pins (over-filtering — real listings would go missing from the map)",
       evidence: "opportunitiesToMapItems([{lat:42.8864,lng:-78.8784}])",
       suggestedNextAction: "Review hasCoordinates / the filter predicate for an overly strict condition.",
+    }),
+    check(organizationsToMapItems([baseOrganization({ location_visibility: "hidden" })]).length === 0, {
+      scenario: "A 'hidden' organization never produces a pin, even with real coordinates set",
+      agent, category: "location-privacy", severity: "HIGH",
+      expected: "0 pins", actualIfFail: "1+ pins (private/home location exposed)",
+      evidence: 'organizationsToMapItems([{location_visibility:"hidden", lat:..., lng:...}])',
+      suggestedNextAction: "STOP — this could expose a home address. Review lib/map-selectors.ts's organizationsToMapItems visibility filter.",
+    }),
+    check(organizationsToMapItems([baseOrganization({ location_visibility: "approximate", lat: 42.88641234, lng: -78.87841234 })])[0]?.latitude === 42.89, {
+      scenario: "An 'approximate' organization shows rounded, not exact, coordinates",
+      agent, category: "location-privacy", severity: "MEDIUM",
+      expected: "rounded to 2 decimal places", actualIfFail: "exact coordinates leaked",
+      evidence: 'organizationsToMapItems([{location_visibility:"approximate", lat:42.88641234,...}])',
+      suggestedNextAction: "Review the approximate-rounding branch in lib/map-selectors.ts's organizationsToMapItems.",
+    }),
+    check(organizationsToMapItems([baseOrganization({ location_visibility: "exact" })])[0]?.href === "/o/org-1", {
+      scenario: "A business pin links to the public organization page, not /discover",
+      agent, category: "map-integration", severity: "LOW",
+      expected: "/o/org-1", actualIfFail: "a different or missing route",
+      evidence: 'organizationsToMapItems([...])[0].href',
+      suggestedNextAction: "Review the href in lib/map-selectors.ts's organizationsToMapItems.",
     }),
   ];
 }

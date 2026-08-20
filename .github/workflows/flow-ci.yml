@@ -9,12 +9,15 @@ name: FLOW CI
 # (verified: the build succeeds identically with placeholder values). See
 # tests/README.md for why tests/integration/ (the only suite that would
 # need real credentials) is excluded from this workflow on purpose.
+#
+# Only pull_request triggers this — a push to a feature branch that isn't
+# yet part of a PR produces no useful signal beyond what pull_request
+# already gives once that PR exists, and the two triggers together were
+# producing two identical, redundant runs per commit (confirmed on PR #4).
 
 on:
   pull_request:
     branches: [main]
-  push:
-    branches-ignore: [main]
 
 # Cancel a stale run on the same branch/PR when new commits land, so CI
 # doesn't queue up redundant work.
