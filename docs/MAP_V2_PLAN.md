@@ -215,19 +215,39 @@ here.
 `organizationsToMapItems`'s `location_visibility` gate; no owner id, team
 roster, or raw hidden coordinate is exposed anywhere in the sheet.
 
-**Tests**: no new pure logic was extracted this batch (the changes are
-JSX/formatting inside a client component, matching Batch 1's own
-convention, and the repo has no component-rendering test infrastructure —
-confirmed via `package.json`/`tests/` audit), so no new test file was
-added. All 53 existing tests (`lib/map-selectors.ts` was not touched this
-batch) still pass unchanged.
+**Tests**: no new pure logic was extracted from the pin-detail/selected-pin
+work itself (the changes are JSX/formatting inside a client component,
+matching Batch 1's own convention, and the repo has no component-rendering
+test infrastructure — confirmed via `package.json`/`tests/` audit), so no
+new test file was added for that part. `lib/map-selectors.ts` was not
+touched this batch, so its existing coverage is unchanged. A new test file
+*was* added this batch for the unrelated admin-nav fix below
+(`tests/unit/admin-nav-serialization.test.ts`), bringing the suite to
+**56/56 passing** (`./node_modules/.bin/vitest run tests/unit
+tests/security`).
+
+**Runtime repair bundled into this batch (unrelated to pin detail):**
+manual preview surfaced a pre-existing admin navigation Server Component
+serialization bug on `main` — Lucide icon component references were being
+passed as props from the server `AdminNav` into the client `SidebarShell`,
+which React cannot serialize across that boundary, producing HTTP 500s on
+`/admin` and `/admin/evidence`. Fixed by passing plain string icon keys
+(e.g. `"layout-dashboard"`) instead of component references, with
+`SidebarShell` resolving keys to Lucide components entirely client-side.
+Admin authorization/MFA/AAL2 behavior is unchanged. Covered by the new
+`tests/unit/admin-nav-serialization.test.ts` (asserts every nav item
+survives a JSON round-trip and `icon` is always a string). This bug
+pre-dates Batch 2 and is unrelated to the map/pin-detail work — it's
+included in this PR because manual QA exposed it before merge, not because
+it's part of the Map V2 plan.
 
 **Not done / explicitly out of scope for Batch 2**: radius search,
 "Search This Area", true user-relative distance, geocoding/address
 collection, Work Now V2, Events V2, Passport V2, Wallet. None of these were
 touched, per the batch's own scope lock.
 
-**Local build**: not re-verified this batch — see the QA section of the
-final report for the exact reasoning (same Codespace resource constraints
-as Batch 1; `tsc`/`eslint`/`vitest` all green). GitHub CI remains the
-authoritative build gate once this branch is published.
+**Local build**: verified this session — `npm run build` succeeded locally
+(37.7s compile), in addition to GitHub CI (`typecheck, lint, test, build`)
+reporting green on PR #7. Both the local Codespace resource constraints
+noted in Batch 1 and the earlier "not re-verified" note for this batch are
+superseded by that successful local run.
