@@ -15,6 +15,7 @@ import {
   Building2,
   ArrowLeft,
   Download,
+  FlaskConical,
 } from "lucide-react";
 import { SidebarShell, type SidebarNavGroup } from "@/components/nav/SidebarShell";
 
@@ -32,6 +33,7 @@ const GROUPS: SidebarNavGroup[] = [
     items: [
       { href: "/admin", label: "Overview", icon: LayoutDashboard, exact: true },
       { href: "/admin/command", label: "Command", icon: Radar },
+      { href: "/admin/test-lab", label: "Test Lab", icon: FlaskConical },
     ],
   },
   {
