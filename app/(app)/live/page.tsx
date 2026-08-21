@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { getOpenOpportunities } from "@/lib/data/opportunities";
 import { getUpcomingEvents } from "@/lib/data/events";
 import { getDiscoverOrganizations } from "@/lib/data/discover";
@@ -13,5 +14,16 @@ export default async function LivePage() {
   // render zero business pins for a while.
   const mapItems = [...opportunitiesToMapItems(opportunities), ...eventsToMapItems(events), ...organizationsToMapItems(organizations)];
 
-  return <LiveBrowser opportunities={opportunities} events={events} organizations={organizations} mapItems={mapItems} />;
+  // LiveBrowser reads useSearchParams() (Batch 3 — layer + search-area URL
+  // persistence, see lib/map-viewport.ts), which per Next.js's own guidance
+  // should be wrapped in Suspense. This route is already fully dynamic
+  // (lib/supabase/server.ts's createClient() reads cookies()), so this
+  // never actually falls back to the Suspense boundary in practice — it's
+  // here for correctness against a future static-rendering change, not
+  // because this page currently prerenders.
+  return (
+    <Suspense fallback={<div className="h-[420px] animate-pulse rounded-2xl bg-ink-100 dark:bg-ink-900" />}>
+      <LiveBrowser opportunities={opportunities} events={events} organizations={organizations} mapItems={mapItems} />
+    </Suspense>
+  );
 }

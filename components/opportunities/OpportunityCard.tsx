@@ -13,8 +13,25 @@ const TYPE_LABEL: Record<MockOpportunity["opportunity_type"], string> = {
   volunteer: "Volunteer",
 };
 
-export function OpportunityCard({ opportunity, className }: { opportunity: MockOpportunity; className?: string }) {
+export function OpportunityCard({
+  opportunity,
+  className,
+  distanceOverrideMi,
+}: {
+  opportunity: MockOpportunity;
+  className?: string;
+  /**
+   * Map V2 Batch 3: when the browser's one-shot geolocation is available,
+   * callers (e.g. LiveBrowser) can pass a true user-relative distance here
+   * to override `opportunity.distance_mi` (which is always the fixed
+   * city-center basis computed server-side — see lib/data/opportunities.ts).
+   * `undefined`/`null` (the default) keeps this card's existing behavior
+   * completely unchanged — no caller is required to pass this.
+   */
+  distanceOverrideMi?: number | null;
+}) {
   const spotsLeft = opportunity.slots - opportunity.slots_filled;
+  const distanceMi = distanceOverrideMi ?? opportunity.distance_mi;
 
   return (
     <Link
@@ -43,7 +60,7 @@ export function OpportunityCard({ opportunity, className }: { opportunity: MockO
 
       <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-400">
         <span className="flex items-center gap-1">
-          <MapPin className="h-3 w-3" /> {opportunity.location_name} · {opportunity.distance_mi} mi
+          <MapPin className="h-3 w-3" /> {opportunity.location_name} · {distanceMi} mi
         </span>
         <span className="flex items-center gap-1">
           <Clock className="h-3 w-3" /> {relativeTime(opportunity.starts_at)}

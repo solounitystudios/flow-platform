@@ -231,6 +231,32 @@ export function isPublicMapEligible(o: Pick<MockOrganization, "location_visibili
 }
 
 /**
+ * The single point (if any) an organization is ever allowed to render at —
+ * shared by organizationsToMapItems (below) and Batch 3's viewport bounds
+ * filter (lib/map-viewport.ts's filterOrganizationsByBounds) so both paths
+ * apply the exact same privacy rule instead of two copies that could drift.
+ * Returns null for 'hidden'/'remote' or a coordinate-less organization —
+ * never a fabricated point. 'approximate' rounds to 2 decimal places
+ * (~1.1km of fuzz), matching
+ * supabase/migrations/20260820163442_organization_location_privacy.sql's
+ * own rounding, so a real row already redacted by that view and a mock row
+ * redacted here end up with the same precision either way.
+ */
+export function effectiveOrganizationCoordinates(
+  o: Pick<MockOrganization, "lat" | "lng" | "location_visibility">,
+): { lat: number; lng: number } | null {
+  if (!isPublicMapEligible(o)) return null;
+  // hasCoordinates only narrows its first argument's type (lat), so the
+  // explicit `o.lng === null` re-check below is purely for TypeScript's
+  // control-flow narrowing on the second field — hasCoordinates already
+  // guarantees both are finite numbers at runtime.
+  if (!hasCoordinates(o.lat, o.lng) || o.lng === null) return null;
+  return o.location_visibility === "approximate"
+    ? { lat: Math.round(o.lat * 100) / 100, lng: Math.round(o.lng * 100) / 100 }
+    : { lat: o.lat, lng: o.lng };
+}
+
+/**
  * Converts already-fetched organizations (the shape returned by
  * getDiscoverOrganizations) into map pins. `organizations.lat/lng` are plain
  * nullable columns with no backfill/geocoding step yet, so most orgs will
@@ -246,22 +272,19 @@ export function isPublicMapEligible(o: Pick<MockOrganization, "location_visibili
  * against lib/mock/data.ts's demo-mode fixtures, which never go through
  * the organizations_public view that redacts real Supabase rows — this is
  * the one place both real and mock data are guaranteed to pass through the
- * same check. 'approximate' rounds to 2 decimal places (~1.1km of fuzz) —
- * matching supabase/migrations/20260820163442_organization_location_privacy.sql's
- * own rounding, so a real row already redacted by that view and a mock row
- * redacted here end up with the same precision either way.
+ * same check (via effectiveOrganizationCoordinates above).
  */
 export function organizationsToMapItems(organizations: MockOrganization[]): MapItem[] {
   return organizations
-    .filter(isPublicMapEligible)
-    .filter((o): o is MockOrganization & { lat: number; lng: number } => hasCoordinates(o.lat, o.lng))
-    .map((o) => ({
+    .map((o) => ({ o, coords: effectiveOrganizationCoordinates(o) }))
+    .filter((x): x is { o: MockOrganization; coords: { lat: number; lng: number } } => x.coords !== null)
+    .map(({ o, coords }) => ({
       id: o.id,
       entityType: "business" as const,
       isWorkNow: false,
       title: o.name,
-      latitude: o.location_visibility === "approximate" ? Math.round(o.lat * 100) / 100 : o.lat,
-      longitude: o.location_visibility === "approximate" ? Math.round(o.lng * 100) / 100 : o.lng,
+      latitude: coords.lat,
+      longitude: coords.lng,
       city: o.city,
       state: o.state,
       status: null,
