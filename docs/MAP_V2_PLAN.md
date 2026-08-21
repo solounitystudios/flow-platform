@@ -335,3 +335,83 @@ result.
 **Not done / explicitly out of scope for Batch 3**: radius-search UI beyond
 existing pan/zoom, geocoding/address entry, a second city, live/continuous
 geolocation tracking, Work Now V2, Events V2, Passport V2, Wallet.
+
+## Batch 4 Status — QA/Release-Manager Follow-Up Cleanup
+
+Scope: exactly the 4 non-blocking follow-ups identified by the independent
+`qa-security` and `release-manager` gates on Batch 3 (PR #8) — no new
+feature surface, no zoom/map-list-mode persistence, no geocoding, no
+second city.
+
+**Organization bounds-filter privacy contract** (`lib/map-viewport.ts`):
+`filterOrganizationsByBounds` previously returned early (`if (!bounds)
+return organizations;`) before its `isPublicMapEligible` re-check ran,
+so a hidden/remote organization technically passed through unfiltered
+when no search area was committed — contradicting the function's own
+docstring. Never exploitable in the shipped app (the sole call site in
+`LiveBrowser.tsx` always applies `filterOrganizationsForLayer` first, and
+`organizations_public` already redacts hidden/remote coordinates
+server-side), but the contract now matches the implementation: eligibility
+is checked unconditionally, before the `bounds === null` short-circuit.
+Approximate-visibility organizations are still filtered on their
+already-rounded point only; coordinate-less eligible organizations are
+still preserved. The existing `tests/unit/map-viewport.test.ts` case for
+`bounds === null` was rewritten from asserting the old (leaky) behavior to
+asserting the fixed one.
+
+**Clear Search Area baseline reset** (`lib/map-viewport.ts` +
+`LiveMap.tsx`): clearing a committed search area correctly restored the
+full result set, but `LiveMap`'s internal comparison baseline for "Search
+this area" was never explicitly reset, since no effect watched the
+`searchBounds` prop after mount. A new pure `shouldResetSearchBaseline(previous,
+next)` (`previous !== null && next === null`) drives a minimal `useEffect`
+that re-seeds the baseline from the map's actual live bounds exactly on an
+explicit clear — not on mount, not on a restored search area, not on the
+geolocation fly-to. Batch 3's `cc46f43` load-time baseline fix is
+untouched. Covered by 5 new tests exercising every relevant transition.
+
+**Distance-source UI disclosure** (`lib/geo.ts`, `LiveMap.tsx`,
+`OpportunityCard.tsx`): `distanceInfo()`'s `source: "user" | "city-center"`
+tag was already computed correctly in Batch 3 but never surfaced — both
+the pin detail sheet and the opportunity card rendered plain "X mi"
+regardless of source. A new `formatDistanceLabel()` renders `"X mi away"`
+for real user-relative distance and `"~X mi from city center"` for the
+fallback, used identically at both call sites so they can never disagree
+and the fallback can never be mistaken for the user's true position. No
+coordinate is ever rendered; geolocation posture (one-shot, non-blocking,
+never persisted) is unchanged.
+
+**Mobile cleanup** (`LiveBrowser.tsx`): the map/list view-toggle buttons
+(previously ~28px) now meet the 44px touch-target minimum this screen's
+other controls already met, via `min-h-11 min-w-11` absorbed into padding
+rather than growing the visible icon — no change to visual hierarchy. The
+results grid gained an explicit base `grid-cols-1` before `sm:grid-cols-2`
+(functionally a no-op given CSS grid's default single-column behavior, but
+makes the intent explicit).
+
+**Verification**: `tsc --noEmit` clean; `eslint .` clean (one pre-existing,
+unrelated warning on `MfaEnrollment.tsx`'s `<img>` usage); `vitest run
+tests/unit tests/security` **99/99 passing** (5 new tests for
+`shouldResetSearchBaseline`, the rewritten organization-privacy test);
+`npm run build` succeeded. GitHub Actions CI green. Independently verified
+by both `qa-security` (PASS) and `release-manager` (READY WITH
+FOLLOW-UPS) gates before merge.
+
+**Known non-blocking follow-ups carried forward**: `formatDistanceLabel`
+has no dedicated unit test in `tests/unit/geo.test.ts` (exercised
+indirectly via both call sites only); mobile viewport rendering, the
+authenticated interactive map sequence, and screen-reader behavior for the
+new distance wording were verified via code trace and static analysis
+only — no real browser/device/assistive-tech session, consistent with
+every prior Map V2 batch's verification depth in this repo.
+
+**Batch 4 shipped**: PR #9, merged to `main` at commit
+`87a619a96461a4987f294562851f2b0323a38a6a` after GitHub Actions CI and
+both independent review gates reported green.
+
+**Not done / explicitly out of scope for Batch 4**: everything Batch 3
+already deferred (radius-search UI, geocoding/address entry, a second
+city, live/continuous geolocation tracking, exact zoom persistence,
+map/list mode persistence, Work Now V2, Events V2, Passport V2, Wallet) —
+this batch closed out review follow-ups only, it did not open any new
+scope.
