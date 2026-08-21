@@ -1,17 +1,27 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import MapGL, { GeolocateControl, Layer, NavigationControl, Source, type MapLayerMouseEvent, type MapRef } from "react-map-gl/maplibre";
+import MapGL, {
+  GeolocateControl,
+  Layer,
+  NavigationControl,
+  Source,
+  type MapLayerMouseEvent,
+  type MapRef,
+  type ViewStateChangeEvent,
+} from "react-map-gl/maplibre";
 import type { GeoJSONSource } from "maplibre-gl";
 import type { Feature, FeatureCollection, Point } from "geojson";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { BadgeCheck, Briefcase, Building2, CalendarDays, DollarSign, HandHeart, Loader2, MapPin as MapPinIcon, TriangleAlert, Users2, Zap } from "lucide-react";
+import { BadgeCheck, Briefcase, Building2, CalendarDays, DollarSign, HandHeart, Loader2, LocateFixed, MapPin as MapPinIcon, TriangleAlert, Users2, Zap } from "lucide-react";
 import { CITY_CENTER } from "@/lib/mock/data";
+import { distanceInfo, type UserLocation } from "@/lib/geo";
 import { formatCents, formatDateTime, relativeTime } from "@/lib/utils";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Badge } from "@/components/ui/Badge";
 import { DetailSheet, type DetailSheetAction } from "@/components/ui/DetailSheet";
 import { MAP_LAYER_EMPTY_COPY, type MapEntityType, type MapItem, type MapLayer } from "@/lib/map-selectors";
+import { roundBounds, shouldShowSearchThisArea, type MapBounds } from "@/lib/map-viewport";
 import type { OpportunityType } from "@/lib/types";
 
 /** Raw opportunity-type label for the detail sheet's type badge — kept
@@ -64,6 +74,18 @@ function displayBucketFor(item: MapItem, layer: MapLayer): MapEntityType | "work
   return layer === "work_now" ? "work_now" : item.entityType;
 }
 
+/** "City, State · 2.1 mi" (or just "2.1 mi" if city/state are missing) for
+ * the pin detail sheet's location line. Distance is real user-relative
+ * distance when `userLocation` is available, city-center fallback
+ * otherwise — see lib/geo.ts's distanceInfo. Every MapItem is guaranteed a
+ * real latitude/longitude (the selectors that build MapItem[] never
+ * fabricate one), so this never needs a "no distance" branch. */
+function formatLocationWithDistance(item: MapItem, userLocation: UserLocation | null): string {
+  const place = [item.city, item.state].filter(Boolean).join(", ");
+  const milesLabel = `${distanceInfo(item.latitude, item.longitude, userLocation).miles} mi`;
+  return place ? `${place} · ${milesLabel}` : milesLabel;
+}
+
 function toFeatureCollection(items: MapItem[]): FeatureCollection<Point, { id: string }> {
   return {
     type: "FeatureCollection",
@@ -98,10 +120,49 @@ function pointLayerId(bucket: string) {
  * own: one layer selection, owned by the parent, drives both this and the
  * results list identically.
  */
-export function LiveMap({ items, layer }: { items: MapItem[]; layer: MapLayer }) {
+export function LiveMap({
+  items,
+  layer,
+  userLocation,
+  searchBounds,
+  onSearchThisArea,
+  isSearchPending = false,
+}: {
+  items: MapItem[];
+  layer: MapLayer;
+  /** The browser's one-shot geolocation result, lifted up to LiveBrowser so
+   * it's available whether or not the map is currently mounted (map/list
+   * toggle) — see LiveBrowser.tsx. Null when unavailable/denied/not yet
+   * resolved; every distance shown here falls back to city-center in that
+   * case (see lib/geo.ts's distanceInfo). */
+  userLocation: UserLocation | null;
+  /** The currently-committed "Search this area" viewport, if any — restored
+   * from the URL on first load (see LiveBrowser.tsx). Used once, on mount,
+   * to fit the initial camera to it (and to skip the auto-fly-to-user-
+   * location below, since an explicit prior search should win). Not used
+   * for anything after mount — LiveMap tracks its own live camera bounds
+   * internally from then on. */
+  searchBounds: MapBounds | null;
+  /** Fired when the user explicitly clicks "Search this area." Never called
+   * automatically on pan/zoom. */
+  onSearchThisArea: (bounds: MapBounds) => void;
+  /** True while the parent is applying a just-committed search (a
+   * near-instant client-side filter, but still worth a lightweight pending
+   * affordance on the button itself). */
+  isSearchPending?: boolean;
+}) {
   const mapRef = useRef<MapRef>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [canSearchThisArea, setCanSearchThisArea] = useState(false);
+  // The viewport this batch compares future moves against — starts at the
+  // restored search area (if any); otherwise gets established from the
+  // first *programmatic* settle (initial load / the geolocation fly-to
+  // below), never from a user gesture, so opening the map never shows
+  // "Search this area" before the user has actually moved anything.
+  const referenceBoundsRef = useRef<MapBounds | null>(searchBounds);
+  const currentBoundsRef = useRef<MapBounds | null>(searchBounds);
+  const hasFlownToUserRef = useRef(false);
 
   const itemsByBucket = useMemo(() => {
     const map = new Map<MapEntityType | "work_now", MapItem[]>();
@@ -121,26 +182,67 @@ export function LiveMap({ items, layer }: { items: MapItem[]; layer: MapLayer })
   const selectedBucket = useMemo(() => (selected ? displayBucketFor(selected, layer) : null), [selected, layer]);
   const selectedFeatureCollection = useMemo(() => (selected ? toFeatureCollection([selected]) : null), [selected]);
 
-  // Best-effort, non-blocking geolocation: the map renders at the city
-  // center immediately regardless of outcome, then flies to the user's
-  // location only if permission is granted quickly. Denied/unavailable
-  // geolocation never blocks or errors the map itself.
+  // Best-effort, non-blocking geolocation fly-to: the map renders at the
+  // city center (or a restored search area) immediately regardless of
+  // outcome, then flies to the user's location only once, only if
+  // `userLocation` becomes available (LiveBrowser's one-shot
+  // getCurrentPosition call resolved) and only if there's no explicit
+  // restored search area to respect instead — an explicit prior "Search
+  // this area" click is a stronger signal than "recenter on me now."
+  // Denied/unavailable geolocation never blocks or errors the map itself.
   useEffect(() => {
-    if (typeof navigator === "undefined" || !navigator.geolocation) return;
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        mapRef.current?.flyTo({
-          center: [position.coords.longitude, position.coords.latitude],
-          zoom: USER_LOCATION_ZOOM,
-          duration: 1200,
-        });
-      },
-      () => {
-        // Denied, unavailable, or timed out — silently keep the city-center default.
-      },
-      { enableHighAccuracy: false, timeout: 6000, maximumAge: 5 * 60 * 1000 },
-    );
+    if (!userLocation || hasFlownToUserRef.current) return;
+    hasFlownToUserRef.current = true;
+    if (searchBounds) return;
+    mapRef.current?.flyTo({
+      center: [userLocation.lng, userLocation.lat],
+      zoom: USER_LOCATION_ZOOM,
+      duration: 1200,
+    });
+    // searchBounds is intentionally excluded — this effect only ever
+    // considers the value present at mount (captured once via the ref
+    // guard above), matching the existing "one-shot" geolocation posture.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userLocation]);
+
+  // "Search this area": every settle of the camera (moveend fires for both
+  // real user gestures and programmatic flyTo/fitBounds calls) records the
+  // live bounds. A *programmatic* settle (evt.originalEvent is undefined —
+  // maplibre/mapbox's own signal for "this wasn't a user gesture") resets
+  // the reference baseline instead of ever triggering the control, so the
+  // initial load and the geolocation fly-to above never surface "Search
+  // this area" on their own. A genuine user pan/zoom/drag compares the new
+  // bounds against that baseline and only shows the control once the
+  // overlap has dropped meaningfully — never on every small nudge.
+  const handleMoveEnd = useCallback((evt: ViewStateChangeEvent) => {
+    const map = mapRef.current?.getMap();
+    if (!map) return;
+    const b = map.getBounds();
+    const current = roundBounds({ west: b.getWest(), south: b.getSouth(), east: b.getEast(), north: b.getNorth() });
+    currentBoundsRef.current = current;
+
+    if (!evt.originalEvent) {
+      referenceBoundsRef.current = current;
+      setCanSearchThisArea(false);
+      return;
+    }
+    if (referenceBoundsRef.current === null) {
+      referenceBoundsRef.current = current;
+      setCanSearchThisArea(false);
+      return;
+    }
+    setCanSearchThisArea(shouldShowSearchThisArea(current, referenceBoundsRef.current));
   }, []);
+
+  const handleSearchThisArea = useCallback(() => {
+    const current = currentBoundsRef.current;
+    if (!current) return;
+    // Deliberately does not move the camera — the user just moved it
+    // themselves; re-centering now would undo their own action.
+    referenceBoundsRef.current = current;
+    setCanSearchThisArea(false);
+    onSearchThisArea(current);
+  }, [onSearchThisArea]);
 
   const interactiveLayerIds = useMemo(
     () =>
@@ -187,6 +289,26 @@ export function LiveMap({ items, layer }: { items: MapItem[]; layer: MapLayer })
     [],
   );
 
+  const handleLoad = useCallback(() => {
+    setStatus("ready");
+    // Restore a URL-persisted search area on first load — an explicit
+    // prior "Search this area" is a stronger signal than the default
+    // city-wide view, and this fitBounds call is itself the programmatic
+    // settle that establishes the reference baseline (see handleMoveEnd).
+    if (searchBounds) {
+      mapRef.current?.fitBounds(
+        [
+          [searchBounds.west, searchBounds.south],
+          [searchBounds.east, searchBounds.north],
+        ],
+        { padding: 40, duration: 0 },
+      );
+    }
+    // searchBounds is intentionally excluded — this only ever applies the
+    // value present at mount (this is a one-shot restore, not a live sync).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <div className="space-y-3">
       <div className="relative aspect-[4/3] w-full overflow-hidden rounded-2xl border border-ink-100 bg-flow-50 dark:border-ink-800 dark:bg-ink-900 sm:aspect-[16/9]">
@@ -205,6 +327,19 @@ export function LiveMap({ items, layer }: { items: MapItem[]; layer: MapLayer })
                 <Loader2 className="h-6 w-6 animate-spin text-flow-500" />
               </div>
             )}
+            {status === "ready" && canSearchThisArea && (
+              <div className="pointer-events-none absolute inset-x-0 top-3 z-20 flex justify-center px-3">
+                <button
+                  type="button"
+                  onClick={handleSearchThisArea}
+                  disabled={isSearchPending}
+                  className="pointer-events-auto flex min-h-11 items-center gap-2 rounded-full border border-ink-200 bg-white px-4 text-sm font-semibold text-ink-900 shadow-card transition hover:bg-ink-50 disabled:opacity-70 dark:border-ink-700 dark:bg-ink-900 dark:text-white dark:hover:bg-ink-800"
+                >
+                  {isSearchPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <LocateFixed className="h-4 w-4" />}
+                  Search this area
+                </button>
+              </div>
+            )}
             <MapGL
               ref={mapRef}
               mapStyle={MAP_STYLE_URL}
@@ -212,7 +347,8 @@ export function LiveMap({ items, layer }: { items: MapItem[]; layer: MapLayer })
               style={{ width: "100%", height: "100%" }}
               interactiveLayerIds={interactiveLayerIds}
               onClick={handleClick}
-              onLoad={() => setStatus("ready")}
+              onLoad={handleLoad}
+              onMoveEnd={handleMoveEnd}
               onError={() => setStatus("error")}
               cursor="pointer"
             >
@@ -303,7 +439,7 @@ export function LiveMap({ items, layer }: { items: MapItem[]; layer: MapLayer })
           const bucket = displayBucketFor(selected, layer);
           const displayMeta = DISPLAY_META[bucket];
           const Icon = displayMeta.icon;
-          const locationLabel = [selected.city, selected.state].filter(Boolean).join(", ");
+          const locationLabel = formatLocationWithDistance(selected, userLocation);
 
           let subtitle: ReactNode;
           let action: DetailSheetAction;
