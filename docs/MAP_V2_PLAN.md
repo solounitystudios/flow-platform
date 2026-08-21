@@ -251,3 +251,87 @@ touched, per the batch's own scope lock.
 reporting green on PR #7. Both the local Codespace resource constraints
 noted in Batch 1 and the earlier "not re-verified" note for this batch are
 superseded by that successful local run.
+
+## Batch 3 Status — Search This Area + True User-Relative Distance
+
+Scope: the two items Batch 2 explicitly deferred — "Search This Area" /
+map-bounds-driven result filtering, and true user-relative distance — plus
+the URL persistence (layer + search-area) needed for either to survive a
+reload or a shared link. No new backend systems, no schema changes, no
+radius-search UI beyond the existing zoom/pan, no geocoding.
+
+**`lib/map-viewport.ts`** (new, pure, dependency-free — mirrors
+`lib/map-selectors.ts`'s own convention): `MapBounds` type; bounds
+validity/containment (`isValidBounds`, `isWithinBounds`); an
+intersection-over-union `boundsOverlapRatio` plus
+`shouldShowSearchThisArea` (overlap `< 0.5` after a real user gesture,
+never on the initial load or on the geolocation fly-to); URL param
+parse/serialize for the active layer and the last-committed search bounds
+(`parseMapLayerParam`/`parseBoundsParam`/`buildLiveMapSearchParams`, all
+fail-safe against missing/malformed/out-of-range input — never a crash, never
+a bogus partial bounds box); and per-entity-type bounds filters
+(`filterMapItemsByBounds`/`filterOpportunitiesByBounds`/`filterEventsByBounds`/
+`filterOrganizationsByBounds`) that only ever narrow items which already have
+a coordinate — a remote/coordinate-less item stays visible regardless of the
+search area, exactly like the existing layer filters' own philosophy.
+
+**Privacy contract re-verified under bounds filtering**:
+`filterOrganizationsByBounds` re-derives the same privacy-redacted point via
+a new shared helper, `effectiveOrganizationCoordinates` (extracted from
+`organizationsToMapItems` in `lib/map-selectors.ts` so both paths apply one
+rule instead of two copies that could drift) — a hidden/remote organization
+is excluded even if its raw coordinates fall inside the searched box, and an
+`approximate` organization is filtered using its already-rounded (fuzzed)
+point, never gaining precision from the bounds check. Covered by dedicated
+tests in `tests/unit/map-viewport.test.ts`.
+
+**"Search this area"** (`LiveMap.tsx`): every camera settle (`onMoveEnd`)
+records the live bounds; a *programmatic* settle (initial load, the
+geolocation fly-to, or restoring a URL-persisted search area) resets the
+comparison baseline instead of ever surfacing the control, so opening the
+map never shows "Search this area" before the user has actually moved
+anything themselves. A genuine user pan/zoom/drag compares against that
+baseline and only surfaces the button once the overlap has dropped
+meaningfully. Clicking it commits the current bounds upward to
+`LiveBrowser` without moving the camera (the user just moved it — recentering
+now would undo their own action) and clears the button immediately.
+
+**URL persistence** (`LiveBrowser.tsx`): the active layer and the committed
+search bounds are the entire persisted state — restored from
+`useSearchParams()` on mount, kept in sync via `window.history.replaceState`
+(shallow, no server round-trip, no extra back-stack entry per change, so
+the browser back button returns to wherever the user was before `/live`,
+not through intermediate layer/search states — a deliberate choice, not an
+oversight). Device geolocation is never part of this: it stays in
+component state only, exactly as before. `app/(app)/live/page.tsx` wraps
+`LiveBrowser` in `<Suspense>` per Next.js's guidance for `useSearchParams()`
+consumers (this route is already fully dynamic via `cookies()`, so this
+never actually falls back to the Suspense boundary today — it's future-proofing,
+not a behavior change).
+
+**True user-relative distance** (`lib/geo.ts`): `distanceInfo(lat, lng,
+userLocation)` returns both the miles and a tagged `source: "user" |
+"city-center"` — never a magic sentinel, always explicit about which basis
+produced the number. `LiveBrowser` lifts the one-shot geolocation call up
+from `LiveMap` (unchanged posture: non-blocking, best-effort, never
+persisted, never in the URL) so it's available whether the map or the list
+is currently showing, and both the pin detail sheet and the opportunity
+card list use the exact same source/value — they can never disagree.
+Falls back to the existing city-center distance whenever geolocation is
+denied/unavailable/not yet resolved, or for a remote/coordinate-less
+opportunity.
+
+**Mobile touch targets**: the new "Search this area" button and the "clear
+search area" link both meet the 44px minimum established in Batch 1 for
+this screen's tappable controls.
+
+**Verification**: `tsc --noEmit` clean; `eslint .` clean (one pre-existing,
+unrelated warning on `MfaEnrollment.tsx`'s `<img>` usage); `vitest run
+tests/unit tests/security` **94/94 passing** (30 new tests in
+`tests/unit/map-viewport.test.ts`, 8 new tests in `tests/unit/geo.test.ts`,
+existing suites unchanged). `npm run build` — see this batch's PR for the
+result.
+
+**Not done / explicitly out of scope for Batch 3**: radius-search UI beyond
+existing pan/zoom, geocoding/address entry, a second city, live/continuous
+geolocation tracking, Work Now V2, Events V2, Passport V2, Wallet.
