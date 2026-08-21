@@ -18,6 +18,7 @@ import {
   parseBoundsParam,
   parseMapLayerParam,
   serializeBoundsParam,
+  shouldResetSearchBaseline,
   shouldShowSearchThisArea,
   type MapBounds,
 } from "@/lib/map-viewport";
@@ -221,6 +222,29 @@ describe("URL param parsing: fails safe on invalid/stale/malformed input", () =>
   });
 });
 
+describe("shouldResetSearchBaseline: Batch 4's Clear Search Area baseline-reset decision", () => {
+  it("is true for an explicit clear (a real bounds box -> null)", () => {
+    expect(shouldResetSearchBaseline(BUFFALO_BOUNDS, null)).toBe(true);
+  });
+
+  it("is false on mount with no prior search (null -> null)", () => {
+    expect(shouldResetSearchBaseline(null, null)).toBe(false);
+  });
+
+  it("is false on mount with a restored URL search area (bounds -> the same bounds)", () => {
+    expect(shouldResetSearchBaseline(BUFFALO_BOUNDS, BUFFALO_BOUNDS)).toBe(false);
+  });
+
+  it("is false for a fresh commit (null -> bounds)", () => {
+    expect(shouldResetSearchBaseline(null, BUFFALO_BOUNDS)).toBe(false);
+  });
+
+  it("is false for a re-commit to a different area (bounds -> different bounds) — handleSearchThisArea already owns that baseline update", () => {
+    const elsewhere: MapBounds = { west: 10, south: 10, east: 11, north: 11 };
+    expect(shouldResetSearchBaseline(BUFFALO_BOUNDS, elsewhere)).toBe(false);
+  });
+});
+
 describe("filterMapItemsByBounds", () => {
   it("passes everything through when bounds is null (no search committed yet)", () => {
     const items = [mapItem({ id: "a", latitude: 42.88, longitude: -78.87 }), mapItem({ id: "b", latitude: 50, longitude: 50 })];
@@ -291,12 +315,11 @@ describe("filterOrganizationsByBounds: privacy contract holds under the new boun
     expect(filterOrganizationsByBounds([noCoords], BUFFALO_BOUNDS)).toHaveLength(1);
   });
 
-  it("bounds === null passes every organization through unfiltered (privacy gate is orthogonal to this function, not bypassed by it)", () => {
+  it("bounds === null still excludes hidden/remote organizations — the eligibility gate is unconditional, not just a bounds-comparison side effect (Batch 4 fix)", () => {
     const hidden = makeOrganization({ id: "hidden-org", location_visibility: "hidden" });
-    // This function alone does not apply the layer/eligibility gate — that
-    // is filterOrganizationsForLayer's job upstream — but callers apply
-    // both in sequence (see LiveBrowser.tsx), and effectiveOrganizationCoordinates
-    // (used internally above) always re-enforces the privacy rule anyway.
-    expect(filterOrganizationsByBounds([hidden], null)).toEqual([hidden]);
+    const remote = makeOrganization({ id: "remote-org", location_visibility: "remote" });
+    const eligible = makeOrganization({ id: "eligible-org", location_visibility: "exact" });
+    const result = filterOrganizationsByBounds([hidden, remote, eligible], null);
+    expect(result.map((o) => o.id)).toEqual(["eligible-org"]);
   });
 });
