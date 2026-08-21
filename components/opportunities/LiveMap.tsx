@@ -291,6 +291,20 @@ export function LiveMap({
 
   const handleLoad = useCallback(() => {
     setStatus("ready");
+    // Establish the reference baseline from the map's actual settled bounds
+    // as soon as it's ready to interact with — unconditionally, even when
+    // there's no restored search area to fit to. Without this, a user whose
+    // geolocation is slow/denied/unavailable (very common) would have their
+    // very first pan silently adopted as the new baseline by handleMoveEnd's
+    // own null-guard, instead of ever being compared against one — the
+    // opposite of "never from a user gesture" above. When a searchBounds
+    // restore *does* run below, its own fitBounds call fires a later,
+    // still-programmatic moveend that correctly supersedes this baseline.
+    const map = mapRef.current?.getMap();
+    if (map) {
+      const b = map.getBounds();
+      referenceBoundsRef.current = roundBounds({ west: b.getWest(), south: b.getSouth(), east: b.getEast(), north: b.getNorth() });
+    }
     // Restore a URL-persisted search area on first load — an explicit
     // prior "Search this area" is a stronger signal than the default
     // city-wide view, and this fitBounds call is itself the programmatic
