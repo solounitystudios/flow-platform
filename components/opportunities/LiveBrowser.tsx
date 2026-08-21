@@ -10,7 +10,7 @@ import { OrganizationCard } from "@/components/social/OrganizationCard";
 import { ChipToggleGroup, type ChipOption } from "@/components/ui/ChipToggleGroup";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { cn } from "@/lib/utils";
-import { distanceInfo, type UserLocation } from "@/lib/geo";
+import { distanceInfo, type DistanceInfo, type UserLocation } from "@/lib/geo";
 import type { MockEvent, MockOpportunity, MockOrganization } from "@/lib/types";
 // Type-only import — erased at compile time, so this never pulls
 // lib/data/discover.ts's server-only Supabase client into the client bundle.
@@ -38,14 +38,17 @@ import {
   type MapBounds,
 } from "@/lib/map-viewport";
 
-/** True user-relative distance for an opportunity card, or `null` when it
- * can't/shouldn't be overridden — no user location yet, remote (no single
- * point to measure to), or no coordinates at all. `null` tells
- * OpportunityCard to keep its existing server-computed (city-center)
- * `distance_mi`, never a fabricated number. */
-function opportunityDistanceOverrideMi(o: MockOpportunity, userLocation: UserLocation | null): number | null {
+/** True user-relative DistanceInfo (miles + source: "user") for an
+ * opportunity card, or `null` when it can't/shouldn't be overridden — no
+ * user location yet, remote (no single point to measure to), or no
+ * coordinates at all. `null` tells OpportunityCard to keep its existing
+ * server-computed (city-center) `distance_mi`, tagged `source:
+ * "city-center"` — never a fabricated "real" distance (Map V2 Batch 4:
+ * carries `source` alongside the number so the card can render the same
+ * source-aware wording LiveMap's pin detail sheet uses). */
+function opportunityDistanceOverride(o: MockOpportunity, userLocation: UserLocation | null): DistanceInfo | null {
   if (!userLocation || o.is_remote || o.lat === null || o.lng === null) return null;
-  return distanceInfo(o.lat, o.lng, userLocation).miles;
+  return distanceInfo(o.lat, o.lng, userLocation);
 }
 
 /**
@@ -155,10 +158,32 @@ export function LiveBrowser({
           className="min-w-0 flex-1"
         />
         <div className="flex shrink-0 gap-1 rounded-lg bg-ink-100 p-1 dark:bg-ink-800">
-          <button onClick={() => setView("map")} className={cn("rounded-md p-1.5", view === "map" && "bg-white shadow-sm dark:bg-ink-900")} aria-label="Map view">
+          {/* Map V2 Batch 4: min-h/min-w-11 (44px) touch target without
+              growing the visible control — padding + flex-centering hold
+              the same compact rounded-md square (~28px) it already had, the
+              icon stays h-4 w-4, only the tappable hit area grows. Matches
+              this screen's other 44px controls (ChipToggleGroup's chips,
+              "Search this area", "Clear search area"), all one size for
+              both mobile and desktop — none of those introduce a separate
+              sm: size, so this doesn't either. */}
+          <button
+            onClick={() => setView("map")}
+            className={cn(
+              "flex min-h-11 min-w-11 items-center justify-center rounded-md p-1.5",
+              view === "map" && "bg-white shadow-sm dark:bg-ink-900",
+            )}
+            aria-label="Map view"
+          >
             <MapIcon className="h-4 w-4" />
           </button>
-          <button onClick={() => setView("list")} className={cn("rounded-md p-1.5", view === "list" && "bg-white shadow-sm dark:bg-ink-900")} aria-label="List view">
+          <button
+            onClick={() => setView("list")}
+            className={cn(
+              "flex min-h-11 min-w-11 items-center justify-center rounded-md p-1.5",
+              view === "list" && "bg-white shadow-sm dark:bg-ink-900",
+            )}
+            aria-label="List view"
+          >
             <List className="h-4 w-4" />
           </button>
         </div>
@@ -186,9 +211,9 @@ export function LiveBrowser({
       )}
 
       {hasResults ? (
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {visibleOpportunities.map((o) => (
-            <OpportunityCard key={o.id} opportunity={o} distanceOverrideMi={opportunityDistanceOverrideMi(o, userLocation)} />
+            <OpportunityCard key={o.id} opportunity={o} distanceOverride={opportunityDistanceOverride(o, userLocation)} />
           ))}
           {visibleEvents.map((e) => (
             <EventCard key={e.id} event={e} />

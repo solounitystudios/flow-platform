@@ -76,6 +76,32 @@ export function roundBounds(b: MapBounds): MapBounds {
   return { west: round(b.west), south: round(b.south), east: round(b.east), north: round(b.north) };
 }
 
+/**
+ * Map V2 Batch 4 — pure decision for LiveMap's "Clear Search Area" baseline
+ * reset: given the previous and next `searchBounds` prop values on a given
+ * render, should the comparison baseline ("Search this area" is judged
+ * against this) be re-established from the map's live current viewport?
+ *
+ * True only for the explicit clear transition — a real, previously-set
+ * bounds box going to `null` (LiveBrowser's `clearSearchArea`). Deliberately
+ * false for:
+ * - mount (`previous === next`, including the common `null === null` case
+ *   and the restored-URL-bounds case) — handleLoad already establishes the
+ *   baseline on first ready, this must not duplicate or race that.
+ * - a commit or re-commit (`next !== null`) — handleSearchThisArea already
+ *   sets the baseline itself at the moment of that click; this effect has
+ *   nothing to add there.
+ *
+ * Extracted as a pure function (rather than inlined in the effect) so the
+ * decision itself is unit-testable without a component-rendering harness —
+ * see tests/unit/map-viewport.test.ts. The actual side effect (reading the
+ * map's live bounds via mapRef and writing referenceBoundsRef) still lives
+ * in LiveMap.tsx, since it depends on the maplibre instance.
+ */
+export function shouldResetSearchBaseline(previous: MapBounds | null, next: MapBounds | null): boolean {
+  return previous !== null && next === null;
+}
+
 // ── URL persistence ──────────────────────────────────────────────────────
 // Map V2's URL state is deliberately small and stable: the active layer and
 // the last explicitly-searched viewport. This is never raw device
@@ -155,20 +181,30 @@ export function filterEventsByBounds(events: MockEvent[], bounds: MapBounds | nu
  * itself, and re-applies the same hidden/remote eligibility gate inside
  * that helper — so this can never leak a hidden/remote organization into
  * the list, even if called directly without the layer filter having
- * already excluded it upstream. An organization with no eligible
- * coordinate is left in (never excluded by viewport), same reasoning as
- * opportunities/events above.
+ * already excluded it upstream, and even when `bounds` is null. An
+ * organization with no eligible coordinate is left in (never excluded by
+ * viewport), same reasoning as opportunities/events above.
+ *
+ * The eligibility check runs unconditionally, before the bounds check, and
+ * is NOT short-circuited by `bounds === null` — that early return only
+ * ever skipped the *spatial* comparison in earlier versions of this
+ * function; it must never skip the privacy gate too. This is
+ * defense-in-depth only: the real enforcement boundary for organization
+ * location privacy is the server-side `organizations_public` view (see
+ * supabase/migrations/20260820163442_organization_location_privacy.sql),
+ * which this function does not and cannot weaken.
  */
 export function filterOrganizationsByBounds(organizations: MockOrganization[], bounds: MapBounds | null): MockOrganization[] {
-  if (!bounds) return organizations;
   return organizations.filter((o) => {
     // Eligibility (hidden/remote) is checked unconditionally here, not just
     // via effectiveOrganizationCoordinates returning null — a hidden/remote
     // org must never pass through this function even if it's called in
     // isolation, before whatever layer filter would otherwise have removed
-    // it. "No usable coordinate" (eligible but ungeocoded) is a distinct
-    // case from "ineligible" — only the former is kept unconditionally.
+    // it, and even if bounds is null (no search committed yet). "No usable
+    // coordinate" (eligible but ungeocoded) is a distinct case from
+    // "ineligible" — only the former is kept unconditionally.
     if (!isPublicMapEligible(o)) return false;
+    if (!bounds) return true;
     const coords = effectiveOrganizationCoordinates(o);
     if (!coords) return true;
     return isWithinBounds(coords.lat, coords.lng, bounds);

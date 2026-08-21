@@ -60,6 +60,28 @@ export function distanceInfo(lat: number, lng: number, userLocation: UserLocatio
   return { miles: milesFromCityCenter(lat, lng), source: "city-center" };
 }
 
+/**
+ * Map V2 Batch 4: renders a DistanceInfo as the one piece of user-facing
+ * copy for it, shared verbatim by components/opportunities/OpportunityCard.tsx
+ * (results list) and components/opportunities/LiveMap.tsx's
+ * formatLocationWithDistance (pin detail sheet) — both surfaces must always
+ * agree, so this is the single place that decides the wording.
+ *
+ * `source: "user"` (a real one-shot geolocation fix) reads as the viewer's
+ * actual distance ("1.2 mi away"). `source: "city-center"` (geolocation
+ * denied/unavailable/not yet resolved) is explicitly qualified as an
+ * estimate ("~1.2 mi from city center") — never phrased so it could be
+ * mistaken for the viewer's true distance. Text-only distinction
+ * (no color/icon dependency) so it reads identically to a screen reader;
+ * the "~" is a plain glyph read by screen readers as "tilde" or (VoiceOver)
+ * often skipped/announced as "approximately" depending on verbosity
+ * settings, so the word "from city center" is what actually carries the
+ * meaning, not the glyph alone.
+ */
+export function formatDistanceLabel(info: DistanceInfo): string {
+  return info.source === "user" ? `${info.miles} mi away` : `~${info.miles} mi from city center`;
+}
+
 export function isUuid(value: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 }

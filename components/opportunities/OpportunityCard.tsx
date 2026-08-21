@@ -5,6 +5,7 @@ import type { MockOpportunity } from "@/lib/types";
 import { Badge } from "@/components/ui/Badge";
 import { formatCents, relativeTime } from "@/lib/utils";
 import { cn } from "@/lib/utils";
+import { formatDistanceLabel, type DistanceInfo } from "@/lib/geo";
 
 const TYPE_LABEL: Record<MockOpportunity["opportunity_type"], string> = {
   gig: "Gig",
@@ -16,7 +17,7 @@ const TYPE_LABEL: Record<MockOpportunity["opportunity_type"], string> = {
 export function OpportunityCard({
   opportunity,
   className,
-  distanceOverrideMi,
+  distanceOverride,
 }: {
   opportunity: MockOpportunity;
   className?: string;
@@ -27,11 +28,20 @@ export function OpportunityCard({
    * city-center basis computed server-side — see lib/data/opportunities.ts).
    * `undefined`/`null` (the default) keeps this card's existing behavior
    * completely unchanged — no caller is required to pass this.
+   *
+   * Map V2 Batch 4: carries a full `DistanceInfo` (miles + source), not a
+   * bare number, so this card can render the same source-aware wording
+   * (formatDistanceLabel) LiveMap's pin detail sheet uses — the two
+   * surfaces must never disagree about whether a distance is the viewer's
+   * real position or a city-center estimate. Omitting this prop falls back
+   * to `opportunity.distance_mi` tagged `source: "city-center"`, which is
+   * accurate: that field is always computed from the fixed city center,
+   * never the viewer's real position (see lib/data/opportunities.ts).
    */
-  distanceOverrideMi?: number | null;
+  distanceOverride?: DistanceInfo | null;
 }) {
   const spotsLeft = opportunity.slots - opportunity.slots_filled;
-  const distanceMi = distanceOverrideMi ?? opportunity.distance_mi;
+  const distance: DistanceInfo = distanceOverride ?? { miles: opportunity.distance_mi, source: "city-center" };
 
   return (
     <Link
@@ -60,7 +70,7 @@ export function OpportunityCard({
 
       <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-400">
         <span className="flex items-center gap-1">
-          <MapPin className="h-3 w-3" /> {opportunity.location_name} · {distanceMi} mi
+          <MapPin className="h-3 w-3" /> {opportunity.location_name} · {formatDistanceLabel(distance)}
         </span>
         <span className="flex items-center gap-1">
           <Clock className="h-3 w-3" /> {relativeTime(opportunity.starts_at)}

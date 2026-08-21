@@ -15,13 +15,13 @@ import type { Feature, FeatureCollection, Point } from "geojson";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { BadgeCheck, Briefcase, Building2, CalendarDays, DollarSign, HandHeart, Loader2, LocateFixed, MapPin as MapPinIcon, TriangleAlert, Users2, Zap } from "lucide-react";
 import { CITY_CENTER } from "@/lib/mock/data";
-import { distanceInfo, type UserLocation } from "@/lib/geo";
+import { distanceInfo, formatDistanceLabel, type UserLocation } from "@/lib/geo";
 import { formatCents, formatDateTime, relativeTime } from "@/lib/utils";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Badge } from "@/components/ui/Badge";
 import { DetailSheet, type DetailSheetAction } from "@/components/ui/DetailSheet";
 import { MAP_LAYER_EMPTY_COPY, type MapEntityType, type MapItem, type MapLayer } from "@/lib/map-selectors";
-import { roundBounds, shouldShowSearchThisArea, type MapBounds } from "@/lib/map-viewport";
+import { roundBounds, shouldResetSearchBaseline, shouldShowSearchThisArea, type MapBounds } from "@/lib/map-viewport";
 import type { OpportunityType } from "@/lib/types";
 
 /** Raw opportunity-type label for the detail sheet's type badge — kept
@@ -74,15 +74,17 @@ function displayBucketFor(item: MapItem, layer: MapLayer): MapEntityType | "work
   return layer === "work_now" ? "work_now" : item.entityType;
 }
 
-/** "City, State · 2.1 mi" (or just "2.1 mi" if city/state are missing) for
- * the pin detail sheet's location line. Distance is real user-relative
- * distance when `userLocation` is available, city-center fallback
- * otherwise — see lib/geo.ts's distanceInfo. Every MapItem is guaranteed a
- * real latitude/longitude (the selectors that build MapItem[] never
- * fabricate one), so this never needs a "no distance" branch. */
+/** "City, State · 2.1 mi away" (real geolocation) or "City, State · ~2.1 mi
+ * from city center" (fallback) — or just the distance label alone if
+ * city/state are missing — for the pin detail sheet's location line.
+ * Wording comes from lib/geo.ts's formatDistanceLabel (shared verbatim with
+ * OpportunityCard's results-list distance so the two surfaces never
+ * disagree about source). Every MapItem is guaranteed a real
+ * latitude/longitude (the selectors that build MapItem[] never fabricate
+ * one), so this never needs a "no distance" branch. */
 function formatLocationWithDistance(item: MapItem, userLocation: UserLocation | null): string {
   const place = [item.city, item.state].filter(Boolean).join(", ");
-  const milesLabel = `${distanceInfo(item.latitude, item.longitude, userLocation).miles} mi`;
+  const milesLabel = formatDistanceLabel(distanceInfo(item.latitude, item.longitude, userLocation));
   return place ? `${place} · ${milesLabel}` : milesLabel;
 }
 
@@ -163,6 +165,10 @@ export function LiveMap({
   const referenceBoundsRef = useRef<MapBounds | null>(searchBounds);
   const currentBoundsRef = useRef<MapBounds | null>(searchBounds);
   const hasFlownToUserRef = useRef(false);
+  // Tracks the searchBounds value seen on the previous render, purely so
+  // the effect below can detect an explicit clear (bounds -> null) instead
+  // of reacting to mount or a fresh commit — see shouldResetSearchBaseline.
+  const prevSearchBoundsRef = useRef<MapBounds | null>(searchBounds);
 
   const itemsByBucket = useMemo(() => {
     const map = new Map<MapEntityType | "work_now", MapItem[]>();
@@ -204,6 +210,30 @@ export function LiveMap({
     // guard above), matching the existing "one-shot" geolocation posture.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userLocation]);
+
+  // Map V2 Batch 4: LiveBrowser's "Clear search area" restores the full
+  // result set and drops the URL bounds param, but nothing previously told
+  // this component's internal comparison baseline (referenceBoundsRef)
+  // about it — the next "Search this area" visibility check could still be
+  // judged against the old, now-cleared committed area instead of the
+  // map's actual current viewport. shouldResetSearchBaseline isolates the
+  // "was this an explicit clear?" decision (bounds -> null, not mount, not
+  // a fresh commit) as a pure, unit-testable function; this effect supplies
+  // the one piece that actually needs the live map instance — reading its
+  // current bounds and writing them as the new baseline, exactly the same
+  // shape of update handleLoad already does on first ready.
+  useEffect(() => {
+    const previous = prevSearchBoundsRef.current;
+    prevSearchBoundsRef.current = searchBounds;
+    if (!shouldResetSearchBaseline(previous, searchBounds)) return;
+    const map = mapRef.current?.getMap();
+    if (!map) return;
+    const b = map.getBounds();
+    const current = roundBounds({ west: b.getWest(), south: b.getSouth(), east: b.getEast(), north: b.getNorth() });
+    referenceBoundsRef.current = current;
+    currentBoundsRef.current = current;
+    setCanSearchThisArea(false);
+  }, [searchBounds]);
 
   // "Search this area": every settle of the camera (moveend fires for both
   // real user gestures and programmatic flyTo/fitBounds calls) records the
