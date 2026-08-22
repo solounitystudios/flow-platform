@@ -206,6 +206,16 @@ export function LiveMap({
   const referenceBoundsRef = useRef<MapBounds | null>(searchBounds);
   const currentBoundsRef = useRef<MapBounds | null>(searchBounds);
   const hasFlownToUserRef = useRef(false);
+  // Set immediately before the geolocation flyTo below, cleared the moment
+  // handleMoveEnd consumes the moveend that flyTo produces. Exists solely to
+  // stop that one settle's coordinates (the user's actual device location,
+  // at USER_LOCATION_ZOOM) from ever reaching onViewportChange — and
+  // therefore LiveBrowser's URL persistence — since that would silently leak
+  // precise geolocation into a shareable, loggable URL. Every other settle
+  // (initial load, a restored search area's fitBounds, and every real user
+  // gesture) is unaffected: this ref is only ever set right before that one
+  // flyTo call.
+  const isFlyingToUserRef = useRef(false);
   // Captured once, from the very first render's `viewport` prop (i.e.
   // whatever LiveBrowser parsed out of the URL on mount, before this
   // component has ever reported a settle back up) — never re-derived from
@@ -255,7 +265,14 @@ export function LiveMap({
     hasFlownToUserRef.current = true;
     if (searchBounds) return;
     if (hadRestoredViewportRef.current) return;
-    mapRef.current?.flyTo({
+    const map = mapRef.current;
+    if (!map) return;
+    // Set only once the flyTo call itself is actually about to fire — if
+    // mapRef.current were ever null here (map not yet mounted), leaving this
+    // ref true with no corresponding moveend to clear it would wrongly
+    // suppress persistence for whatever real settle came next.
+    isFlyingToUserRef.current = true;
+    map.flyTo({
       center: [userLocation.lng, userLocation.lat],
       zoom: USER_LOCATION_ZOOM,
       duration: 1200,
@@ -312,9 +329,20 @@ export function LiveMap({
       // search-baseline logic below (which deliberately treats those two
       // cases differently for a different purpose — see the comments on
       // that logic). Persisting "wherever the camera actually is now" is
-      // unconditional.
+      // unconditional — except for the one settle produced by the
+      // geolocation flyTo above, whose coordinates are the user's actual
+      // device location and must never reach onViewportChange (and, via
+      // LiveBrowser, the URL). That settle is still a programmatic move
+      // (evt.originalEvent is undefined for it, same as any other flyTo/
+      // fitBounds), so the search-baseline logic below still runs and
+      // behaves exactly as it already does for any other programmatic
+      // settle — only the persistence call is skipped, once.
+      const isUserLocationFlySettle = isFlyingToUserRef.current;
+      isFlyingToUserRef.current = false;
       const center = map.getCenter();
-      onViewportChange(roundViewport({ lat: center.lat, lng: center.lng, zoom: map.getZoom(), bearing: map.getBearing(), pitch: map.getPitch() }));
+      if (!isUserLocationFlySettle) {
+        onViewportChange(roundViewport({ lat: center.lat, lng: center.lng, zoom: map.getZoom(), bearing: map.getBearing(), pitch: map.getPitch() }));
+      }
 
       if (!evt.originalEvent) {
         referenceBoundsRef.current = current;

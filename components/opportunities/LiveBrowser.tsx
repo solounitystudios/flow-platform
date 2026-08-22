@@ -307,20 +307,22 @@ export function LiveBrowser({
           title={searchBounds ? "Nothing in this area yet." : MAP_LAYER_EMPTY_COPY[layer]}
           body={searchBounds ? "Try clearing the search area or panning the map somewhere else and searching again." : undefined}
           // Map V2 Batch 6 — mirrors LiveMap's own in-map empty state action
-          // for consistency, but scoped narrower here: only offer "Clear
-          // search area" when a searchBounds commit is actually the reason
-          // the grid is empty (the button's job is undoing that specific
-          // action, same as the "Showing results for..." banner above). The
-          // plain-layer-empty case (MAP_LAYER_EMPTY_COPY[layer]) already has
-          // its own explanatory copy and, in map view, LiveMap's broader
-          // "Clear filters and search again" action to recover from — no
-          // second, overlapping button invented here for that case.
+          // for consistency: "Clear search area" undoes a committed
+          // searchBounds specifically (same as the "Showing results for..."
+          // banner above), while the plain-layer-empty case falls back to
+          // the same `resetFilters` LiveMap's in-map empty state already
+          // uses — this only matters in list view, since map view already
+          // renders LiveMap's own in-map empty state with that same action.
           action={
             searchBounds ? (
               <Button type="button" size="md" variant="outline" onClick={clearSearchArea}>
                 Clear search area
               </Button>
-            ) : undefined
+            ) : (
+              <Button type="button" size="md" variant="outline" onClick={resetFilters}>
+                Clear filters and search again
+              </Button>
+            )
           }
         />
       )}
