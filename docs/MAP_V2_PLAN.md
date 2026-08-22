@@ -31,6 +31,8 @@ Everything below is solid and should be **extended, not replaced**:
 
 ## Layer Contract
 
+*(Historical — this table reflects the pre-Batch-1 planning snapshot, i.e. what was true before any Map V2 work shipped. Batch 1 implemented the canonical model this table describes as a gap. See [Map V2 Layer Contract (Current, Post-Batch 6)](#map-v2-layer-contract-current-post-batch-6) near the end of this document for what's actually implemented today.)*
+
 The requested flat model — **All / Work Now / Gigs / Jobs / Volunteer / Events / Businesses** — does **not** exist today in this exact shape. Current reality:
 
 | Requested layer | Current source | Current map-layer reality |
@@ -415,3 +417,591 @@ city, live/continuous geolocation tracking, exact zoom persistence,
 map/list mode persistence, Work Now V2, Events V2, Passport V2, Wallet) —
 this batch closed out review follow-ups only, it did not open any new
 scope.
+
+## Batch 5/6 Status — View/Camera Persistence, URL Versioning, Recovery Polish
+
+Scope: the two items every prior batch explicitly deferred — view-mode
+(map/list) persistence and live-camera (center/zoom/bearing/pitch)
+persistence — plus a URL state-version marker, in-map empty/error recovery
+actions, a lightweight results-count line, 44px touch targets on the map's
+built-in zoom/geolocate controls, and a pure `resolveSelectedMapItem`
+extraction. Shipped as PR #11 in two commits: the feature work itself
+(`1c14135`), then a QA-caught privacy fix (`47da3d5`) before merge — both
+included in the same PR since the fix was required before the feature
+could ship at all.
+
+**View mode + live camera persistence** (`lib/map-viewport.ts`,
+`LiveBrowser.tsx`): `view` (`"map" | "list"`) and `vp` (rounded
+lat/lng/zoom/bearing/pitch, same ~11m rounding as search-area bounds) join
+the existing `layer`/`b` params, all still written via
+`window.history.replaceState` (no new back-stack entries).
+`resolveInitialCameraSource` decides, on load, whether to seed the camera
+from a restored search area, a restored raw viewport, or the existing
+city-center default — a committed search area takes priority over a bare
+viewport when both are present.
+
+**State-version marker** (`MAP_STATE_VERSION` / `MAP_VERSION_PARAM = "v"`):
+a URL with no `v` param (every pre-existing shared/bookmarked `/live` link)
+is still trusted; a URL whose `v` doesn't match the current version causes
+`b`/`view`/`vp` to fall back to defaults rather than being mis-parsed under
+a future, incompatible shape. `layer` is not version-gated (its value space
+hasn't changed shape).
+
+**Selected-item recovery** (`resolveSelectedMapItem`): the exact lookup
+`LiveMap.tsx` already used inline (`items.find((i) => i.id === selectedId)
+?? null`) extracted into a pure, unit-tested function — not new behavior,
+just made independently testable.
+
+**Recovery polish**: a map-tile/load-error "Try again" action (remounts
+`MapGL` via a bumped `mapInstanceKey`); an in-map "Clear filters and search
+again" action (`onResetFilters`) for the zero-results case with no search
+area committed; the same action now also covers the equivalent list-view
+empty state (previously had no action at all — closed in this same pass); a
+"N results" line above the grid (`aria-live="polite"`, hidden on small
+screens while in map view).
+
+**Touch targets**: the map/list toggle buttons already met 44px as of Batch
+4; this batch adds a scoped CSS override
+(`.flow-live-map-controls .maplibregl-ctrl-group button`) forcing
+maplibre's own built-in `NavigationControl`/`GeolocateControl` buttons from
+their default ~29px up to 44px.
+
+**Privacy fix bundled into this same PR** (`47da3d5`): the initial
+persistence work introduced a real regression — the one-shot geolocation
+"Locate Me" `flyTo`'s resulting camera settle was being reported through
+the same `onViewportChange` path as any real user pan/zoom, so it got
+persisted into the `vp` URL param — the user's device location, at ~11m
+precision, silently entering a shareable/loggable/reload-persistent URL.
+Caught by the `qa-security` review gate before merge, not after. Fixed with
+a synchronous ref (`isFlyingToUserRef`) set immediately before that one
+`flyTo` call and read-then-cleared at the top of `handleMoveEnd`,
+suppressing only that one settle's `onViewportChange` call — every other
+settle (initial load, a restored search area, and every real user gesture)
+is unaffected. Re-verified against maplibre-gl's own event-ordering source
+to confirm an interrupted fly-to (a user grabbing the map mid-animation)
+can't cause a real gesture's settle to be wrongly suppressed. See Map V2
+Privacy Invariants below — this fix is now load-bearing for invariant #2.
+
+**Verification**: `tsc --noEmit` clean; `eslint .` clean (one pre-existing,
+unrelated warning on `MfaEnrollment.tsx`'s `<img>` usage); `vitest run
+tests/unit tests/security` **136/136 passing**; `npm run build` succeeded
+locally and GitHub Actions CI (`typecheck, lint, test, build`) reported
+green on PR #11. Independently reviewed by both `release-manager` (PASS)
+and `qa-security` (initial FAIL on the privacy regression above, PASS on
+re-verification after the fix) before merge.
+
+**Batch 5/6 shipped**: PR #11, merged to `main` at commit
+`5d05be9eef48af4634c0338a12eb60ce7e3befbd`.
+
+**Not done / explicitly out of scope for Batch 5/6**: everything every
+prior batch already deferred (radius-search UI beyond pan/zoom,
+geocoding/address entry, a second city, live/continuous geolocation
+tracking, Work Now V2, Events V2, Passport V2, Wallet), plus: a standalone
+"Reset map" button, new analytics infrastructure, browser E2E test
+infrastructure, an application-wide accessibility rewrite, and fixing the
+pre-existing layer-toggle pin re-selection quirk (confirmed to predate this
+batch — see Accepted Limitations Register below). See the Decision Log
+below for why each was deliberately deferred rather than forgotten.
+
+---
+
+# Map V2 Canonical Reference (Post-Batch 6)
+
+Everything below this line is a living reference to how Map V2 actually
+works today, not a chronological batch record. Update these sections in
+place as future batches land; keep the batch-status sections above as
+historical record only.
+
+## Map V2 Architecture Snapshot
+
+High-level data flow, current as of Batch 5/6:
+
+```
+discovery sources (getOpenOpportunities / getUpcomingEvents / getDiscoverOrganizations)
+  → lib/map-selectors.ts: normalized MapItem[] (entityType, isWorkNow, coordinates, layer-safe fields)
+  → layer/filter selection (MapLayer, one model driving both map and list — LiveBrowser)
+  → searched viewport (lib/map-viewport.ts: committed search-area bounds, restored from/persisted to URL)
+  → LiveMap.tsx: MapLibre rendering + per-entity-type clustering
+  → selected entity (resolveSelectedMapItem — transient, not URL-persisted)
+  → DetailSheet
+  → detail-page navigation (real page nav, not intercepted)
+  → state restoration on return (URL-persisted layer/bounds/view/viewport restore the map; selection does not restore, by design — see State Ownership Matrix)
+```
+
+Responsibilities:
+
+- **Discovery data fetchers** (`getOpenOpportunities`, `getUpcomingEvents`,
+  the discover-organizations query) — own fetching public-safe records
+  server-side; the map/list layer never queries Supabase directly.
+- **`lib/map-selectors.ts`** — the one normalization layer. Pure,
+  dependency-free, privacy-aware (never fabricates a coordinate, enforces
+  `organizations.location_visibility` a second time for demo-mode parity
+  with the DB view). Owns the `MapEntityType`/`MapLayer`/`isWorkNow` model
+  and `mapItemMatchesLayer`.
+- **`lib/map-viewport.ts`** — the one place that owns bounds/viewport math,
+  URL param parse/serialize, the version marker, and
+  `resolveSelectedMapItem`. Pure, dependency-free, extensively unit-tested.
+- **`LiveMap.tsx`** — MapLibre rendering, clustering, camera control
+  (including the one-shot geolocation fly-to and its privacy guard), pin
+  selection, empty/error recovery UI for the map itself.
+- **`LiveBrowser.tsx`** — owns the URL-sync effect (the only place that
+  calls `window.history.replaceState` for this route), the layer/list
+  filter reconciliation, the results-count line, and the below-map card
+  grid/empty state.
+- **`components/ui/DetailSheet.tsx`** — the shared pin-detail primitive —
+  mobile bottom sheet, desktop floating card, focus trap, Escape-to-close.
+
+This is a snapshot of contracts and invariants, not a line-by-line
+internals map — expect implementation details inside each file to keep
+evolving; the contracts above are what future work should preserve.
+
+## Map V2 URL State Contract
+
+`/live`'s URL is the only persisted-state surface Map V2 has (no
+server-side session, no database table for "last map view"). Everything
+below is read by `LiveBrowser.tsx` on mount via `useSearchParams()` and
+kept in sync via `window.history.replaceState` (never `pushState` — see
+Search This Area Specification for why).
+
+**Persisted (shareable, safe to log, safe to bookmark):**
+
+| Param | Meaning | Default when absent |
+|---|---|---|
+| `layer` | Active `MapLayer` (`all`/`work_now`/`gig`/`job`/`volunteer`/`event`/`business`) | `all` |
+| `b` | Committed search-area bounds (rounded to ~11m) | none (no search area committed) |
+| `view` | `map` or `list` | `map` |
+| `vp` | Live camera: lat/lng/zoom/bearing/pitch (rounded to ~11m for position) | none (falls back to `b`, then the city-center default) |
+| `v` | State-version marker (`MAP_STATE_VERSION`, currently `1`) | treated as version 1 / trusted |
+
+**Version/backward-compatibility behavior**: a URL missing `v` entirely
+(every link generated before this marker existed, and every link where
+nothing was ever customized) is trusted as-is. A URL whose `v` doesn't
+match the current `MAP_STATE_VERSION` causes `b`, `view`, and `vp` to fall
+back to their defaults rather than being parsed under a shape they may no
+longer match — `layer`'s parser is not version-gated since its value space
+hasn't changed shape. This is a single integer bump, not a migration
+framework — bump it only when an incompatible shape change to `b`/`view`/`vp`
+actually ships.
+
+**Malformed-value fallback behavior**: every parser (`parseMapLayerParam`,
+`parseBoundsParam`, `parseMapViewParam`, `parseViewportParam`) rejects
+unrecognized/out-of-range/non-numeric input and returns the same safe
+default it would return for a missing param — never throws, never produces
+a partial/inconsistent state. Covered by adversarial unit tests (garbage
+strings, wrong field counts, `NaN`/`Infinity`, out-of-range lat/lng).
+
+**Stale selected-entity behavior**: the selected entity is NOT part of the
+URL (see State Ownership Matrix) — there is no "selected id" param to go
+stale. If one were ever added, it would need the same recovery guarantee
+`resolveSelectedMapItem` already provides for the in-session case: an id no
+longer present in the current `items` resolves to no selection, never a
+crash or a mismatched sheet.
+
+**History behavior**: every param above is written via `replaceState`,
+never `pushState` — panning, zooming, toggling a layer, or switching view
+mode never creates a new browser-history entry. This is deliberate: it
+means the browser Back button, after visiting `/live`, returns to wherever
+the user was *before* `/live`, not through a chain of intermediate map
+states.
+
+**Intentionally NOT persisted, ever:**
+
+- **Exact device-derived user coordinates.** The one-shot geolocation
+  call's result lives in `LiveBrowser`/`LiveMap` component state only and
+  is never written to a URL param. The camera settle produced by flying to
+  that location is explicitly suppressed from the `vp`-persistence path
+  (`isFlyingToUserRef` in `LiveMap.tsx`, added in the `47da3d5` privacy
+  fix) — this is the one place a device-derived coordinate could have
+  leaked into `vp`, and it's the one place explicitly guarded against it.
+  If a future change ever adds a new geolocation-driven camera movement, it
+  must apply the same "suppress this specific settle from
+  `onViewportChange`" pattern, not just trust that geolocation itself
+  "isn't in the URL."
+- Private profile/home location.
+- Auth/session information (no session/auth data touches this route's URL
+  at all).
+- Private organization membership information.
+- Secrets/tokens (none exist on this route to begin with).
+
+## Map V2 Privacy Invariants
+
+Permanent engineering rules — any future Map V2 (or Map V3) change must
+preserve these, not just avoid breaking the current tests:
+
+1. **Device location is ephemeral user-context data.** It exists only to
+   compute a distance or center a one-shot fly-to; it is never a piece of
+   state the map "remembers" beyond the current page session.
+2. **Exact device-derived coordinates must not be serialized into
+   shareable URLs.** Any code path that turns a geolocation result into a
+   camera movement must explicitly prevent that movement's resulting
+   settle from reaching URL persistence — see the URL State Contract above
+   and the `47da3d5` fix for the concrete pattern.
+3. **Public pins must originate only from data explicitly safe for public
+   discovery** — `getOpenOpportunities`/`getUpcomingEvents`
+   (status-filtered) and `getDiscoverOrganizations`/`organizations_public`
+   (never the raw `organizations` table for public-facing output).
+4. **Private profile/home location must never be treated as public map
+   location.** Nothing in this codebase currently attempts to map a user's
+   profile/home address; if that ever changes, it must go through an
+   equivalent privacy-visibility gate to `organizations.location_visibility`,
+   never a raw coordinate pass-through.
+5. **Remote opportunities must not receive fake physical coordinates.** A
+   coordinate-less/remote item renders no pin — never a city-center or
+   `0,0` guess.
+6. **Invalid coordinates must fail safely and must never fall back to
+   `0,0`.** Bounds/viewport/coordinate validation rejects `null`/`NaN`/
+   out-of-range values and excludes the item from map rendering rather
+   than plotting a default point.
+7. **Location permission denial must not break map usage.** Geolocation is
+   one-shot and best-effort; every distance calculation has a
+   non-geolocation fallback (`distanceInfo`'s `"city-center"` source), and
+   the map itself never blocks on a permission prompt.
+
+## Map V2 Layer Contract (Current, Post-Batch 6)
+
+Supersedes the pre-Batch-1 planning table earlier in this document — that
+table describes what was requested before Batch 1 shipped; this table
+describes what's actually implemented today, verified against
+`lib/map-selectors.ts`.
+
+| Layer (`MapLayer`) | Source entity | Coexistence | Coordinate requirement | Status |
+|---|---|---|---|---|
+| `all` | — | Default; every other layer active simultaneously | n/a | Live |
+| `work_now` | `opportunities` where `urgent` (computed: on-site + starts <6h) | Cross-cutting — an item can be both `work_now` and its own `entityType` layer | Same as its underlying opportunity | Live |
+| `gig` | `opportunities` where `opportunity_type IN ('gig','project')` | Own layer | lat/lng, or excluded from the map (remains in list) | Live |
+| `job` | `opportunities` where `opportunity_type = 'job'` | Own layer | Same | Live |
+| `volunteer` | `opportunities` where `opportunity_type = 'volunteer'` | Own layer | Same | Live |
+| `event` | `events` where `status = 'published'` | Own layer | Same | Live |
+| `business` | `organizations_public` where `location_visibility IN ('exact','approximate')` | Own layer | Requires the organization to have geocoded lat/lng AND a non-`hidden`/non-`remote` visibility setting | **Honestly enabled, data-dependent** — the code path is fully correct end-to-end, but will show few or no pins in practice until organizations actually have coordinates set and a non-hidden visibility. This is a data-completeness fact, not a bug or a stub. |
+
+**Layer toggling and selection**: switching the active layer re-filters
+`items` via `mapItemMatchesLayer`; if the currently selected entity no
+longer matches the new layer, `resolveSelectedMapItem` returns `null` on
+the next render and the detail sheet closes — it does not keep showing a
+pin that's no longer visible. See the Accepted Limitations Register for the
+one case this does NOT fully cover (re-enabling a layer that makes a
+previously-deselected item visible again).
+
+**Disabled/missing data behavior**: a layer with zero currently-eligible
+items renders the map's empty state (with a "Clear filters and search
+again" recovery action), not a blank map with no explanation.
+
+## Search This Area — Specification
+
+Product/engineering contract for the "Search this area" control:
+
+1. User moves or zooms the map (pan, zoom, or drag).
+2. The currently searched result set (whatever bounds were last explicitly
+   committed, or none) stays stable through ordinary movement — moving the
+   camera never silently refetches or reshuffles results.
+3. Once the live camera has diverged meaningfully from the last
+   searched/reference bounds, the "Search this area" button appears.
+4. The user explicitly taps/clicks it.
+5. The current live viewport becomes the new committed search area, which
+   is what actually filters the result set (map pins and the card list
+   identically — see State Ownership Matrix).
+6. The result set updates to whatever falls inside the new committed
+   bounds (an item with no coordinate at all is never spatially filtered
+   either way).
+7. The button disappears (the new bounds become the new baseline) until
+   the camera diverges meaningfully again.
+
+**Why not auto-refetch on every movement**: continuous refetch-on-pan
+would make results feel unstable/flickery mid-gesture, hide the user's own
+search intent behind a moving target, and cost a query per frame of
+movement at real usage volume. An explicit commit step is deliberate,
+small friction that keeps the result set predictable.
+
+**Threshold behavior (conceptual, not contractual)**: "meaningful
+divergence" is computed as an intersection-over-union overlap ratio
+between the live camera bounds and the reference bounds
+(`lib/map-viewport.ts`) — below a threshold, the button appears. The exact
+numeric threshold is an implementation tuning value, not a product
+contract; it may be adjusted without this document needing to change, as
+long as the qualitative behavior (stable until meaningfully diverged,
+explicit user commit, no auto-refetch) is preserved.
+
+**Programmatic vs. gesture moves**: initial page load, restoring a
+URL-persisted search area, and the geolocation fly-to are all programmatic
+settles — none of them ever surface the button; only a genuine user-driven
+pan/zoom/drag can. This is also the same signal the geolocation-URL
+privacy guard piggybacks on (see URL State Contract) — the two concerns
+are related but distinct: one governs when the button shows, the other
+governs what gets persisted to the URL.
+
+**Client-side filtering vs. server responsibility**: the server query
+fetches the full public-safe candidate set once (no per-pan server
+round-trip); bounds filtering happens entirely client-side against that
+already-fetched set. This is a single-city-scale design choice — a
+materially larger candidate set would need a server-side spatial query
+instead, which is out of scope for Map V2 (see Map V3 Boundary).
+
+**Persistence relationship between searched viewport and camera
+viewport**: committed search bounds (`b`) and the live camera (`vp`) are
+persisted independently and can diverge — after committing a search area,
+the user can keep panning/zooming without re-committing, and `vp` tracks
+that live camera while `b` stays put until the next explicit commit. On
+reload, `resolveInitialCameraSource` prefers `b` over `vp` when both are
+present (a committed search area is a stronger signal of intent than
+wherever the camera happened to be).
+
+## Map V2 State Ownership Matrix
+
+| State | Category | Owner | Notes |
+|---|---|---|---|
+| Active layer (`layer`) | URL / shareable | `LiveBrowser` (URL-sync effect) | Drives both map and list identically |
+| Committed search-area bounds (`b`) | URL / shareable | `LiveBrowser` | Privacy-safe (rounded, only ever narrows already-public/geocoded items) |
+| View mode, map vs. list (`view`) | URL / shareable | `LiveBrowser` | |
+| Live camera — center/zoom/bearing/pitch (`vp`) | URL / shareable, with one exception | `LiveBrowser`/`LiveMap` | The one settle produced by the geolocation fly-to is explicitly excluded — see Privacy Invariants #2 |
+| State-version marker (`v`) | URL / shareable | `lib/map-viewport.ts` | Governs `b`/`view`/`vp` parsing only |
+| Selected entity | Transient client state | `LiveMap` (`useState`) | **Not URL-persisted** — deep-linking directly to a specific open pin is not currently supported; resolved defensively every render via `resolveSelectedMapItem` |
+| Detail-sheet open/closed | Transient client state | `LiveMap` (derived from selected entity) | Not a deep-linkable concept independent of the selection |
+| Hover/focus state | Transient client state (DOM/React only) | Component-local | Never persisted anywhere |
+| Loading/error/empty UI state | Transient client state | `LiveMap`/`LiveBrowser` | Recomputed every render from data + params, never itself persisted |
+| Map interaction state (mid-drag/mid-zoom) | Transient client state | MapLibre/`react-map-gl` internal | Only the settled result crosses into persistence |
+| Exact device geolocation | Ephemeral private device state | `LiveBrowser`/`LiveMap` component state | One-shot, best-effort, **never persisted anywhere**, never in a URL, never in `localStorage`/`sessionStorage` |
+| Geolocation permission result | Ephemeral private device state | Browser API + component state | Not tracked/stored beyond the current page load |
+| Current device-derived distance origin | Ephemeral private device state | `lib/geo.ts` (`distanceInfo`) | Tagged `source: "user" \| "city-center"` so the UI never conflates the two |
+| Public opportunity/event/business coordinates | Server/database state | Supabase (`opportunities`, `events`, `organizations`/`organizations_public`) | The only durable, cross-session, cross-user source of truth for map pins |
+| Publish/status information (`status`, `location_visibility`) | Server/database state | Same tables | Read-only from the map's perspective — the map never writes back to these |
+| Discovery records themselves | Server/database state | Same tables, via the discovery data fetchers | |
+
+There is no `localStorage`/`sessionStorage` involvement anywhere in Map V2
+today — every persisted-state example above is URL-based. If a future
+batch adds client-storage-based persistence, it should be added as its own
+row here, not silently assumed under "URL state."
+
+## Map Entity Contract (`MapItem`)
+
+The one normalization layer every discoverable thing on the map goes
+through (`lib/map-selectors.ts`). Conceptual contract, not a schema:
+
+- **Stable ID** — unique within its entity type.
+- **Entity type** — `"gig" | "job" | "volunteer" | "event" | "business"`.
+- **`isWorkNow`** — cross-cutting boolean, independent of entity type (an
+  item is never forced to choose between "this is a job" and "this is
+  Work Now").
+- **Display title/name.**
+- **Public coordinates** — already privacy-redacted for organizations (see
+  Privacy Invariants). Never fabricated.
+- **Layer** — derived via `mapItemMatchesLayer`, not a stored field — a
+  `MapItem` doesn't need to know which layer it belongs to; the matcher
+  computes it from entity type/`isWorkNow`.
+- **Public route/detail destination.**
+- **Status/availability** — surfaced per entity type (e.g. verified,
+  urgency, positions-remaining) rather than one generic status enum.
+- **Optional user-relative distance** — not stored on the item itself;
+  computed on demand via `distanceInfo()`, always tagged with its source
+  (`"user"` or `"city-center"`).
+- **Primary action** — one CTA per entity type ("View & Apply" / "View &
+  Register" / "View organization"), resolved by the consuming component,
+  not stored on the item.
+
+**Coordinate validation expectations:**
+- Latitude must be within `-90..90`, longitude within `-180..180`.
+- `null`/`undefined`/`NaN`/non-numeric-string values are rejected, not
+  coerced.
+- `0,0` is never used as a fallback for a missing coordinate.
+- An item failing validation is excluded from map rendering only — it
+  remains available through non-map surfaces (its own detail page, the
+  card list where applicable) exactly as before.
+
+This is a conceptual/behavioral contract, not a proposal to formalize
+`MapItem` as a shared database schema — it stays a TypeScript-only
+normalization layer, deliberately.
+
+## Map V2 Regression-Protection Notes
+
+Areas future changes to this surface should re-verify, with where existing
+coverage lives:
+
+- **Malformed URL state** — `tests/unit/map-viewport.test.ts` (adversarial
+  input cases for every parser).
+- **Missing/old version marker** — same file, version-gated parser tests.
+- **Selected item no longer existing** — `resolveSelectedMapItem` tests,
+  same file.
+- **Selected entity filtered out by a layer change** — covered
+  conceptually by the same `resolveSelectedMapItem` contract (it re-runs
+  against whatever the current item list is); no dedicated "layer change
+  deselects" test exists as a named case — worth closing if this behavior
+  regresses.
+- **Invalid coordinates** — bounds/viewport validation tests,
+  `tests/unit/map-selectors.test.ts`'s coordinate-rejection cases.
+- **Duplicate entity results** — no dedicated regression test exists for
+  this specifically; the invariant currently holds structurally (each
+  underlying entity produces exactly one `MapItem`), not via an explicit
+  dedup test.
+- **Search This Area threshold behavior** — overlap/baseline-reset tests,
+  `tests/unit/map-viewport.test.ts`.
+- **State restoration** — parser/`resolveInitialCameraSource` tests, same
+  file.
+- **Geolocation denial** — no automated test (geolocation itself isn't
+  unit-testable without a browser); covered by code review only —
+  `distanceInfo`'s fallback path and the map's non-blocking posture.
+- **Device-location privacy** — the fly-to persistence guard is verified
+  by code trace/review (see Batch 5/6 Status and the `47da3d5` commit), not
+  by an automated test — this repo has no way to simulate a real
+  `flyTo`/`moveend` sequence in `vitest` without a browser/map-rendering
+  harness.
+- **Hydration** — no automated test; verified by code review (state
+  initializers read `useSearchParams()` consistently on server and
+  client, no `window`/storage access during render).
+- **Persistence write frequency** — verified by code review (writes happen
+  on settled camera events and explicit user actions, never on raw
+  drag/zoom ticks); no dedicated test asserting call counts.
+- **Map/list result consistency** — both derive from the same filtered
+  arrays in `LiveBrowser`; no dedicated cross-check test, this is
+  structural.
+
+Where this list says "no dedicated test," that's a real, honestly-reported
+gap — not a claim the behavior is untested in every sense (most are still
+covered by code review/tracing at merge time), just that there's no
+`vitest` assertion a future refactor would trip if it broke.
+
+## Accepted Limitations Register
+
+1. **Browser E2E coverage.** No automated browser E2E coverage currently
+   verifies Back/forward map-state restoration, because the repository
+   does not currently have browser E2E infrastructure (only `vitest`
+   unit/security tests exist under `tests/unit`/`tests/security`).
+   Disposition: **Accepted infrastructure gap, not currently a Map V2
+   production blocker.**
+2. **Physical device rotation QA.** No physical-device rotation/resize
+   test has been performed as part of automated release validation.
+   Disposition: **Manual QA gap, not currently a code blocker.**
+3. **Layer-toggle pin re-selection quirk.** A previously deselected pin
+   may reopen if its underlying layer is disabled and later re-enabled
+   (because selected-item resolution re-runs against whatever the current
+   item list is, and a re-enabled layer can bring the same id back into
+   that list). Disposition: **Known product quirk, confirmed (via `git
+   show` against the pre-Batch-5 code) to predate the Map V2
+   state-persistence branch — not fixed in this pass, not claimed to be
+   fixed.**
+
+## Decision Log — Deliberately Deferred, Not Forgotten
+
+- **Standalone "Reset map" button**: evaluated during the Batch 5/6
+  hardening pass and judged redundant — "Clear search area" (pre-existing)
+  and "Clear filters and search again" (new this batch) already cover
+  every practical recovery path; a third, overlapping reset control was
+  judged more likely to confuse than help.
+- **New analytics infrastructure/vendor**: no analytics/event abstraction
+  exists anywhere in this repository today. Rather than introduce one
+  solely for Map V2 instrumentation, recommended future event names were
+  documented (below) for whenever a real analytics abstraction is adopted
+  repo-wide.
+- **New global state library**: URL params + component state have been
+  sufficient for every Map V2 batch so far; no cross-page or cross-session
+  state need has emerged that would justify one.
+- **New schema just for map persistence**: every persisted value lives in
+  the URL, computed from data that already has a schema
+  (opportunities/events/organizations). No new table/column was ever
+  needed.
+- **Browser E2E framework**: a real gap (see Accepted Limitations Register
+  #1), but standing up an E2E framework for the whole repo is a
+  project-wide infrastructure decision, not a Map V2-scoped one.
+- **Broad application accessibility rewrite**: Map V2's own controls got a
+  targeted pass (44px touch targets, existing labels confirmed present,
+  `DetailSheet`'s existing focus trap/Escape-to-close reused) — but a full
+  app-wide accessibility audit is explicitly out of scope for a
+  map-feature batch.
+- **Map V3 feature expansion**: anything in the Map V3 Boundary section
+  below was deliberately not pulled forward into this closeout pass, even
+  where it would have been a natural extension of what's here.
+
+**Recommended future analytics events** (if/when a real event abstraction
+exists): `map_viewed`, `map_layer_toggled`, `map_search_area`,
+`map_locate_used`, `map_pin_opened`, `map_detail_action`,
+`map_empty_state`, `map_reset`. Any future implementation of these must
+use coarse/public metadata only (e.g. layer name, entity type, city) —
+never exact user coordinates, consistent with the Privacy Invariants
+above.
+
+## Map V3 Boundary
+
+Map V2 maintenance must preserve the contracts documented above. The
+following are examples (not commitments) of capability that would require
+a separately scoped future initiative rather than an incremental addition
+to Map V2:
+
+- Full turn-by-turn routing/navigation.
+- Real-time moving-user location tracking (as opposed to the current
+  one-shot, best-effort geolocation).
+- Heatmaps or density intelligence layers.
+- Advanced/server-side geographic search (radius search beyond pan/zoom,
+  geospatial query infrastructure).
+- Richer live city-activity layers beyond the current five entity types.
+- Large-scale analytics infrastructure/rollout.
+- A new mapping provider/architecture (replacing MapLibre/OpenFreeMap).
+- New public-location schema work beyond `organizations.location_visibility`.
+- Significant real-time presence architecture (who else is nearby right
+  now, live).
+
+If a request touches any of these, treat it as a new, separately scoped
+batch — not an "optional addition" folded into ongoing Map V2 maintenance.
+
+## Manual Founder/Device QA Checklist
+
+For use on iPad/iPhone/desktop before a significant Map V2 change ships:
+
+- [ ] Map loads on `/live`
+- [ ] Portrait orientation renders correctly
+- [ ] Landscape orientation renders correctly (rotate mid-session, not
+      just fresh load)
+- [ ] Each layer chip toggles independently
+- [ ] Multiple layers active simultaneously show combined pins correctly
+- [ ] "Search this area" appears after real movement, not on load
+- [ ] "Search this area" commits and updates results
+- [ ] Map pan/zoom feels responsive, no dropped frames on a real device
+- [ ] "Locate Me" / geolocate control works
+- [ ] Denying location permission doesn't break the map or throw a
+      visible error
+- [ ] Opening a pin shows the detail sheet with correct content
+- [ ] Closing the detail sheet returns to the expected map state
+- [ ] Opening a pin's full detail page navigates correctly
+- [ ] Browser Back from a detail page returns to a sensible map state
+- [ ] Refreshing `/live` preserves layer/search-area/view/camera as
+      expected
+- [ ] Copying the current URL and opening it in a new tab/session
+      restores the same state
+- [ ] An area with zero results shows an actionable empty state, not a
+      blank map
+- [ ] A simulated data-load failure (if reproducible) shows a recoverable
+      error state
+- [ ] An invalid/stale selected entity (e.g. via a hand-edited URL) fails
+      safely, no crash
+- [ ] No overlap between the map's own controls and site navigation
+      (top/bottom bars)
+- [ ] All map control touch targets feel comfortably tappable, not
+      cramped
+- [ ] No accidental horizontal page overflow/scroll on any tested
+      viewport
+- [ ] Inspect the address bar after granting location — confirm no
+      precise device coordinates appear in the URL
+
+## Production Readiness Checklist
+
+Run this before any future significant Map V2 change ships:
+
+1. Can a first-time user understand what the map does?
+2. Can the map be used without granting location access?
+3. Can users recover from a bad filter/search state?
+4. Does navigation (Back, refresh, shared link) preserve useful map
+   context?
+5. Does refresh preserve safe/useful state?
+6. Can malformed persisted state crash the page?
+7. Can bad coordinates crash map rendering?
+8. Are private locations protected?
+9. Are mobile/tablet controls usable?
+10. Are discovery/map results consistent with the list?
+11. Does "Search this area" require intentional user action rather than
+    firing continuously?
+12. Are persistence writes controlled (not on every raw movement event)?
+13. Are schema/RLS requirements for this change explicit and resolved?
+14. Are unavailable/data-dependent layers (e.g. Businesses) represented
+    honestly rather than claimed complete?
+15. Are any known blockers clearly recorded, not hidden?
+
+As of Batch 5/6 (this document's current state), every question above is
+answered affirmatively except where the Accepted Limitations Register
+above records an explicit, honestly-disclosed gap.
