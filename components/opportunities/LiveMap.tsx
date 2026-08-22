@@ -19,9 +19,20 @@ import { distanceInfo, formatDistanceLabel, type UserLocation } from "@/lib/geo"
 import { formatCents, formatDateTime, relativeTime } from "@/lib/utils";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
 import { DetailSheet, type DetailSheetAction } from "@/components/ui/DetailSheet";
 import { MAP_LAYER_EMPTY_COPY, type MapEntityType, type MapItem, type MapLayer } from "@/lib/map-selectors";
-import { roundBounds, shouldResetSearchBaseline, shouldShowSearchThisArea, type MapBounds } from "@/lib/map-viewport";
+import {
+  isValidViewport,
+  resolveInitialCameraSource,
+  resolveSelectedMapItem,
+  roundBounds,
+  roundViewport,
+  shouldResetSearchBaseline,
+  shouldShowSearchThisArea,
+  type MapBounds,
+  type MapViewport,
+} from "@/lib/map-viewport";
 import type { OpportunityType } from "@/lib/types";
 
 /** Raw opportunity-type label for the detail sheet's type badge — kept
@@ -127,8 +138,11 @@ export function LiveMap({
   layer,
   userLocation,
   searchBounds,
+  viewport,
+  onViewportChange,
   onSearchThisArea,
   isSearchPending = false,
+  onResetFilters,
 }: {
   items: MapItem[];
   layer: MapLayer;
@@ -145,6 +159,20 @@ export function LiveMap({
    * for anything after mount — LiveMap tracks its own live camera bounds
    * internally from then on. */
   searchBounds: MapBounds | null;
+  /** Map V2 Batch 5 — the map's last-known live camera (center/zoom/
+   * bearing/pitch), restored from the URL on first load. Used once, on
+   * mount, as the initial camera when there's no `searchBounds` to fit to
+   * instead (see lib/map-viewport.ts's resolveInitialCameraSource for the
+   * full precedence order) — and, like `searchBounds`, to skip the
+   * auto-fly-to-user-location below. Not read again after mount; LiveMap
+   * reports every subsequent settle back up via `onViewportChange` instead
+   * of re-reading this prop. */
+  viewport: MapViewport | null;
+  /** Fired on every settled camera move (moveend) — user gestures and
+   * programmatic settles (initial load, fitBounds, flyTo) alike — so the
+   * parent always has the actual current camera to persist, regardless of
+   * whether a "Search this area" is also committed. */
+  onViewportChange: (viewport: MapViewport) => void;
   /** Fired when the user explicitly clicks "Search this area." Never called
    * automatically on pan/zoom. */
   onSearchThisArea: (bounds: MapBounds) => void;
@@ -152,9 +180,22 @@ export function LiveMap({
    * near-instant client-side filter, but still worth a lightweight pending
    * affordance on the button itself). */
   isSearchPending?: boolean;
+  /** Map V2 Batch 6 — optional callback for the in-map empty state's action
+   * button ("Clear filters and search again"). LiveMap has no filter or
+   * searchBounds state of its own to reset (both `layer` and `searchBounds`
+   * are owned and lifted by LiveBrowser — see this component's other props),
+   * so this only renders the button and reports the click; the caller
+   * decides what "reset" actually means. Optional so LiveMap keeps working
+   * exactly as before for any caller that hasn't wired this up. */
+  onResetFilters?: () => void;
 }) {
   const mapRef = useRef<MapRef>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
+  // Bumped to force MapGL to fully remount on "Try again" after a tile/map
+  // load error — react-map-gl/maplibre has no supported "retry the same
+  // instance" API, and a fresh instance is the reliable way to get a clean
+  // onLoad/onError cycle again.
+  const [mapInstanceKey, setMapInstanceKey] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [canSearchThisArea, setCanSearchThisArea] = useState(false);
   // The viewport this batch compares future moves against — starts at the
@@ -165,6 +206,16 @@ export function LiveMap({
   const referenceBoundsRef = useRef<MapBounds | null>(searchBounds);
   const currentBoundsRef = useRef<MapBounds | null>(searchBounds);
   const hasFlownToUserRef = useRef(false);
+  // Captured once, from the very first render's `viewport` prop (i.e.
+  // whatever LiveBrowser parsed out of the URL on mount, before this
+  // component has ever reported a settle back up) — never re-derived from
+  // later, live-tracked viewport updates. Used only to decide whether the
+  // geolocation fly-to below should defer to an explicitly *restored*
+  // camera; if this read the live `viewport` prop instead, it would always
+  // be true shortly after mount (this component reports every settle,
+  // including the very first one), which would wrongly suppress the
+  // fly-to even when nothing was ever restored from the URL.
+  const hadRestoredViewportRef = useRef(isValidViewport(viewport));
   // Tracks the searchBounds value seen on the previous render, purely so
   // the effect below can detect an explicit clear (bounds -> null) instead
   // of reacting to mount or a fresh commit — see shouldResetSearchBaseline.
@@ -177,7 +228,7 @@ export function LiveMap({
     return map;
   }, [items, layer]);
 
-  const selected = useMemo(() => items.find((i) => i.id === selectedId) ?? null, [items, selectedId]);
+  const selected = useMemo(() => resolveSelectedMapItem(items, selectedId), [items, selectedId]);
 
   // Selected-pin emphasis: a single-feature source/layer pair drawn after
   // (so on top of) every category source below — same coordinates, larger
@@ -189,17 +240,21 @@ export function LiveMap({
   const selectedFeatureCollection = useMemo(() => (selected ? toFeatureCollection([selected]) : null), [selected]);
 
   // Best-effort, non-blocking geolocation fly-to: the map renders at the
-  // city center (or a restored search area) immediately regardless of
-  // outcome, then flies to the user's location only once, only if
-  // `userLocation` becomes available (LiveBrowser's one-shot
-  // getCurrentPosition call resolved) and only if there's no explicit
-  // restored search area to respect instead — an explicit prior "Search
-  // this area" click is a stronger signal than "recenter on me now."
-  // Denied/unavailable geolocation never blocks or errors the map itself.
+  // city center (or a restored search area / restored live viewport)
+  // immediately regardless of outcome, then flies to the user's location
+  // only once, only if `userLocation` becomes available (LiveBrowser's
+  // one-shot getCurrentPosition call resolved) and only if there's no
+  // explicit restored camera to respect instead — a prior committed
+  // "Search this area" (checked live, since a commit can land while this
+  // effect is still waiting on geolocation) or a URL-restored live
+  // viewport (checked from the mount-time ref above — see its comment)
+  // are both stronger signals than "recenter on me now." Denied/
+  // unavailable geolocation never blocks or errors the map itself.
   useEffect(() => {
     if (!userLocation || hasFlownToUserRef.current) return;
     hasFlownToUserRef.current = true;
     if (searchBounds) return;
+    if (hadRestoredViewportRef.current) return;
     mapRef.current?.flyTo({
       center: [userLocation.lng, userLocation.lat],
       zoom: USER_LOCATION_ZOOM,
@@ -244,24 +299,45 @@ export function LiveMap({
   // this area" on their own. A genuine user pan/zoom/drag compares the new
   // bounds against that baseline and only shows the control once the
   // overlap has dropped meaningfully — never on every small nudge.
-  const handleMoveEnd = useCallback((evt: ViewStateChangeEvent) => {
-    const map = mapRef.current?.getMap();
-    if (!map) return;
-    const b = map.getBounds();
-    const current = roundBounds({ west: b.getWest(), south: b.getSouth(), east: b.getEast(), north: b.getNorth() });
-    currentBoundsRef.current = current;
+  const handleMoveEnd = useCallback(
+    (evt: ViewStateChangeEvent) => {
+      const map = mapRef.current?.getMap();
+      if (!map) return;
+      const b = map.getBounds();
+      const current = roundBounds({ west: b.getWest(), south: b.getSouth(), east: b.getEast(), north: b.getNorth() });
+      currentBoundsRef.current = current;
 
-    if (!evt.originalEvent) {
-      referenceBoundsRef.current = current;
-      setCanSearchThisArea(false);
-      return;
-    }
-    if (referenceBoundsRef.current === null) {
-      referenceBoundsRef.current = current;
-      setCanSearchThisArea(false);
-      return;
-    }
-    setCanSearchThisArea(shouldShowSearchThisArea(current, referenceBoundsRef.current));
+      // Map V2 Batch 5 — report every settle (gesture or programmatic
+      // alike) as the current live camera, independent of the
+      // search-baseline logic below (which deliberately treats those two
+      // cases differently for a different purpose — see the comments on
+      // that logic). Persisting "wherever the camera actually is now" is
+      // unconditional.
+      const center = map.getCenter();
+      onViewportChange(roundViewport({ lat: center.lat, lng: center.lng, zoom: map.getZoom(), bearing: map.getBearing(), pitch: map.getPitch() }));
+
+      if (!evt.originalEvent) {
+        referenceBoundsRef.current = current;
+        setCanSearchThisArea(false);
+        return;
+      }
+      if (referenceBoundsRef.current === null) {
+        referenceBoundsRef.current = current;
+        setCanSearchThisArea(false);
+        return;
+      }
+      setCanSearchThisArea(shouldShowSearchThisArea(current, referenceBoundsRef.current));
+    },
+    [onViewportChange],
+  );
+
+  // "Try again" after a map/tile load error — no in-place retry API exists
+  // on the underlying map instance, so this forces a full remount (see
+  // mapInstanceKey above) and resets status back to "loading" so the usual
+  // loading spinner reappears while the fresh instance connects.
+  const handleRetry = useCallback(() => {
+    setStatus("loading");
+    setMapInstanceKey((k) => k + 1);
   }, []);
 
   const handleSearchThisArea = useCallback(() => {
@@ -273,6 +349,25 @@ export function LiveMap({
     setCanSearchThisArea(false);
     onSearchThisArea(current);
   }, [onSearchThisArea]);
+
+  // Map V2 Batch 5 — the camera MapGL mounts with. Computed once, via a
+  // lazy useState initializer (not useRef — react-hooks/refs correctly
+  // flags reading a ref's .current during render, and `initialViewState`
+  // is itself a one-shot prop from react-map-gl/maplibre's own
+  // perspective, so recomputing this on every render would be pointless
+  // and could disagree with what actually got used anyway). Follows
+  // resolveInitialCameraSource's precedence: a restored
+  // searchBounds always gets fit explicitly in handleLoad regardless of
+  // what's set here (so "bounds" and "default" intentionally render the
+  // same initial camera — the fitBounds call, at duration 0, replaces it
+  // before the user ever sees it); only "viewport" changes what's rendered
+  // here, restoring the last live camera when there's no explicit search
+  // commit to fit to instead.
+  const [initialViewState] = useState(() =>
+    resolveInitialCameraSource(searchBounds, viewport) === "viewport" && viewport
+      ? { longitude: viewport.lng, latitude: viewport.lat, zoom: viewport.zoom, bearing: viewport.bearing, pitch: viewport.pitch }
+      : { longitude: CITY_CENTER.lng, latitude: CITY_CENTER.lat, zoom: DEFAULT_ZOOM },
+  );
 
   const interactiveLayerIds = useMemo(
     () =>
@@ -334,11 +429,26 @@ export function LiveMap({
     if (map) {
       const b = map.getBounds();
       referenceBoundsRef.current = roundBounds({ west: b.getWest(), south: b.getSouth(), east: b.getEast(), north: b.getNorth() });
+      // Map V2 Batch 5 — report the initial settled camera too, so a
+      // reload that never had a searchBounds to fit to (the common case)
+      // still ends up with a persisted viewport reflecting where the map
+      // actually opened (city center, or the restored viewport used as
+      // initialViewState below) rather than staying null until the user's
+      // first pan. If a searchBounds restore *does* run below, its
+      // fitBounds call fires its own later moveend that reports (and
+      // supersedes) this one with the post-fit camera — see handleMoveEnd.
+      const center = map.getCenter();
+      onViewportChange(roundViewport({ lat: center.lat, lng: center.lng, zoom: map.getZoom(), bearing: map.getBearing(), pitch: map.getPitch() }));
     }
     // Restore a URL-persisted search area on first load — an explicit
-    // prior "Search this area" is a stronger signal than the default
-    // city-wide view, and this fitBounds call is itself the programmatic
-    // settle that establishes the reference baseline (see handleMoveEnd).
+    // prior "Search this area" is a stronger signal than a restored live
+    // viewport or the default city-wide view (see
+    // lib/map-viewport.ts's resolveInitialCameraSource), and this
+    // fitBounds call is itself the programmatic settle that establishes
+    // the reference baseline (see handleMoveEnd). When there's no
+    // searchBounds, the map already opened at the restored viewport (or
+    // city center) via initialViewState below — nothing further to do
+    // here in that case.
     if (searchBounds) {
       mapRef.current?.fitBounds(
         [
@@ -350,18 +460,39 @@ export function LiveMap({
     }
     // searchBounds is intentionally excluded — this only ever applies the
     // value present at mount (this is a one-shot restore, not a live sync).
+    // onViewportChange is stable (see LiveBrowser.tsx's handleViewportChange).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [onViewportChange]);
 
   return (
     <div className="space-y-3">
-      <div className="relative aspect-[4/3] w-full overflow-hidden rounded-2xl border border-ink-100 bg-flow-50 dark:border-ink-800 dark:bg-ink-900 sm:aspect-[16/9]">
+      <div className="flow-live-map-controls relative aspect-[4/3] w-full overflow-hidden rounded-2xl border border-ink-100 bg-flow-50 dark:border-ink-800 dark:bg-ink-900 sm:aspect-[16/9]">
+        {/* maplibre-gl's own NavigationControl/GeolocateControl buttons render
+            at a fixed 29x29px — short of the 44px (min-h-11/min-w-11) touch
+            target used elsewhere in this file (e.g. "Search this area"
+            below). Scoped to this component's own map container rather than
+            a bare global .maplibregl-ctrl-group override, since this is the
+            only maplibre map in the app today but a global override would
+            still be an easy-to-miss footgun for a future one. Widening the
+            hit area only (not the icon's background-size) keeps the icon's
+            visual size unchanged — just more generous padding around it. */}
+        <style>{`
+          .flow-live-map-controls .maplibregl-ctrl-group button {
+            width: 44px;
+            height: 44px;
+          }
+        `}</style>
         {status === "error" ? (
           <div className="absolute inset-0 flex items-center justify-center p-6">
             <EmptyState
               icon={<TriangleAlert className="h-8 w-8" />}
               title="Map failed to load"
               body="The map tiles couldn't be reached. Your connection or the tile provider may be down — try again shortly."
+              action={
+                <Button type="button" size="md" variant="outline" onClick={handleRetry}>
+                  Try again
+                </Button>
+              }
             />
           </div>
         ) : (
@@ -385,9 +516,10 @@ export function LiveMap({
               </div>
             )}
             <MapGL
+              key={mapInstanceKey}
               ref={mapRef}
               mapStyle={MAP_STYLE_URL}
-              initialViewState={{ longitude: CITY_CENTER.lng, latitude: CITY_CENTER.lat, zoom: DEFAULT_ZOOM }}
+              initialViewState={initialViewState}
               style={{ width: "100%", height: "100%" }}
               interactiveLayerIds={interactiveLayerIds}
               onClick={handleClick}
@@ -470,9 +602,24 @@ export function LiveMap({
         )}
 
         {status === "ready" && items.length === 0 && (
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-6">
+          // z-10 (not the default z-auto): without this, the "Search this
+          // area" pill above (z-20) would still correctly paint on top, but
+          // this overlay could otherwise end up ambiguously stacked relative
+          // to future z-indexed additions to the map — matching the loading
+          // spinner's own z-10 keeps both of this container's non-map
+          // overlays on one consistent, explicit layer, one below the pill.
+          <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center p-6">
             <div className="pointer-events-auto">
-              <EmptyState title={MAP_LAYER_EMPTY_COPY[layer]} />
+              <EmptyState
+                title={MAP_LAYER_EMPTY_COPY[layer]}
+                action={
+                  onResetFilters ? (
+                    <Button type="button" size="md" variant="outline" onClick={onResetFilters}>
+                      Clear filters and search again
+                    </Button>
+                  ) : undefined
+                }
+              />
             </div>
           </div>
         )}

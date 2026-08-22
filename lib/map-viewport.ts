@@ -117,6 +117,32 @@ export function shouldResetSearchBaseline(previous: MapBounds | null, next: MapB
 export const MAP_LAYER_PARAM = "layer";
 export const MAP_BOUNDS_PARAM = "b";
 
+// ── State versioning (Map V2 Batch 6) ───────────────────────────────────
+// A tiny marker, not a migration framework: bump MAP_STATE_VERSION only if
+// a future change makes an *existing* bounds/viewport/view param value mean
+// something different (not just "a new field was added" — buildLiveMapSearchParams
+// already handles that case safely on its own, since every param here is
+// independently optional). When that happens, a URL stamped with an older
+// (or, defensively, any non-matching) version number has its persisted
+// bounds/viewport/view ignored in favor of defaults rather than being
+// mis-parsed under the new meaning — see isCurrentMapStateVersion below.
+export const MAP_STATE_VERSION = 1;
+export const MAP_VERSION_PARAM = "v";
+
+/**
+ * Should a URL's persisted bounds/viewport/view be trusted? A *missing*
+ * version param (every /live URL from Batches 3-5, before this marker
+ * existed) is treated as trustworthy — those params' meaning hasn't
+ * changed, so there is nothing to distrust yet, and treating "no marker" as
+ * untrusted would silently break every already-shared/bookmarked Map V2 URL
+ * the day this ships. Only an explicit, non-matching value (a URL stamped
+ * under a later, incompatible version) is untrusted. Never throws.
+ */
+export function isCurrentMapStateVersion(value: string | null | undefined): boolean {
+  if (value === null || value === undefined || value === "") return true;
+  return value === String(MAP_STATE_VERSION);
+}
+
 /** Invalid/unrecognized values fail safe to "all" — a malformed or stale
  * URL param must never crash or leave the map showing nothing. */
 export function parseMapLayerParam(value: string | null | undefined): MapLayer {
@@ -125,8 +151,12 @@ export function parseMapLayerParam(value: string | null | undefined): MapLayer {
 }
 
 /** Invalid/malformed values fail safe to `null` (no viewport filter — the
- * full city-wide fetch), never a crash or a bogus/partial bounds box. */
-export function parseBoundsParam(value: string | null | undefined): MapBounds | null {
+ * full city-wide fetch), never a crash or a bogus/partial bounds box.
+ * `version` is optional (see isCurrentMapStateVersion) — omitting it keeps
+ * every existing call site's behavior exactly as before; a caller that
+ * passes the URL's `v` param gets the version guard applied too. */
+export function parseBoundsParam(value: string | null | undefined, version?: string | null): MapBounds | null {
+  if (!isCurrentMapStateVersion(version)) return null;
   if (!value) return null;
   const parts = value.split(",").map(Number);
   if (parts.length !== 4 || parts.some((n) => !Number.isFinite(n))) return null;
@@ -140,14 +170,181 @@ export function serializeBoundsParam(bounds: MapBounds): string {
   return `${r.west},${r.south},${r.east},${r.north}`;
 }
 
-/** Builds the query string for /live given the current layer + search
- * bounds. "all" and null bounds are both the default and are omitted
- * entirely, so the common case (no filter, no search-area) keeps the URL
- * empty rather than always appending params. */
-export function buildLiveMapSearchParams(layer: MapLayer, bounds: MapBounds | null): URLSearchParams {
+// ── Map V2 Batch 5 — view mode + live camera persistence ───────────────
+// Two more small, shareable pieces of state, following exactly the
+// MAP_*_PARAM / parse*/build* / fail-safe conventions above: which of
+// map/list the user was looking at, and the map's actual camera position
+// (center + zoom, plus bearing/pitch since maplibre's default drag-rotate
+// and touch-pitch handlers are never disabled here, so a user *can* rotate
+// or tilt the map with a gesture even though there's no dedicated compass/
+// tilt UI — losing that silently on reload would be a real regression, not
+// a simplification). Like the committed search bounds, this is a coarse,
+// non-identifying "what part of the public map was open" position — never
+// the raw device geolocation coordinate, which stays exactly as
+// unpersisted as it already was (see LiveBrowser.tsx's userLocation and
+// the header comment above).
+
+export const MAP_VIEW_PARAM = "view";
+export const MAP_VIEWPORT_PARAM = "vp";
+
+export const MAP_VIEW_MODES = ["map", "list"] as const;
+export type MapViewMode = (typeof MAP_VIEW_MODES)[number];
+
+/** Invalid/unrecognized values fail safe to "map" — same reasoning as
+ * parseMapLayerParam: a malformed or stale param must never crash or leave
+ * the page rendering neither view. `version` is optional — see
+ * parseBoundsParam's doc comment for why omitting it is safe. */
+export function parseMapViewParam(value: string | null | undefined, version?: string | null): MapViewMode {
+  if (!isCurrentMapStateVersion(version)) return "map";
+  if (value && (MAP_VIEW_MODES as readonly string[]).includes(value)) return value as MapViewMode;
+  return "map";
+}
+
+export interface MapViewport {
+  lat: number;
+  lng: number;
+  zoom: number;
+  /** Degrees, maplibre's own normalized range. Always 0 unless the user
+   * explicitly rotated the map (right-click-drag / two-finger twist) —
+   * there is no compass/rotate control in this UI. */
+  bearing: number;
+  /** Degrees. Always 0 unless the user explicitly tilted the map
+   * (ctrl-drag / two-finger drag) — there is no tilt control in this UI. */
+  pitch: number;
+}
+
+// maplibre-gl's own defaults (no custom minZoom/maxZoom/maxPitch configured
+// anywhere in LiveMap) — bounds chosen to reject "absurdly high/negative"
+// values, not to be a tight product-specific range.
+const VIEWPORT_ZOOM_MIN = 0;
+const VIEWPORT_ZOOM_MAX = 22;
+const VIEWPORT_PITCH_MIN = 0;
+const VIEWPORT_PITCH_MAX = 85;
+const VIEWPORT_BEARING_MIN = -180;
+const VIEWPORT_BEARING_MAX = 180;
+
+export function isValidViewport(v: MapViewport | null | undefined): v is MapViewport {
+  if (!v) return false;
+  const { lat, lng, zoom, bearing, pitch } = v;
+  if (![lat, lng, zoom, bearing, pitch].every((n) => typeof n === "number" && Number.isFinite(n))) return false;
+  if (lat < -90 || lat > 90) return false;
+  if (lng < -180 || lng > 180) return false;
+  if (zoom < VIEWPORT_ZOOM_MIN || zoom > VIEWPORT_ZOOM_MAX) return false;
+  if (bearing < VIEWPORT_BEARING_MIN || bearing > VIEWPORT_BEARING_MAX) return false;
+  if (pitch < VIEWPORT_PITCH_MIN || pitch > VIEWPORT_PITCH_MAX) return false;
+  return true;
+}
+
+// Coordinates share BOUNDS_DECIMALS' ~11m precision/reasoning. Zoom/bearing/
+// pitch get coarser rounding than that — a fraction of a zoom level or a
+// degree of rotation is never perceptible enough to be worth extra URL
+// characters, and rounding this way keeps repeated small camera nudges from
+// endlessly churning the URL.
+const VIEWPORT_ZOOM_DECIMALS = 2;
+const VIEWPORT_ANGLE_DECIMALS = 1;
+
+function roundTo(n: number, decimals: number): number {
+  const f = 10 ** decimals;
+  return Math.round(n * f) / f;
+}
+
+export function roundViewport(v: MapViewport): MapViewport {
+  return {
+    lat: roundTo(v.lat, BOUNDS_DECIMALS),
+    lng: roundTo(v.lng, BOUNDS_DECIMALS),
+    zoom: roundTo(v.zoom, VIEWPORT_ZOOM_DECIMALS),
+    bearing: roundTo(v.bearing, VIEWPORT_ANGLE_DECIMALS),
+    pitch: roundTo(v.pitch, VIEWPORT_ANGLE_DECIMALS),
+  };
+}
+
+/** "lat,lng,zoom" in the overwhelmingly common case (no rotate/tilt — this
+ * UI has no control for either); bearing/pitch are only appended when
+ * actually non-zero, so the default camera shape never carries two extra,
+ * always-0 fields around in every /live URL. */
+export function serializeViewportParam(viewport: MapViewport): string {
+  const r = roundViewport(viewport);
+  const base = `${r.lat},${r.lng},${r.zoom}`;
+  if (r.bearing === 0 && r.pitch === 0) return base;
+  return `${base},${r.bearing},${r.pitch}`;
+}
+
+/** Invalid/malformed values fail safe to `null` (no restored camera — the
+ * default city center applies), never a crash, never a partial/NaN
+ * viewport reaching the map. Accepts both the 3-field (no rotate/tilt) and
+ * 5-field (rotate and/or tilt present) shapes serializeViewportParam
+ * produces; a missing bearing/pitch defaults to 0 rather than failing.
+ * `version` is optional — see parseBoundsParam's doc comment for why
+ * omitting it is safe. */
+export function parseViewportParam(value: string | null | undefined, version?: string | null): MapViewport | null {
+  if (!isCurrentMapStateVersion(version)) return null;
+  if (!value) return null;
+  const parts = value.split(",").map(Number);
+  if (parts.length !== 3 && parts.length !== 5) return null;
+  if (parts.some((n) => !Number.isFinite(n))) return null;
+  const [lat, lng, zoom, bearing = 0, pitch = 0] = parts;
+  const viewport: MapViewport = { lat, lng, zoom, bearing, pitch };
+  return isValidViewport(viewport) ? viewport : null;
+}
+
+/**
+ * Which signal should win for the map's *initial* camera position on
+ * mount/reload — the precedence order this batch establishes:
+ *
+ * 1. A restored committed "Search this area" (`bounds`) — an explicit,
+ *    named search commit is the strongest signal a user has given about
+ *    where they want to be, same reasoning Batch 3 already used to make it
+ *    outrank the geolocation fly-to (see LiveMap.tsx's handleLoad/effect).
+ * 2. A restored live viewport (`viewport`) — no explicit "search" was
+ *    committed, but the user's last camera position (from ordinary pan/
+ *    zoom) is still a real, specific choice, and a closer match to "back
+ *    where I left off" than recentering on their current physical location
+ *    would be. This is also why the one-shot geolocation fly-to
+ *    (LiveMap.tsx) skips itself whenever this resolves to "viewport", not
+ *    just "bounds" — flying away from a position the user explicitly
+ *    panned/zoomed to on every reload would be more surprising than
+ *    helpful, the same reasoning that already applied to `bounds`.
+ * 3. Neither present — falls through to LiveMap's own default (city
+ *    center), and the geolocation fly-to is free to run once `userLocation`
+ *    resolves, exactly as before this batch.
+ *
+ * When both `bounds` and `viewport` are present (e.g. the user searched an
+ * area, then panned further without re-committing), `bounds` wins — the
+ * explicit commit is still the stronger signal, and the live viewport
+ * continues to be tracked and persisted underneath it so that if the user
+ * later clears the search area, the most recently viewed camera position
+ * (not the city center) becomes the new starting point.
+ */
+export type InitialCameraSource = "bounds" | "viewport" | "default";
+
+export function resolveInitialCameraSource(bounds: MapBounds | null, viewport: MapViewport | null): InitialCameraSource {
+  if (isValidBounds(bounds)) return "bounds";
+  if (isValidViewport(viewport)) return "viewport";
+  return "default";
+}
+
+export interface LiveMapUrlState {
+  layer: MapLayer;
+  bounds: MapBounds | null;
+  view: MapViewMode;
+  viewport: MapViewport | null;
+}
+
+/** Builds the query string for /live given the current layer, search
+ * bounds, view mode, and live camera. Every default value ("all" layer, no
+ * bounds, "map" view, no viewport) is omitted entirely, so the common case
+ * (nothing customized yet) keeps the URL empty rather than always
+ * appending params. The `v` version marker (see MAP_STATE_VERSION above)
+ * follows the same rule: it's only worth stamping a URL that actually
+ * carries some persisted state to be versioned, so it's appended last, only
+ * when at least one of the other params was — never on its own. */
+export function buildLiveMapSearchParams(state: LiveMapUrlState): URLSearchParams {
   const params = new URLSearchParams();
-  if (layer !== "all") params.set(MAP_LAYER_PARAM, layer);
-  if (bounds && isValidBounds(bounds)) params.set(MAP_BOUNDS_PARAM, serializeBoundsParam(bounds));
+  if (state.layer !== "all") params.set(MAP_LAYER_PARAM, state.layer);
+  if (state.bounds && isValidBounds(state.bounds)) params.set(MAP_BOUNDS_PARAM, serializeBoundsParam(state.bounds));
+  if (state.view !== "map") params.set(MAP_VIEW_PARAM, state.view);
+  if (state.viewport && isValidViewport(state.viewport)) params.set(MAP_VIEWPORT_PARAM, serializeViewportParam(state.viewport));
+  if (params.toString().length > 0) params.set(MAP_VERSION_PARAM, String(MAP_STATE_VERSION));
   return params;
 }
 
@@ -194,6 +391,24 @@ export function filterEventsByBounds(events: MockEvent[], bounds: MapBounds | nu
  * supabase/migrations/20260820163442_organization_location_privacy.sql),
  * which this function does not and cannot weaken.
  */
+// ── Selected-pin lookup ──────────────────────────────────────────────────
+
+/**
+ * Map V2 Batch 6 — pure form of LiveMap.tsx's `selected` derivation
+ * (`items.find((i) => i.id === selectedId) ?? null`), extracted so its
+ * "selection survives across a rerender until its underlying item actually
+ * disappears from `items`" behavior — e.g. a layer switch, a bounds filter,
+ * or an item expiring off the list — is unit-testable without a
+ * component-rendering harness (this repo doesn't have one set up; see
+ * tests/unit/map-viewport.test.ts). Not new behavior: LiveMap.tsx's
+ * `selected` useMemo calls this instead of duplicating the lookup inline,
+ * so the two can never drift.
+ */
+export function resolveSelectedMapItem(items: MapItem[], selectedId: string | null): MapItem | null {
+  if (!selectedId) return null;
+  return items.find((i) => i.id === selectedId) ?? null;
+}
+
 export function filterOrganizationsByBounds(organizations: MockOrganization[], bounds: MapBounds | null): MockOrganization[] {
   return organizations.filter((o) => {
     // Eligibility (hidden/remote) is checked unconditionally here, not just
