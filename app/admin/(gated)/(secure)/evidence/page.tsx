@@ -73,7 +73,16 @@ export default async function AdminEvidencePage({ searchParams }: { searchParams
                     </p>
                   )}
                   {c.evidence_note && <p className="text-xs text-ink-600 dark:text-ink-300">{c.evidence_note}</p>}
-                  <Badge tone={STATUS_TONE[c.status] ?? "neutral"}>{evidenceStatusLabel(c.status)}</Badge>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <Badge tone={STATUS_TONE[c.status] ?? "neutral"}>{evidenceStatusLabel(c.status)}</Badge>
+                    {c.resolved_tier && <Badge tone="flow">{c.resolved_tier.replace("_", " ")}</Badge>}
+                  </div>
+                  {c.witness && (
+                    <p className="text-xs text-ink-400">
+                      Named collaborator: {c.witness.full_name ?? c.witness.username ?? c.witness.id}
+                    </p>
+                  )}
+                  {c.organization && <p className="text-xs text-ink-400">Named organization: {c.organization.name}</p>}
                 </div>
                 <EvidenceDecisionForm verificationId={c.id} status={c.status} reviews={reviews} />
               </div>
