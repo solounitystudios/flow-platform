@@ -1,0 +1,32 @@
+-- Verification witness read access — closes a gap flagged during QA/founder
+-- review of 20260822180043_passport_verification_tiering.sql.
+--
+-- That batch added `witness_profile_id` to public.verifications and
+-- confirm_verification_as_collaborator(), which correctly authorizes the
+-- named witness to *confirm* a claim (SECURITY DEFINER, bypasses RLS). But
+-- it deliberately left verifications_self_read (from
+-- 20260819073354_v1plus_passport_trust_matching.sql) untouched, so a named
+-- witness who is not the claimant still cannot SELECT the real row through
+-- a normal client query — only auth.uid() = profile_id or
+-- is_flow_admin(true) can. The app worked around this with a display-only,
+-- non-authorizing text fallback on the confirm page; this migration closes
+-- the underlying gap properly.
+--
+-- Purely additive: this adds one more RLS SELECT policy alongside
+-- verifications_self_read (RLS policies for the same command are OR'd
+-- together), so the existing policy's grant is untouched. It grants read
+-- access to exactly one row per witness — the one specific claim they were
+-- named on — and nothing else: no visibility into any other claim, and no
+-- visibility into claims where they are not the named witness.
+--
+-- Live-data audit before this migration (read-only, via Supabase MCP):
+-- public.verifications still has 0 rows on the live project. This is a
+-- pure RLS policy add with no column/constraint change, so there is no
+-- backfill risk regardless of row count.
+--
+-- Explicitly out of scope: verifications_self_read, verification_reviews,
+-- verification_collaborator_confirmations, witness_profile_id's CHECK
+-- constraint, and every RPC — none of those are touched here.
+
+create policy verifications_witness_read on public.verifications for select
+  using (witness_profile_id = (select auth.uid()));
