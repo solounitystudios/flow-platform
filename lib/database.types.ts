@@ -3092,6 +3092,59 @@ export type Database = {
         }
         Relationships: []
       }
+      verification_collaborator_confirmations: {
+        Row: {
+          confirmed_by: string
+          created_at: string
+          id: string
+          note: string | null
+          verification_id: string
+        }
+        Insert: {
+          confirmed_by: string
+          created_at?: string
+          id?: string
+          note?: string | null
+          verification_id: string
+        }
+        Update: {
+          confirmed_by?: string
+          created_at?: string
+          id?: string
+          note?: string | null
+          verification_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "verification_collaborator_confirmations_confirmed_by_fkey"
+            columns: ["confirmed_by"]
+            isOneToOne: false
+            referencedRelation: "passport_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "verification_collaborator_confirmations_confirmed_by_fkey"
+            columns: ["confirmed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "verification_collaborator_confirmations_confirmed_by_fkey"
+            columns: ["confirmed_by"]
+            isOneToOne: false
+            referencedRelation: "reliability_breakdown"
+            referencedColumns: ["profile_id"]
+          },
+          {
+            foreignKeyName: "verification_collaborator_confirmations_verification_id_fkey"
+            columns: ["verification_id"]
+            isOneToOne: true
+            referencedRelation: "verifications"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       verification_decisions: {
         Row: {
           actor_id: string
@@ -3163,6 +3216,7 @@ export type Database = {
           method: string | null
           notes: string | null
           reason_code: string | null
+          tier: string
           to_status: string
           verification_id: string
         }
@@ -3174,6 +3228,7 @@ export type Database = {
           method?: string | null
           notes?: string | null
           reason_code?: string | null
+          tier: string
           to_status: string
           verification_id: string
         }
@@ -3185,6 +3240,7 @@ export type Database = {
           method?: string | null
           notes?: string | null
           reason_code?: string | null
+          tier?: string
           to_status?: string
           verification_id?: string
         }
@@ -3227,15 +3283,18 @@ export type Database = {
           evidence_url: string | null
           expires_at: string | null
           id: string
+          organization_id: string | null
           profile_id: string
           reference_id: string | null
           reference_table: string | null
+          resolved_tier: string | null
           revoked_at: string | null
           source: string
           status: string
           title: string | null
           updated_at: string
           verified_at: string | null
+          witness_profile_id: string | null
         }
         Insert: {
           created_at?: string
@@ -3244,15 +3303,18 @@ export type Database = {
           evidence_url?: string | null
           expires_at?: string | null
           id?: string
+          organization_id?: string | null
           profile_id: string
           reference_id?: string | null
           reference_table?: string | null
+          resolved_tier?: string | null
           revoked_at?: string | null
           source?: string
           status?: string
           title?: string | null
           updated_at?: string
           verified_at?: string | null
+          witness_profile_id?: string | null
         }
         Update: {
           created_at?: string
@@ -3261,15 +3323,18 @@ export type Database = {
           evidence_url?: string | null
           expires_at?: string | null
           id?: string
+          organization_id?: string | null
           profile_id?: string
           reference_id?: string | null
           reference_table?: string | null
+          resolved_tier?: string | null
           revoked_at?: string | null
           source?: string
           status?: string
           title?: string | null
           updated_at?: string
           verified_at?: string | null
+          witness_profile_id?: string | null
         }
         Relationships: [
           {
@@ -3278,6 +3343,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "credential_types"
             referencedColumns: ["key"]
+          },
+          {
+            foreignKeyName: "verifications_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "verifications_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_public"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "verifications_profile_id_fkey"
@@ -3296,6 +3375,27 @@ export type Database = {
           {
             foreignKeyName: "verifications_profile_id_fkey"
             columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "reliability_breakdown"
+            referencedColumns: ["profile_id"]
+          },
+          {
+            foreignKeyName: "verifications_witness_profile_id_fkey"
+            columns: ["witness_profile_id"]
+            isOneToOne: false
+            referencedRelation: "passport_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "verifications_witness_profile_id_fkey"
+            columns: ["witness_profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "verifications_witness_profile_id_fkey"
+            columns: ["witness_profile_id"]
             isOneToOne: false
             referencedRelation: "reliability_breakdown"
             referencedColumns: ["profile_id"]
@@ -3412,6 +3512,19 @@ export type Database = {
         Args: { p_granted_by: string; p_profile_id: string; p_reason: string }
         Returns: undefined
       }
+      _resolve_verification: {
+        Args: {
+          p_actor_id: string
+          p_expires_at?: string
+          p_method?: string
+          p_new_status: string
+          p_notes?: string
+          p_reason_code?: string
+          p_tier: string
+          p_verification_id: string
+        }
+        Returns: undefined
+      }
       accept_employer_invitation: {
         Args: { p_token_hash: string }
         Returns: Json
@@ -3445,6 +3558,10 @@ export type Database = {
       }
       complete_invited_employer_onboarding: {
         Args: { p_organization_id: string }
+        Returns: Json
+      }
+      confirm_verification_as_collaborator: {
+        Args: { p_notes?: string; p_verification_id: string }
         Returns: Json
       }
       decide_evidence_verification: {
@@ -3552,6 +3669,10 @@ export type Database = {
       remove_connection: { Args: { p_connection_id: string }; Returns: Json }
       report_profile: {
         Args: { p_details?: string; p_reason: string; p_target_id: string }
+        Returns: Json
+      }
+      resolve_verification_as_organization: {
+        Args: { p_notes?: string; p_verification_id: string }
         Returns: Json
       }
       respond_to_connection_request: {
@@ -3830,4 +3951,21 @@ export interface GenerateMatchesResult {
   ok: boolean;
   reason?: "not_authenticated" | "not_authorized";
   generated?: number;
+}
+
+// ── Passport verification tiering RPC result shapes ──────────────────────
+// Same reasoning as the blocks above: jsonb-typed at the SQL level, real
+// shape here. See
+// supabase/migrations/20260822180043_passport_verification_tiering.sql.
+
+export type VerificationTier = "auto_verified" | "collaborator_verified" | "organization_verified" | "admin_verified";
+
+export interface CollaboratorConfirmationResult {
+  ok: boolean;
+  reason?: "not_authenticated" | "not_found" | "not_authorized" | "not_pending";
+}
+
+export interface OrganizationVerificationResult {
+  ok: boolean;
+  reason?: "not_authenticated" | "not_found" | "no_organization_named" | "not_pending" | "organization_not_verified" | "not_authorized";
 }

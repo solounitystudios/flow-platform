@@ -88,6 +88,7 @@ export function EvidenceDecisionForm({ verificationId, status, reviews }: { veri
             {reviews.map((r) => (
               <li key={r.id} className="text-xs text-ink-500 dark:text-ink-400">
                 {formatDateTime(r.created_at)} — {r.actor?.full_name ?? r.actor?.username ?? "Unknown"}: {r.from_status ?? "new"} → {r.to_status}
+                {r.tier && ` [${r.tier.replace("_", " ")}]`}
                 {r.reason_code && ` (${r.reason_code})`}
               </li>
             ))}
