@@ -13,14 +13,24 @@ import {
   filterMapItemsByBounds,
   filterOpportunitiesByBounds,
   filterOrganizationsByBounds,
+  isCurrentMapStateVersion,
   isValidBounds,
+  isValidViewport,
   isWithinBounds,
+  MAP_STATE_VERSION,
   parseBoundsParam,
   parseMapLayerParam,
+  parseMapViewParam,
+  parseViewportParam,
+  resolveInitialCameraSource,
+  resolveSelectedMapItem,
+  roundViewport,
   serializeBoundsParam,
+  serializeViewportParam,
   shouldResetSearchBaseline,
   shouldShowSearchThisArea,
   type MapBounds,
+  type MapViewport,
 } from "@/lib/map-viewport";
 import { organizationsToMapItems } from "@/lib/map-selectors";
 import type { MapItem } from "@/lib/map-selectors";
@@ -211,14 +221,203 @@ describe("URL param parsing: fails safe on invalid/stale/malformed input", () =>
     expect(parseBoundsParam("-500,42.83,-78.8,42.93")).toBeNull(); // out-of-range longitude
   });
 
-  it("buildLiveMapSearchParams omits default values (layer 'all', bounds null) to keep the URL clean", () => {
-    expect(buildLiveMapSearchParams("all", null).toString()).toBe("");
+  it("buildLiveMapSearchParams omits default values (layer 'all', bounds null, view 'map', viewport null) to keep the URL clean", () => {
+    expect(buildLiveMapSearchParams({ layer: "all", bounds: null, view: "map", viewport: null }).toString()).toBe("");
   });
 
   it("buildLiveMapSearchParams includes a non-default layer and/or bounds", () => {
-    const params = buildLiveMapSearchParams("business", BUFFALO_BOUNDS);
+    const params = buildLiveMapSearchParams({ layer: "business", bounds: BUFFALO_BOUNDS, view: "map", viewport: null });
     expect(params.get("layer")).toBe("business");
     expect(params.get("b")).toBe(serializeBoundsParam(BUFFALO_BOUNDS));
+  });
+});
+
+describe("Map V2 Batch 5: view mode persistence (parseMapViewParam)", () => {
+  it("accepts the known view modes", () => {
+    expect(parseMapViewParam("map")).toBe("map");
+    expect(parseMapViewParam("list")).toBe("list");
+  });
+
+  it("falls back to 'map' for null, missing, or garbage values — never crashes, never leaves both/neither view active", () => {
+    expect(parseMapViewParam(null)).toBe("map");
+    expect(parseMapViewParam(undefined)).toBe("map");
+    expect(parseMapViewParam("")).toBe("map");
+    expect(parseMapViewParam("grid")).toBe("map");
+    expect(parseMapViewParam("<script>alert(1)</script>")).toBe("map");
+    expect(parseMapViewParam("MAP")).toBe("map"); // case-sensitive — not a recognized value
+  });
+});
+
+describe("Map V2 Batch 5: live camera persistence (MapViewport)", () => {
+  const VALID_VIEWPORT: MapViewport = { lat: 42.8864, lng: -78.8784, zoom: 13.25, bearing: 0, pitch: 0 };
+  const ROTATED_VIEWPORT: MapViewport = { lat: 42.8864, lng: -78.8784, zoom: 13.25, bearing: 45.3, pitch: 30.7 };
+
+  describe("isValidViewport", () => {
+    it("accepts a normal camera position", () => {
+      expect(isValidViewport(VALID_VIEWPORT)).toBe(true);
+      expect(isValidViewport(ROTATED_VIEWPORT)).toBe(true);
+    });
+
+    it("rejects null/undefined", () => {
+      expect(isValidViewport(null)).toBe(false);
+      expect(isValidViewport(undefined)).toBe(false);
+    });
+
+    it("rejects non-finite fields (NaN, Infinity)", () => {
+      expect(isValidViewport({ ...VALID_VIEWPORT, lat: NaN })).toBe(false);
+      expect(isValidViewport({ ...VALID_VIEWPORT, zoom: Infinity })).toBe(false);
+      expect(isValidViewport({ ...VALID_VIEWPORT, bearing: -Infinity })).toBe(false);
+    });
+
+    it("rejects out-of-range latitude/longitude, including negative extremes", () => {
+      expect(isValidViewport({ ...VALID_VIEWPORT, lat: 91 })).toBe(false);
+      expect(isValidViewport({ ...VALID_VIEWPORT, lat: -91 })).toBe(false);
+      expect(isValidViewport({ ...VALID_VIEWPORT, lng: 181 })).toBe(false);
+      expect(isValidViewport({ ...VALID_VIEWPORT, lng: -181 })).toBe(false);
+    });
+
+    it("rejects invalid zoom: negative, zero is valid (min zoom), absurdly high", () => {
+      expect(isValidViewport({ ...VALID_VIEWPORT, zoom: -1 })).toBe(false);
+      expect(isValidViewport({ ...VALID_VIEWPORT, zoom: 0 })).toBe(true); // 0 is maplibre's own min zoom, a legitimate fully-zoomed-out camera
+      expect(isValidViewport({ ...VALID_VIEWPORT, zoom: 999 })).toBe(false);
+    });
+
+    it("rejects out-of-range bearing/pitch", () => {
+      expect(isValidViewport({ ...VALID_VIEWPORT, bearing: 200 })).toBe(false);
+      expect(isValidViewport({ ...VALID_VIEWPORT, bearing: -200 })).toBe(false);
+      expect(isValidViewport({ ...VALID_VIEWPORT, pitch: -1 })).toBe(false);
+      expect(isValidViewport({ ...VALID_VIEWPORT, pitch: 200 })).toBe(false);
+    });
+  });
+
+  describe("roundViewport / serializeViewportParam / parseViewportParam", () => {
+    it("round-trips a valid viewport with no rotate/tilt through the 3-field shape", () => {
+      const serialized = serializeViewportParam(VALID_VIEWPORT);
+      expect(serialized.split(",")).toHaveLength(3);
+      expect(parseViewportParam(serialized)).toEqual(roundViewport(VALID_VIEWPORT));
+    });
+
+    it("round-trips a rotated/tilted viewport through the 5-field shape", () => {
+      const serialized = serializeViewportParam(ROTATED_VIEWPORT);
+      expect(serialized.split(",")).toHaveLength(5);
+      expect(parseViewportParam(serialized)).toEqual(roundViewport(ROTATED_VIEWPORT));
+    });
+
+    it("rounds coordinates to 4 decimals and zoom/bearing/pitch to coarser precision, keeping the round-trip stable within that precision", () => {
+      const precise: MapViewport = { lat: 42.886412345, lng: -78.878398765, zoom: 13.2537, bearing: 12.34, pitch: 5.67 };
+      const rounded = roundViewport(precise);
+      expect(rounded.lat).toBe(42.8864);
+      expect(rounded.lng).toBe(-78.8784);
+      expect(rounded.zoom).toBe(13.25);
+      expect(rounded.bearing).toBe(12.3);
+      expect(rounded.pitch).toBe(5.7);
+      expect(parseViewportParam(serializeViewportParam(precise))).toEqual(rounded);
+    });
+  });
+
+  describe("parseViewportParam: fails safe on missing/malformed/extreme/adversarial input", () => {
+    it("returns null for missing input", () => {
+      expect(parseViewportParam(null)).toBeNull();
+      expect(parseViewportParam(undefined)).toBeNull();
+      expect(parseViewportParam("")).toBeNull();
+    });
+
+    it("returns null (never throws) for garbage/wrong-shape strings", () => {
+      expect(parseViewportParam("not,a,viewport")).toBeNull();
+      expect(parseViewportParam("1,2")).toBeNull(); // wrong count
+      expect(parseViewportParam("1,2,3,4")).toBeNull(); // wrong count (neither 3 nor 5)
+      expect(parseViewportParam("1,2,3,4,5,6")).toBeNull(); // wrong count
+      expect(parseViewportParam("a,b,c")).toBeNull(); // non-numeric
+      expect(parseViewportParam("<script>alert(1)</script>,1,1")).toBeNull(); // XSS-style, non-numeric
+      expect(parseViewportParam(",,,")).toBeNull();
+    });
+
+    it("returns null for non-numeric/NaN fields even when the shape otherwise looks right", () => {
+      expect(parseViewportParam("42.8,NaN,13")).toBeNull();
+      expect(parseViewportParam("42.8,-78.8,Infinity")).toBeNull();
+    });
+
+    it("returns null for extreme/out-of-range coordinates (never lets an off-earth camera through)", () => {
+      expect(parseViewportParam("91,-78.8,13")).toBeNull(); // lat > 90
+      expect(parseViewportParam("-91,-78.8,13")).toBeNull(); // lat < -90
+      expect(parseViewportParam("42.8,181,13")).toBeNull(); // lng > 180
+      expect(parseViewportParam("42.8,-181,13")).toBeNull(); // lng < -180
+    });
+
+    it("returns null for invalid zoom (negative, absurdly high, non-numeric)", () => {
+      expect(parseViewportParam("42.8,-78.8,-5")).toBeNull();
+      expect(parseViewportParam("42.8,-78.8,500")).toBeNull();
+      expect(parseViewportParam("42.8,-78.8,not-a-number")).toBeNull();
+    });
+
+    it("defaults a missing bearing/pitch to 0 for the 3-field shape rather than failing", () => {
+      expect(parseViewportParam("42.8864,-78.8784,13.25")).toEqual({ lat: 42.8864, lng: -78.8784, zoom: 13.25, bearing: 0, pitch: 0 });
+    });
+  });
+
+  describe("resolveInitialCameraSource: precedence between restored search bounds and restored live viewport", () => {
+    it("prefers bounds when both a committed search area and a restored viewport are present", () => {
+      expect(resolveInitialCameraSource(BUFFALO_BOUNDS, VALID_VIEWPORT)).toBe("bounds");
+    });
+
+    it("falls back to viewport when only a restored viewport is present", () => {
+      expect(resolveInitialCameraSource(null, VALID_VIEWPORT)).toBe("viewport");
+    });
+
+    it("falls back to default (city center) when neither is present", () => {
+      expect(resolveInitialCameraSource(null, null)).toBe("default");
+    });
+
+    it("ignores a malformed/invalid bounds or viewport rather than trusting it", () => {
+      const invalidBounds = { west: 1, south: 1, east: 1, north: 1 }; // inverted (west === east)
+      expect(resolveInitialCameraSource(invalidBounds, VALID_VIEWPORT)).toBe("viewport");
+      const invalidViewport = { ...VALID_VIEWPORT, zoom: 999 };
+      expect(resolveInitialCameraSource(null, invalidViewport)).toBe("default");
+    });
+  });
+
+  describe("buildLiveMapSearchParams: view + viewport interaction with layer/bounds", () => {
+    it("includes the view param only when non-default ('list')", () => {
+      const mapView = buildLiveMapSearchParams({ layer: "all", bounds: null, view: "map", viewport: null });
+      expect(mapView.get("view")).toBeNull();
+      const listView = buildLiveMapSearchParams({ layer: "all", bounds: null, view: "list", viewport: VALID_VIEWPORT });
+      expect(listView.get("view")).toBe("list");
+    });
+
+    it("includes the viewport param only when present, alongside an unaffected layer param (layer + viewport don't interfere)", () => {
+      const params = buildLiveMapSearchParams({ layer: "job", bounds: null, view: "map", viewport: VALID_VIEWPORT });
+      expect(params.get("layer")).toBe("job");
+      expect(params.get("vp")).toBe(serializeViewportParam(VALID_VIEWPORT));
+    });
+
+    it("carries both a committed bounds and a restored viewport at once (e.g. searched, then panned further without re-committing) without either being dropped", () => {
+      const params = buildLiveMapSearchParams({ layer: "all", bounds: BUFFALO_BOUNDS, view: "map", viewport: VALID_VIEWPORT });
+      expect(params.get("b")).toBe(serializeBoundsParam(BUFFALO_BOUNDS));
+      expect(params.get("vp")).toBe(serializeViewportParam(VALID_VIEWPORT));
+      // ...and on a subsequent restore, bounds still wins for the initial camera — see resolveInitialCameraSource.
+      expect(resolveInitialCameraSource(parseBoundsParam(params.get("b")), parseViewportParam(params.get("vp")))).toBe("bounds");
+    });
+
+    it("clearing viewport/view (absent from the URL) fails safe to defaults, not a crash", () => {
+      expect(parseMapViewParam(new URLSearchParams("").get("view"))).toBe("map");
+      expect(parseViewportParam(new URLSearchParams("").get("vp"))).toBeNull();
+    });
+  });
+});
+
+describe("Map V2 Batch 5: geolocation privacy — no raw device coordinate path into URL-building", () => {
+  it("buildLiveMapSearchParams's inputs are a MapLayer, MapBounds, MapViewMode, and MapViewport — none of which is (or is derived from) the raw GeolocationCoordinates the browser reports", () => {
+    // This is a structural/API-shape assertion, not a runtime one: LiveBrowser.tsx's
+    // one-shot navigator.geolocation.getCurrentPosition result (`userLocation`) is
+    // never passed as an argument anywhere in this file, and MapViewport's fields
+    // (lat/lng/zoom/bearing/pitch) are sourced exclusively from the maplibre map
+    // instance's own getCenter()/getZoom()/getBearing()/getPitch() — i.e. wherever
+    // the *camera* is, which the user can reach via the geolocation fly-to but which
+    // is never the raw coordinate itself once the map has settled somewhere. A grep
+    // for "userLocation" across lib/map-viewport.ts (this module) confirms it: the
+    // symbol does not appear here at all.
+    const source = buildLiveMapSearchParams.toString();
+    expect(source).not.toMatch(/userLocation|getCurrentPosition|geolocation/i);
   });
 });
 
@@ -321,5 +520,81 @@ describe("filterOrganizationsByBounds: privacy contract holds under the new boun
     const eligible = makeOrganization({ id: "eligible-org", location_visibility: "exact" });
     const result = filterOrganizationsByBounds([hidden, remote, eligible], null);
     expect(result.map((o) => o.id)).toEqual(["eligible-org"]);
+  });
+});
+
+describe("Map V2 Batch 6: state versioning (isCurrentMapStateVersion / buildLiveMapSearchParams)", () => {
+  describe("isCurrentMapStateVersion", () => {
+    it("trusts a missing version marker (null, undefined, or empty string) — every pre-Batch-6 /live URL has no 'v' param at all", () => {
+      expect(isCurrentMapStateVersion(null)).toBe(true);
+      expect(isCurrentMapStateVersion(undefined)).toBe(true);
+      expect(isCurrentMapStateVersion("")).toBe(true);
+    });
+
+    it("trusts the current version value", () => {
+      expect(isCurrentMapStateVersion(String(MAP_STATE_VERSION))).toBe(true);
+    });
+
+    it("does not trust an explicit, non-matching version value", () => {
+      expect(isCurrentMapStateVersion(String(MAP_STATE_VERSION + 1))).toBe(false);
+      expect(isCurrentMapStateVersion("not-a-version")).toBe(false);
+      expect(isCurrentMapStateVersion("0")).toBe(false);
+    });
+  });
+
+  describe("buildLiveMapSearchParams: 'v' param only appears alongside other non-default state", () => {
+    it("omits 'v' entirely when every other value is default (the common empty-URL case doesn't grow)", () => {
+      const params = buildLiveMapSearchParams({ layer: "all", bounds: null, view: "map", viewport: null });
+      expect(params.toString()).toBe("");
+      expect(params.get("v")).toBeNull();
+    });
+
+    it("includes 'v' once any non-default state is present", () => {
+      const params = buildLiveMapSearchParams({ layer: "business", bounds: null, view: "map", viewport: null });
+      expect(params.get("v")).toBe(String(MAP_STATE_VERSION));
+    });
+  });
+
+  describe("parseBoundsParam / parseViewportParam / parseMapViewParam: version guard", () => {
+    const serializedBounds = serializeBoundsParam(BUFFALO_BOUNDS);
+    const viewport: MapViewport = { lat: 42.8864, lng: -78.8784, zoom: 13.25, bearing: 0, pitch: 0 };
+    const serializedViewport = serializeViewportParam(viewport);
+
+    it("restores normally when the version param is absent (backward-compatible with pre-Batch-6 URLs)", () => {
+      expect(parseBoundsParam(serializedBounds)).toEqual(BUFFALO_BOUNDS);
+      expect(parseViewportParam(serializedViewport)).toEqual(viewport);
+      expect(parseMapViewParam("list")).toBe("list");
+    });
+
+    it("restores normally when the version param matches the current version", () => {
+      expect(parseBoundsParam(serializedBounds, String(MAP_STATE_VERSION))).toEqual(BUFFALO_BOUNDS);
+      expect(parseViewportParam(serializedViewport, String(MAP_STATE_VERSION))).toEqual(viewport);
+      expect(parseMapViewParam("list", String(MAP_STATE_VERSION))).toBe("list");
+    });
+
+    it("falls back to defaults (never crashes) when the version param is present but doesn't match", () => {
+      const staleVersion = String(MAP_STATE_VERSION + 1);
+      expect(parseBoundsParam(serializedBounds, staleVersion)).toBeNull();
+      expect(parseViewportParam(serializedViewport, staleVersion)).toBeNull();
+      expect(parseMapViewParam("list", staleVersion)).toBe("map");
+    });
+  });
+});
+
+describe("resolveSelectedMapItem: pure form of LiveMap's selected-pin lookup", () => {
+  it("returns null when selectedId is null", () => {
+    expect(resolveSelectedMapItem([mapItem({ id: "a" })], null)).toBeNull();
+  });
+
+  it("returns the matching item when its id is present in items", () => {
+    const a = mapItem({ id: "a" });
+    const b = mapItem({ id: "b" });
+    expect(resolveSelectedMapItem([a, b], "b")).toEqual(b);
+  });
+
+  it("auto-recovers to null once the previously-selected item's id is no longer present in items (e.g. a layer switch, a bounds filter, or the item expiring off the list)", () => {
+    const a = mapItem({ id: "a" });
+    expect(resolveSelectedMapItem([a], "gone")).toBeNull();
+    expect(resolveSelectedMapItem([], "a")).toBeNull();
   });
 });

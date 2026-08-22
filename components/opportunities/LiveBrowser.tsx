@@ -7,6 +7,7 @@ import { LiveMap } from "@/components/opportunities/LiveMap";
 import { OpportunityCard } from "@/components/opportunities/OpportunityCard";
 import { EventCard } from "@/components/events/EventCard";
 import { OrganizationCard } from "@/components/social/OrganizationCard";
+import { Button } from "@/components/ui/Button";
 import { ChipToggleGroup, type ChipOption } from "@/components/ui/ChipToggleGroup";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { cn } from "@/lib/utils";
@@ -28,6 +29,9 @@ import {
 import {
   MAP_BOUNDS_PARAM,
   MAP_LAYER_PARAM,
+  MAP_VERSION_PARAM,
+  MAP_VIEW_PARAM,
+  MAP_VIEWPORT_PARAM,
   buildLiveMapSearchParams,
   filterEventsByBounds,
   filterMapItemsByBounds,
@@ -35,7 +39,11 @@ import {
   filterOrganizationsByBounds,
   parseBoundsParam,
   parseMapLayerParam,
+  parseMapViewParam,
+  parseViewportParam,
   type MapBounds,
+  type MapViewMode,
+  type MapViewport,
 } from "@/lib/map-viewport";
 
 /** True user-relative DistanceInfo (miles + source: "user") for an
@@ -59,10 +67,11 @@ function opportunityDistanceOverride(o: MockOpportunity, userLocation: UserLocat
  * can never disagree about what's currently visible. There is no second,
  * competing filter/layer system anywhere in this tree.
  *
- * Layer and search-area both persist to the URL (see lib/map-viewport.ts)
- * so a reload or a shared link restores the same view — never the raw
- * device geolocation result, which stays in-memory only (see userLocation
- * below).
+ * Layer, search-area, map/list view mode, and the map's live camera
+ * (Map V2 Batch 5) all persist to the URL (see lib/map-viewport.ts) so a
+ * reload or a shared link restores the same view — never the raw device
+ * geolocation result, which stays in-memory only (see userLocation below)
+ * and is never written into the URL or any other storage mechanism.
  */
 export function LiveBrowser({
   opportunities,
@@ -76,9 +85,24 @@ export function LiveBrowser({
   mapItems: MapItem[];
 }) {
   const searchParams = useSearchParams();
+  // Map V2 Batch 6 — the `v` state-version marker, read once and passed to
+  // every version-guarded parser below so a URL stamped under some future,
+  // incompatible Map V3 state shape falls back to safe defaults instead of
+  // being mis-parsed under today's meaning (see lib/map-viewport.ts's
+  // isCurrentMapStateVersion). A missing marker (every pre-Batch-6 URL) is
+  // still trusted — see that function's own doc comment.
+  const v = searchParams.get(MAP_VERSION_PARAM);
   const [layer, setLayerState] = useState<MapLayer>(() => parseMapLayerParam(searchParams.get(MAP_LAYER_PARAM)));
-  const [searchBounds, setSearchBoundsState] = useState<MapBounds | null>(() => parseBoundsParam(searchParams.get(MAP_BOUNDS_PARAM)));
-  const [view, setView] = useState<"map" | "list">("map");
+  const [searchBounds, setSearchBoundsState] = useState<MapBounds | null>(() => parseBoundsParam(searchParams.get(MAP_BOUNDS_PARAM), v));
+  const [view, setView] = useState<MapViewMode>(() => parseMapViewParam(searchParams.get(MAP_VIEW_PARAM), v));
+  // Map V2 Batch 5 — the map's actual live camera (center/zoom, plus
+  // bearing/pitch if the user ever rotated/tilted it), restored from the
+  // URL on mount and kept in sync as LiveMap reports settled moves. This is
+  // a coarse, shareable "what part of the public map was open" position —
+  // never the raw device geolocation coordinate below, which stays
+  // in-memory only. See lib/map-viewport.ts's resolveInitialCameraSource
+  // for the full precedence order against searchBounds/geolocation.
+  const [viewport, setViewport] = useState<MapViewport | null>(() => parseViewportParam(searchParams.get(MAP_VIEWPORT_PARAM), v));
   const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -102,13 +126,17 @@ export function LiveBrowser({
 
   // Keep the URL in sync via a shallow history update (no server
   // round-trip, no full-page navigation, no extra back-stack entry per
-  // change) — see lib/map-viewport.ts's header comment for exactly what
-  // is/isn't persisted and why.
+  // change — deliberately replaceState, not pushState, for all four
+  // pieces of state here, matching the existing layer/bounds behavior:
+  // back/forward should return the user to wherever they were before
+  // /live, not step through intermediate map camera positions) — see
+  // lib/map-viewport.ts's header comment for exactly what is/isn't
+  // persisted and why.
   useEffect(() => {
-    const qs = buildLiveMapSearchParams(layer, searchBounds).toString();
+    const qs = buildLiveMapSearchParams({ layer, bounds: searchBounds, view, viewport }).toString();
     const url = qs ? `${window.location.pathname}?${qs}` : window.location.pathname;
     window.history.replaceState(null, "", url);
-  }, [layer, searchBounds]);
+  }, [layer, searchBounds, view, viewport]);
 
   const setLayer = useCallback((next: MapLayer) => {
     startTransition(() => setLayerState(next));
@@ -124,6 +152,31 @@ export function LiveBrowser({
 
   const clearSearchArea = useCallback(() => {
     startTransition(() => setSearchBoundsState(null));
+  }, []);
+
+  // Map V2 Batch 6 — LiveMap's in-map empty state "Clear filters and search
+  // again" action (see onResetFilters below). Deliberately narrow: resets
+  // only the two things that can actually cause a *zero-results* dead end
+  // (the selected layer and any committed search area), not `view`/
+  // `viewport` — the user's map/list preference and camera position are
+  // real choices unrelated to why the result set came up empty, and
+  // clearing them here would be a surprising, unrequested side effect (a
+  // full "reset map" is evaluated separately; this is not that).
+  const resetFilters = useCallback(() => {
+    startTransition(() => {
+      setLayerState("all");
+      setSearchBoundsState(null);
+    });
+  }, []);
+
+  // Fired on every settled camera move LiveMap reports (user gestures and
+  // programmatic settles alike — see LiveMap.tsx's handleMoveEnd) so the
+  // persisted viewport always reflects the actual current camera, whether
+  // or not a "Search this area" is also committed. Plain state (not
+  // wrapped in startTransition) — this never drives a result-filtering
+  // computation, only the URL-sync effect above.
+  const handleViewportChange = useCallback((next: MapViewport) => {
+    setViewport(next);
   }, []);
 
   const visibleMapItems = useMemo(() => {
@@ -143,7 +196,12 @@ export function LiveBrowser({
 
   const layerOptions: ChipOption[] = MAP_LAYERS.map((l) => ({ id: l, label: MAP_LAYER_LABEL[l] }));
 
-  const hasResults = visibleOpportunities.length > 0 || visibleEvents.length > 0 || visibleOrganizations.length > 0;
+  // Map V2 Batch 6 — one combined count across all three result kinds,
+  // shared by both the lightweight "N results" line below and the
+  // has-any-results check that decides between the grid and the empty
+  // state.
+  const totalResults = visibleOpportunities.length + visibleEvents.length + visibleOrganizations.length;
+  const hasResults = totalResults > 0;
 
   return (
     <div className="space-y-4">
@@ -189,6 +247,25 @@ export function LiveBrowser({
         </div>
       </div>
 
+      {/* Map V2 Batch 6 — lightweight result-count feedback. aria-live so
+          screen reader users hear the count update as layer/search-area
+          changes narrow or widen it, without it being announced so often
+          it becomes noise (it only changes on an explicit layer switch or
+          "Search this area" commit, never on every pan). Hidden in map
+          view on small screens — the map itself is the priority there, and
+          this line would otherwise sit awkwardly between the chips and a
+          map that already fills the available space; list view (where the
+          count is scanning a grid) and any sm+ screen always show it. */}
+      {hasResults && (
+        <p
+          aria-live="polite"
+          className={cn("text-xs font-medium text-ink-500 dark:text-ink-400", view === "map" && "hidden sm:block")}
+        >
+          {totalResults} result{totalResults === 1 ? "" : "s"}
+          {searchBounds ? " in this area" : ""}
+        </p>
+      )}
+
       {searchBounds && (
         <button
           type="button"
@@ -205,8 +282,11 @@ export function LiveBrowser({
           layer={layer}
           userLocation={userLocation}
           searchBounds={searchBounds}
+          viewport={viewport}
+          onViewportChange={handleViewportChange}
           onSearchThisArea={handleSearchThisArea}
           isSearchPending={isPending}
+          onResetFilters={resetFilters}
         />
       )}
 
@@ -226,6 +306,24 @@ export function LiveBrowser({
         <EmptyState
           title={searchBounds ? "Nothing in this area yet." : MAP_LAYER_EMPTY_COPY[layer]}
           body={searchBounds ? "Try clearing the search area or panning the map somewhere else and searching again." : undefined}
+          // Map V2 Batch 6 — mirrors LiveMap's own in-map empty state action
+          // for consistency: "Clear search area" undoes a committed
+          // searchBounds specifically (same as the "Showing results for..."
+          // banner above), while the plain-layer-empty case falls back to
+          // the same `resetFilters` LiveMap's in-map empty state already
+          // uses — this only matters in list view, since map view already
+          // renders LiveMap's own in-map empty state with that same action.
+          action={
+            searchBounds ? (
+              <Button type="button" size="md" variant="outline" onClick={clearSearchArea}>
+                Clear search area
+              </Button>
+            ) : (
+              <Button type="button" size="md" variant="outline" onClick={resetFilters}>
+                Clear filters and search again
+              </Button>
+            )
+          }
         />
       )}
     </div>
