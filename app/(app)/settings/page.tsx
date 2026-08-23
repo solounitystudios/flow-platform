@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { getAllSkills, getCurrentUser, getFullProfile } from "@/lib/data/profile";
 import { getMyIntents } from "@/lib/data/intents";
-import { getMyVerifications, getCredentialTypes } from "@/lib/data/verifications";
+import { getMyVerifications, getCredentialTypes, getMyActiveCreativeProjects } from "@/lib/data/verifications";
 import { getMyReferrals } from "@/lib/data/referrals";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { ProfileForm } from "@/components/settings/ProfileForm";
@@ -19,12 +19,13 @@ export default async function SettingsPage() {
   const full = await getFullProfile(user.id);
   if (!full) redirect("/onboarding");
 
-  const [allSkills, intents, verifications, credentialTypes, referrals] = await Promise.all([
+  const [allSkills, intents, verifications, credentialTypes, referrals, creativeProjects] = await Promise.all([
     getAllSkills(),
     getMyIntents(user.id),
     getMyVerifications(user.id),
     getCredentialTypes(),
     getMyReferrals(user.id),
+    getMyActiveCreativeProjects(user.id),
   ]);
 
   return (
@@ -61,7 +62,7 @@ export default async function SettingsPage() {
           <h2 className="font-bold text-ink-900 dark:text-white">Evidence &amp; verification</h2>
         </CardHeader>
         <CardBody>
-          <EvidencePanel verifications={verifications} credentialTypes={credentialTypes} skills={allSkills} />
+          <EvidencePanel verifications={verifications} credentialTypes={credentialTypes} skills={allSkills} creativeProjects={creativeProjects} />
         </CardBody>
       </Card>
 

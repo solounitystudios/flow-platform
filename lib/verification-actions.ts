@@ -26,6 +26,7 @@ export async function submitEvidenceAction(_prev: EvidenceActionState, formData:
   const evidence_url = String(formData.get("evidence_url") ?? "").trim();
   const evidence_note = String(formData.get("evidence_note") ?? "").trim();
   const skill_id = String(formData.get("skill_id") ?? "");
+  const creative_project_id = String(formData.get("creative_project_id") ?? "").trim();
   const witness_username = String(formData.get("witness_username") ?? "").trim();
 
   if (!credential_type) return { error: "Choose what kind of credential this is." };
@@ -46,6 +47,13 @@ export async function submitEvidenceAction(_prev: EvidenceActionState, formData:
     witness_profile_id = witness.id;
   }
 
+  // A claim references at most one of skill_id / creative_project_id in this
+  // batch. creative_project_id wins if both are somehow submitted — it comes
+  // from a dedicated, narrower project picker rather than the general skill
+  // picker, so it's the more specific signal when both are present.
+  const reference_table = creative_project_id ? "creative_project" : skill_id ? "profile_skill" : null;
+  const reference_id = creative_project_id || skill_id || null;
+
   const { error } = await supabase.from("verifications").insert({
     profile_id: user.id,
     credential_type,
@@ -53,8 +61,8 @@ export async function submitEvidenceAction(_prev: EvidenceActionState, formData:
     source,
     evidence_url: evidence_url || null,
     evidence_note: evidence_note || null,
-    reference_id: skill_id || null,
-    reference_table: skill_id ? "profile_skill" : null,
+    reference_id,
+    reference_table,
     witness_profile_id,
     status: "pending",
   });
@@ -132,6 +140,7 @@ const COLLABORATOR_CONFIRM_MESSAGES: Record<NonNullable<CollaboratorConfirmation
   not_authenticated: "Log in to confirm this claim.",
   not_found: "That claim could not be found.",
   not_authorized: "You're not the named collaborator on this claim.",
+  not_a_project_member: "You're no longer an active member of the project this claim references.",
   not_pending: "This claim has already been resolved.",
 };
 

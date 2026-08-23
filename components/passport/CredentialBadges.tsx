@@ -1,4 +1,4 @@
-import { BadgeCheck, Sparkles, Briefcase, GraduationCap, Users, ShieldCheck, Star, Compass, Building, type LucideIcon } from "lucide-react";
+import { BadgeCheck, Sparkles, Briefcase, GraduationCap, Users, ShieldCheck, Star, Compass, Building, Palette, type LucideIcon } from "lucide-react";
 import type { Tables } from "@/lib/database.types";
 import { relativeTime } from "@/lib/utils";
 
@@ -12,6 +12,7 @@ const ICONS: Record<string, LucideIcon> = {
   star: Star,
   compass: Compass,
   building: Building,
+  palette: Palette,
 };
 
 const COLOR_CLASSES: Record<string, string> = {
@@ -24,6 +25,7 @@ const COLOR_CLASSES: Record<string, string> = {
   rose: "bg-rose-500/10 text-rose-600 dark:text-rose-400",
   indigo: "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400",
   slate: "bg-slate-500/10 text-slate-600 dark:text-slate-400",
+  fuchsia: "bg-fuchsia-500/10 text-fuchsia-600 dark:text-fuchsia-400",
 };
 
 /** Color is never the only indicator — every badge also carries its label

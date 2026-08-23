@@ -51,6 +51,36 @@ export async function findProfileByUsername(username: string): Promise<Pick<Tabl
   return data ?? null;
 }
 
+/** Narrow lookup used to populate the "related creative project" picker on
+ * the evidence submission form. Reads creative_project_members (Batch 15's
+ * Creative Projects foundation — no owning specialist assigned yet) filtered
+ * to the caller's own currently-active memberships, joined to just the id +
+ * title of each project. This is not a claim of ownership over that table or
+ * feature — it returns exactly the two fields the picker needs and nothing
+ * else (no role, no status, no other members). */
+export interface MyCreativeProject {
+  id: string;
+  title: string;
+}
+
+export async function getMyActiveCreativeProjects(profileId: string): Promise<MyCreativeProject[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("creative_project_members")
+    .select("project:creative_projects(id, title)")
+    .eq("profile_id", profileId)
+    .eq("status", "active");
+
+  if (error) {
+    console.error("[getMyActiveCreativeProjects] query failed:", error.message);
+    return [];
+  }
+
+  return (data ?? [])
+    .map((row) => row.project as unknown as MyCreativeProject | null)
+    .filter((project): project is MyCreativeProject => project !== null);
+}
+
 /** A single claim, with the claimant's public profile joined in. RLS
  * (verifications_self_read) only lets the claimant or an admin read this —
  * a named witness who isn't the claimant will get `null` here even for a
