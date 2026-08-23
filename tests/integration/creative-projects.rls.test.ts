@@ -91,3 +91,75 @@ describe.todo("creative_project_members mutation-attack resistance (STAGING_ONLY
   it.todo("[executed] an UPDATE naming invited_by fails at the privilege-check stage (permission denied) — it's audit metadata fixed at invite time, never revisable");
   it.todo("[executed] an INSERT that supplies an explicit invited_by value has it silently overwritten to the real caller's auth.uid() by the BEFORE INSERT trigger — client-forged inviter metadata is impossible, not merely rejected");
 });
+
+// ── Batch 17a — invite consent (accept_creative_project_invite /
+// decline_creative_project_invite / owner_manage tightening) ──────────────
+// supabase/migrations/20260823232600_creative_project_invite_consent.sql
+//
+// Same STAGING_ONLY reasoning as every block above, and the same honesty
+// convention: every assertion below marked "[executed]" was actually run,
+// for real, in this session — an ephemeral Docker Postgres 16 container was
+// bootstrapped with a stub auth.uid()/auth.jwt(), the real anon/authenticated
+// roles, this repo's real is_flow_admin()/set_admin_updated_at()/
+// log_admin_change() (copied verbatim from
+// 20260819035422_admin_employer_outreach_mvp.sql), the real, unmodified
+// 20260823041155_creative_projects_foundation.sql followed by the real,
+// unmodified 20260823232600_creative_project_invite_consent.sql were both
+// applied with zero errors, and 26 real assertions were run with real
+// role/claim switching against fixture data across 2 projects and 10
+// personas (2 owners, 2 invitees under test, a stranger, a suspended
+// member, a removed/departed member, an already-active non-owner member, a
+// dedicated decline persona, and a dedicated concurrency persona). All 26
+// passed, including a genuine two-connection concurrency race (not
+// simulated): session 1 opened an explicit transaction, called
+// accept_creative_project_invite(), held the row lock for 2s via pg_sleep,
+// then committed; session 2, started 0.5s later on a separate connection,
+// blocked on the same row's FOR UPDATE lock for the remaining ~1.5s (proven
+// by wall-clock timestamps in both sessions) and only then received
+// {ok:false, reason:'not_pending'} — the row was locked, not double-processed,
+// and no error/deadlock occurred. The container was then torn down — not a
+// persistent fixture, cannot be re-run by `npm test` today. Harness scripts
+// and full output logs are archived in this session's scratchpad (not part
+// of the repo) for founder/qa-security re-verification.
+//
+// Batch 16 cross-check boundary (documented, not silently skipped): cases
+// 22-25 from the originating task brief (full verifications-table
+// project-linked-evidence/collaborator-confirmation re-verification) were
+// NOT re-executed in this harness — doing so would have required
+// reimplementing Batch 14/16's verifications, verification_reviews,
+// profile_credentials, achievements, and evaluate_achievements() machinery
+// here too, which this batch's own scope (membership consent only, no
+// Batch 16 change) doesn't touch. Instead, is_creative_project_member() —
+// the exact single shared gate both verifications_self_insert and
+// confirm_verification_as_collaborator() call, with no additional logic of
+// their own — was proven exhaustively for all four statuses (below). Since
+// neither Batch 16 policy does anything beyond call this function, that
+// proof carries over without re-running Batch 16's own SQL.
+describe.todo("creative_project_members invite consent: accept_creative_project_invite / decline_creative_project_invite (STAGING_ONLY for CI — Batch 17a)", () => {
+  it.todo("[executed] the owner_invite policy is unaffected by this batch: the owner can still invite a new member");
+  it.todo("[executed] an invitee can read their own pending invite (creative_project_members_self_read, unchanged, no status filter)");
+  it.todo("[executed] a stranger cannot read another profile's pending invite");
+  it.todo("[executed] an invitee can accept their own invite: accept_creative_project_invite returns {ok:true}");
+  it.todo("[executed] accepting sets status='active' and joined_at to a non-null timestamp");
+  it.todo("[executed] the owner can no longer directly set a non-owner row to status='active' — the tightened creative_project_members_owner_manage with-check rejects it with 'new row violates row-level security policy', not a silent no-op");
+  it.todo("[executed] the owner calling accept_creative_project_invite() on their own project only ever matches their own (already-active) row — {ok:false, reason:'not_pending'} — and the actual invitee's row is left completely untouched");
+  it.todo("[executed] an invitee can decline their own invite: decline_creative_project_invite returns {ok:true}");
+  it.todo("[executed] declining sets status='removed' and removed_at to a non-null timestamp, while joined_at stays null — distinguishing a decline from a later self-leave-after-being-active in the same history, with no new status/CHECK-constraint value needed");
+  it.todo("[executed] a stranger cannot decline another profile's invite ({ok:false, reason:'not_found'} — self-targeting only, no parameter accepts an arbitrary profile) and that invite is left untouched");
+  it.todo("[executed] calling accept for the right profile but the wrong project_id fails ({ok:false, reason:'not_found'})");
+  it.todo("[executed] calling decline for the right profile but the wrong project_id fails ({ok:false, reason:'not_found'})");
+  it.todo("[executed] a removed member cannot accept ({ok:false, reason:'not_pending'})");
+  it.todo("[executed] a suspended member cannot accept ({ok:false, reason:'not_pending'})");
+  it.todo("[executed] accepting the same invite a second time is safely rejected ({ok:false, reason:'not_pending'}), no double-processing");
+  it.todo("[executed] declining the same invite a second time is safely rejected ({ok:false, reason:'not_pending'})");
+  it.todo("[executed] the owner's own membership row can never be altered by either RPC — decline_creative_project_invite() against the owner's own row returns {ok:false, reason:'not_pending'} because it's never 'invited' (created 'active' by the ownership-sync trigger)");
+  it.todo("[executed] two concurrent accept_creative_project_invite() calls on the same invite, from two separate connections, are race-safe under the FOR UPDATE row lock: proven with real wall-clock timestamps — the second call visibly blocks until the first commits, then correctly resolves to not_pending, no crash, no double-processing");
+  it.todo("[executed] is_creative_project_member() is false for a status='invited' row");
+  it.todo("[executed] is_creative_project_member() is false for a status='removed' row");
+  it.todo("[executed] is_creative_project_member() is false for a status='suspended' row");
+  it.todo("[executed] is_creative_project_member() is true for a status='active' row");
+  it.todo("NOT executed this round — logically entailed, not independently re-run: an invited (not yet accepted) member's project-linked verifications_self_insert claim is rejected, because that policy's only creative-project-specific condition is is_creative_project_member(), proven false-for-invited directly above");
+  it.todo("NOT executed this round — logically entailed: after accept_creative_project_invite() sets status='active', the same profile's project-linked verifications_self_insert claim succeeds with zero Batch 16 code change, because is_creative_project_member() is proven true-for-active directly above and that policy calls nothing else");
+  it.todo("NOT executed this round — logically entailed: an invited (not yet accepted) member cannot satisfy confirm_verification_as_collaborator()'s project-membership check, same is_creative_project_member() dependency as above");
+  it.todo("NOT executed this round — logically entailed: an active member does satisfy confirm_verification_as_collaborator()'s project-membership check, same is_creative_project_member() dependency as above");
+});

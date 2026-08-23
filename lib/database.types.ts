@@ -3769,6 +3769,14 @@ export type Database = {
         Args: { p_organization_id: string; p_role: string }
         Returns: boolean
       }
+      accept_creative_project_invite: {
+        Args: { p_project_id: string }
+        Returns: Json
+      }
+      decline_creative_project_invite: {
+        Args: { p_project_id: string }
+        Returns: Json
+      }
       import_business_leads: { Args: { p_rows: Json }; Returns: Json }
       is_blocked_between: { Args: { a: string; b: string }; Returns: boolean }
       is_conversation_member: {
@@ -4117,4 +4125,15 @@ export interface CollaboratorConfirmationResult {
 export interface OrganizationVerificationResult {
   ok: boolean;
   reason?: "not_authenticated" | "not_found" | "no_organization_named" | "not_pending" | "organization_not_verified" | "not_authorized";
+}
+
+// ── Creative Project invite consent RPC result shape ──────────────────────
+// jsonb-typed at the SQL level, real shape here. Shared by both
+// accept_creative_project_invite and decline_creative_project_invite — same
+// self-targeting precondition, same rejection reasons. See
+// supabase/migrations/20260823232600_creative_project_invite_consent.sql.
+
+export interface CreativeProjectInviteResult {
+  ok: boolean;
+  reason?: "not_authenticated" | "not_found" | "not_pending";
 }
