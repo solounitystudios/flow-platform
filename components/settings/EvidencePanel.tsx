@@ -5,7 +5,7 @@ import { Plus, Clock, ShieldCheck, XCircle, AlertTriangle, Ban, Link2, Check } f
 import { Input, Textarea, Select } from "@/components/ui/Input";
 import { SubmitButton } from "@/components/ui/SubmitButton";
 import { submitEvidenceAction, type EvidenceActionState } from "@/lib/verification-actions";
-import type { Verification, CredentialType } from "@/lib/data/verifications";
+import type { Verification, CredentialType, MyCreativeProject } from "@/lib/data/verifications";
 import type { Tables } from "@/lib/database.types";
 
 const initialState: EvidenceActionState = {};
@@ -18,7 +18,17 @@ const STATUS_ICON = {
   revoked: { icon: Ban, className: "text-red-500" },
 } as const;
 
-export function EvidencePanel({ verifications, credentialTypes, skills }: { verifications: Verification[]; credentialTypes: CredentialType[]; skills: Tables<"skills">[] }) {
+export function EvidencePanel({
+  verifications,
+  credentialTypes,
+  skills,
+  creativeProjects,
+}: {
+  verifications: Verification[];
+  credentialTypes: CredentialType[];
+  skills: Tables<"skills">[];
+  creativeProjects: MyCreativeProject[];
+}) {
   const [showForm, setShowForm] = useState(false);
   const [source, setSource] = useState<"self_reported" | "external_link">("self_reported");
   const [state, formAction] = useActionState(submitEvidenceAction, initialState);
@@ -67,6 +77,14 @@ export function EvidencePanel({ verifications, credentialTypes, skills }: { veri
             {skills.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name}
+              </option>
+            ))}
+          </Select>
+          <Select label="Related creative project (optional)" name="creative_project_id">
+            <option value="">None</option>
+            {creativeProjects.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.title}
               </option>
             ))}
           </Select>

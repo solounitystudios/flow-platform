@@ -4111,7 +4111,7 @@ export type VerificationTier = "auto_verified" | "collaborator_verified" | "orga
 
 export interface CollaboratorConfirmationResult {
   ok: boolean;
-  reason?: "not_authenticated" | "not_found" | "not_authorized" | "not_pending";
+  reason?: "not_authenticated" | "not_found" | "not_authorized" | "not_a_project_member" | "not_pending";
 }
 
 export interface OrganizationVerificationResult {
