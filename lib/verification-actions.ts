@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { findProfileByUsername } from "@/lib/data/verifications";
+import { findProfileByUsername, resolveEvidenceReference } from "@/lib/data/verifications";
 import type { CollaboratorConfirmationResult, OrganizationVerificationResult } from "@/lib/database.types";
 
 export interface EvidenceActionState {
@@ -47,12 +47,7 @@ export async function submitEvidenceAction(_prev: EvidenceActionState, formData:
     witness_profile_id = witness.id;
   }
 
-  // A claim references at most one of skill_id / creative_project_id in this
-  // batch. creative_project_id wins if both are somehow submitted — it comes
-  // from a dedicated, narrower project picker rather than the general skill
-  // picker, so it's the more specific signal when both are present.
-  const reference_table = creative_project_id ? "creative_project" : skill_id ? "profile_skill" : null;
-  const reference_id = creative_project_id || skill_id || null;
+  const { reference_table, reference_id } = resolveEvidenceReference(skill_id, creative_project_id);
 
   const { error } = await supabase.from("verifications").insert({
     profile_id: user.id,

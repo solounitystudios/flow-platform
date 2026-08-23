@@ -63,6 +63,21 @@ export interface MyCreativeProject {
   title: string;
 }
 
+/** A claim references at most one of skill_id / creative_project_id.
+ * creative_project_id wins if both are somehow submitted — it comes from a
+ * dedicated, narrower project picker rather than the general skill picker,
+ * so it's the more specific signal when both are present. Pure and exported
+ * so the priority rule has a direct regression test independent of
+ * submitEvidenceAction's surrounding Supabase/auth plumbing. */
+export function resolveEvidenceReference(
+  skillId: string,
+  creativeProjectId: string
+): { reference_table: "creative_project" | "profile_skill" | null; reference_id: string | null } {
+  const reference_table = creativeProjectId ? "creative_project" : skillId ? "profile_skill" : null;
+  const reference_id = creativeProjectId || skillId || null;
+  return { reference_table, reference_id };
+}
+
 export async function getMyActiveCreativeProjects(profileId: string): Promise<MyCreativeProject[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
