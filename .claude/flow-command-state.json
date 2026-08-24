@@ -1,6 +1,6 @@
 {
   "$schema_note": "Structured status for the FLOW COMMAND founder dashboard (/admin/command). Contains no secrets. Updated by flow-lead at meaningful milestones only, not on every tool call. See .claude/FLOW_ORCHESTRATION.md 'Status reporting (FLOW COMMAND)' for the update contract.",
-  "mission": "Batch 16 — Creative Contributions: connect Creative Projects (Batch 15) to the Passport verification/evidence pipeline (Batch 14 tiering). MERGED and closed. No active mission — awaiting next batch selection.",
+  "mission": "No active mission — awaiting next batch selection. Since Batch 16 (PR #15, tracked in detail below), three further PRs merged that this dashboard did not individually track: PR #16 (chore/batch16-recovery-closure), PR #17 (feature/creative-project-invite-consent — self-accept invite flow for Creative Project members), PR #18 (feature/creative-project-ui-v1 — Creative Projects UI). These are stated from verified Git/GitHub history only, not from a flow-lead-tracked mission record — no per-batch process detail is claimed for them. A reconciliation preflight ran 2026-08-24 (see feed) resolving conflicting migration/test-count/Work-Now claims from two prior audits and closing a Creative Projects ownership gap; no product code was touched.",
   "phase": "Founder Approval",
   "phases": [
     "Planning",
@@ -57,42 +57,64 @@
       "time": "2026-08-23T23:15:00Z",
       "actor": "flow-lead",
       "message": "Post-merge smoke check: targeted code inspection only (no new broad audit). Added one small regression test (tests/unit/verifications-data.test.ts) for the previously-untested creative-project-vs-skill reference-priority logic, extracted to a pure resolveEvidenceReference() helper in lib/data/verifications.ts so it's testable outside submitEvidenceAction's Supabase/auth plumbing. typecheck/lint/test(140)/build all re-verified clean. Reconciled this state file: removed the prior unverifiable multi-agent/founder-authorization narrative and the false production_touched:false claim."
+    },
+    {
+      "time": "2026-08-24T12:01:00Z",
+      "actor": "flow-lead",
+      "message": "Resume-FLOW preflight reconciliation (no branch created, no product code touched). Two independent full-repo audits produced conflicting numbers; re-verified each claim directly against live Supabase and repo state via four parallel read-only investigations. Resolved: (1) migration reconciliation is 46/48 exact match + 2 drift items (not 47/48+1) — both drift items content-verified functionally identical to repo source, neither urgent, one purely cosmetic (name-field text only), one a real version-number mismatch on 20260823232600_creative_project_invite_consent flagged to supabase-backend as safe to defer; (2) integration test count is exactly 76 it.todo across 3 files (0 executing), not 87 — confirmed by both grep and vitest's own count; (3) passport_summary SECURITY DEFINER advisor finding is NOT an active vulnerability — its own WHERE clause correctly re-implements the base tables' RLS gating (owner/admin/public_passport, plus block-check), verified by direct logic comparison; safe to leave as an accepted advisor exception; (4) Work Now is accurately described as a computed one-line heuristic (lib/data/opportunities.ts:42, unstored, no dedicated column or route) that is nonetheless wired into real, working map-layer/filter/badge UX across ~10 files — both prior one-line characterizations were individually incomplete. Made two governance-only repairs: closed the Creative Projects ownership gap (folded into passport-reputation's scope in FLOW_ORCHESTRATION.md and its own agent file, since the domain's purpose is entirely to feed the verification pipeline passport-reputation already owns) and added lib/authz.ts to the shared-files coordination list (confirmed via grep it's imported by lib/actions.ts, lib/creative-project-actions.ts, app/(app)/business/team/actions.ts, and lib/admin/auth.ts — genuinely cross-domain). This state file refreshed to reflect PR #18 as the current HEAD; PRs #16/#17 folded in from verified Git/GitHub history only. No feature batch implementation began — awaiting founder approval per standing instruction."
+    },
+    {
+      "time": "2026-08-24T12:02:00Z",
+      "actor": "flow-lead",
+      "message": "Follow-up governance/repo-hygiene pass (still no product code, no schema, no migrations touched). Recorded the four verified baseline facts above (Work Now, integration tests, migration drift, passport_summary) as a canonical 'Verified baseline facts' section in FLOW_ORCHESTRATION.md so future sessions don't re-audit the same ground. Added a single-writer session rule to General safety rules. Clarified the FLOW COMMAND update contract so this file can't silently go stale past a merged batch again (Git/GitHub history stated as the tiebreaker source of truth). Corrected this file's two artificial 00:00:00Z placeholder timestamps to real capture times. Recorded the next-batch recommendation below as awaiting founder approval, no implementation scope added."
     }
   ],
   "blockers": [],
-  "files_touched": [],
+  "files_touched": [
+    ".claude/flow-command-state.json",
+    ".claude/FLOW_ORCHESTRATION.md",
+    ".claude/agents/passport-reputation.md"
+  ],
   "schema_impact": {
     "changed": false,
-    "notes": "No new schema change proposed by this reconciliation. Migration 20260823145545 was found already live in production before this session and was not reapplied; this batch's Git state now matches that live reality."
+    "notes": "This reconciliation touched no migrations and made no Supabase write. The two live migration-history drift items found (20260823145545 name-field cosmetic drift; 20260823232600 real version-number drift, both content-verified identical to their repo source) were left as-is per instruction not to modify migration history for cosmetics — flagged to supabase-backend as safe-to-defer hygiene items."
   },
   "qa_status": "PASS",
   "repo_status": {
     "branch": "main",
-    "working_tree": "clean except this state file (intentionally left uncommitted pending founder review of this reconciliation)",
+    "working_tree": "clean at session start (verified at cb8ee55); this reconciliation's governance-doc edits are the only changes made, pending founder review",
     "ahead_of_origin": 0,
-    "last_commit": "92f0f1569e10c1c67ca0d61c5d7d7f9f5cd61c26 Merge pull request #15 from solounitystudios/feature/creative-contributions-batch16 (local main == origin/main, verified)"
+    "last_commit": "cb8ee559846a41c04f57396a30440db19c2c3879 Merge pull request #18 from solounitystudios/feature/creative-project-ui-v1 (local main == origin/main, verified)"
   },
-  "production_touched": true,
+  "production_touched": false,
   "founder_approval_required": false,
   "usage_mode": "GREEN",
   "usage_mode_note": "Manually reported, not live-detected — this app has no API into Claude Code's session usage. Set to YELLOW/RED only when a founder or agent explicitly observes rate-limit symptoms, or switch via the 'FLOW LOW USAGE MODE' command.",
   "active_agent_count": 0,
   "parallelism_limited": false,
   "last_completed_mission": {
-    "name": "Batch 16 — Creative Project-linked Passport verification (Creative Contributions)",
-    "commit": "92f0f1569e10c1c67ca0d61c5d7d7f9f5cd61c26",
-    "summary": "Connects Creative Projects (Batch 15) to the Passport verification pipeline (Batch 14 tiering): a creative_project_members participant can submit a project-linked self-claim while an active member; a named collaborator can confirm it while also an active member of that same project (new not_a_project_member rejection reason otherwise); resolution and credential issuance reuse the existing tiering pipeline unchanged. Migration 20260823145545_verifications_creative_project_reference.sql was found already applied to the live flow-platform Supabase project at the start of this recovery, with no corresponding Git commit — the responsible prior actor/process is unknown and unverified. This mission's actual work was reconciliation, not a fresh apply: committing the 7 legitimate functional files (migration + 6 app files) to Git, restoring lib/database.types.ts to a minimal diff, opening PR #15, and merging it once CI passed and the founder authorized each step in-session. No Supabase write was made at any point.",
+    "name": "PR #18 — Creative Project UI V1 (most recent merge to main)",
+    "commit": "cb8ee559846a41c04f57396a30440db19c2c3879",
+    "summary": "Most recent merged work on main. Verified from Git/GitHub history only (this dashboard did not track PRs #16-#18 individually as they happened, so no internal process narrative is claimed for them — contrast with the PR #15 record below, which was reconstructed in detail during its own recovery session). Sequence since the last dashboard-tracked mission: PR #16 chore/batch16-recovery-closure, PR #17 feature/creative-project-invite-consent (self-accept invite flow for Creative Project members — a real product gap identified in the 2026-08-24 preflight, since org-member invites elsewhere still lack this), PR #18 feature/creative-project-ui-v1. A live-migration-history check during the 2026-08-24 preflight found migration 20260823232600_creative_project_invite_consent.sql (content matching PR #17) applied live under version 20260823234842 — a real but non-blocking filename/version drift, content-verified identical, flagged to supabase-backend as safe to defer.",
     "agents_used": [],
-    "migration": "20260823145545_verifications_creative_project_reference (already live in production before this session; not reapplied; now represented in Git as of this merge)",
+    "migration": "20260823232600_creative_project_invite_consent (content-verified live; local filename timestamp does not match the live-recorded version 20260823234842 — reconciliation flagged, not yet applied)",
     "qa_status": "PASS",
     "lint_status": "PASS",
     "typecheck_status": "PASS",
     "build_status": "PASS",
-    "production_touched": true,
+    "production_touched": false,
     "pushed": true,
     "merged": true,
-    "pr": 15,
-    "merge_commit": "92f0f1569e10c1c67ca0d61c5d7d7f9f5cd61c26"
+    "pr": 18,
+    "merge_commit": "cb8ee559846a41c04f57396a30440db19c2c3879",
+    "prior_mission_pr15_detail": "Batch 16 — Creative Project-linked Passport verification (Creative Contributions), PR #15, merge commit 92f0f1569e10c1c67ca0d61c5d7d7f9f5cd61c26: connected Creative Projects (Batch 15/PR #14) to the Passport verification pipeline (Batch 14/PR #13 tiering) — a creative_project_members participant can submit a project-linked self-claim while an active member; a named collaborator can confirm it while also an active member of that same project (not_a_project_member rejection otherwise). Preserved here for continuity; see Git history for full detail."
   },
-  "updated_at": "2026-08-23T23:15:00Z"
+  "next_batch_recommendation": {
+    "name": "Activity/Outcome → Evidence → Passport integration completion",
+    "status": "awaiting founder approval",
+    "reason": "Completed work currently updates application status but does not fully carry the outcome into the verification/evidence/Passport loop.",
+    "owner": "passport-reputation",
+    "recorded_at": "2026-08-24T12:02:00Z"
+  },
+  "updated_at": "2026-08-24T12:02:00Z"
 }

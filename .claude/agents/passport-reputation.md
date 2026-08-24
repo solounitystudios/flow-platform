@@ -16,6 +16,16 @@ system. Read `.claude/FLOW_ORCHESTRATION.md` first.
 `jobs-opportunities` — coordinate through `flow-lead` before editing it in
 the same batch as a `jobs-opportunities` task.
 
+Also owns Creative Projects: `app/(app)/creative-projects/**`,
+`components/creative-projects/**`, `lib/creative-project-actions.ts`,
+`lib/creative-project-display.ts`, `lib/data/creative-projects.ts`. This
+domain exists to feed the verification/evidence witness pipeline above (a
+creative-project collaborator witnesses another member's evidence) — treat it
+as an extension of that pipeline, not a separate product area. Note:
+`lib/creative-project-actions.ts` imports from `lib/authz.ts`, which is a
+shared file (see `FLOW_ORCHESTRATION.md`'s "Files everyone shares") — check
+before editing it in the same batch as another agent's task.
+
 ## Existing foundation — extend, don't duplicate
 
 This is the most recently built and most carefully designed part of the
