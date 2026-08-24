@@ -14,6 +14,7 @@ import {
   ClipboardList,
   Sparkles,
   Search,
+  Palette,
   type LucideIcon,
 } from "lucide-react";
 
@@ -30,6 +31,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/gigs", label: "Gigs & Jobs", icon: Briefcase, primary: true },
   { href: "/events", label: "Events", icon: CalendarDays, primary: true },
   { href: "/passport", label: "Passport", icon: IdCard, primary: true },
+  { href: "/creative-projects", label: "Creative Projects", icon: Palette },
   { href: "/work", label: "My Work", icon: Briefcase },
   { href: "/applications", label: "My Applications", icon: ClipboardList },
   { href: "/discover", label: "Discover", icon: Compass },
