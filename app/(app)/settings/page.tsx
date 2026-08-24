@@ -12,7 +12,13 @@ import { ReferralPanel } from "@/components/settings/ReferralPanel";
 import { signOutAction } from "@/lib/actions";
 import { Button } from "@/components/ui/Button";
 
-export default async function SettingsPage() {
+export default async function SettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ evidenceTitle?: string }>;
+}) {
+  const { evidenceTitle } = await searchParams;
+
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
@@ -62,7 +68,13 @@ export default async function SettingsPage() {
           <h2 className="font-bold text-ink-900 dark:text-white">Evidence &amp; verification</h2>
         </CardHeader>
         <CardBody>
-          <EvidencePanel verifications={verifications} credentialTypes={credentialTypes} skills={allSkills} creativeProjects={creativeProjects} />
+          <EvidencePanel
+            verifications={verifications}
+            credentialTypes={credentialTypes}
+            skills={allSkills}
+            creativeProjects={creativeProjects}
+            defaultTitle={evidenceTitle}
+          />
         </CardBody>
       </Card>
 
