@@ -33,7 +33,7 @@
     {
       "name": "Founder Approval",
       "status": "pending",
-      "note": "Awaiting founder authorization to commit/push/open a PR. Migration remains created locally only (supabase/migrations/20260824140000_opportunities_event_link.sql), independently reconfirmed unapplied to Supabase production via a fresh live query this session. Commit/push/PR/merge/production-apply all require separate, explicit founder authorization not yet given."
+      "note": "Commit, push, PR #22, and production migration apply are all complete and founder-authorized (see feed below). Migration supabase/migrations/20260824220611_opportunities_event_link.sql is live in production, independently verified (column/FK/index/RLS/row-preservation/no-adjacent-table-change) and reconciled to match the live ledger's recorded version/filename. Generated production types matched the hand-edited lib/database.types.ts exactly. PR #22 remains OPEN and unmerged. The only remaining step is explicit founder authorization to merge PR #22 — not yet given."
     }
   ],
   "agents": [],
@@ -102,6 +102,21 @@
       "time": "2026-08-24T15:20:00Z",
       "actor": "flow-lead",
       "message": "Founder authorized commit + push + PR (explicitly not merge, not migration apply, not the next batch). Created exactly two commits per instruction: faf113c 'Add event team builder integration' (the 12 product/feature files) and a second commit for .claude/flow-command-state.json alone ('Update FLOW COMMAND for Event Team Builder'). Pushing and opening one PR to main next in this same turn — migration_apply_authorized and merge_authorized remain false."
+    },
+    {
+      "time": "2026-08-24T15:35:00Z",
+      "actor": "flow-lead",
+      "message": "Founder authorized the final pre-production migration check (read-only) on PR #22. Re-confirmed PR OPEN/MERGEABLE/CLEAN at head 0ae2a45, CI passing, migration file content unchanged, and live production still had no event_id column/FK/index and no 20260824140000 entry in the migration ledger. Verdict: READY FOR PRODUCTION MIGRATION AUTHORIZATION. No apply performed in this step."
+    },
+    {
+      "time": "2026-08-24T15:40:00Z",
+      "actor": "flow-lead",
+      "message": "Founder explicitly authorized production application of supabase/migrations/20260824140000_opportunities_event_link.sql, with PR #22 required to remain open/unmerged throughout. Re-verified every precondition immediately before applying (PR state unchanged, live schema still clean, migration file content unchanged), then applied via apply_migration. Live verification after apply: opportunities.event_id exists (uuid, nullable, no default); opportunities_event_id_fkey exists (event_id -> events(id) ON DELETE SET NULL); opportunities_event_id_idx exists (non-unique btree); the 1 existing opportunities row is intact with event_id NULL; all 4 RLS policies on opportunities (admin_read, creator_manage, member_read, public_read) are byte-identical to the pre-apply baseline; no new trigger was created (trg_on_opportunity_cancelled is pre-existing, unrelated); applications (10 cols), event_attendance (12 cols, its own pre-existing unrelated event_id from the ticket composite key), and verifications (18 cols) schemas are completely unchanged. VERSION DRIFT FOUND AND REPORTED PER INSTRUCTION, NOT RENAMED: the live ledger recorded this migration as 20260824220611_opportunities_event_link, not the repo filename's 20260824140000 — the same drift pattern already documented for two prior migrations in this file's 'Verified baseline facts' history (apply_migration timestamps by actual run time, not filename). Generated production TypeScript types were pulled and diffed line-by-line (whitespace-normalized) against the hand-edited lib/database.types.ts opportunities block: exact match, zero mismatch, no file change made. Fresh lint/typecheck/test/build re-run clean: 168/168 tests, build exit 0. PR #22 reconfirmed OPEN/MERGEABLE/CLEAN at the same head SHA with CI still passing throughout and after. PR #22 has NOT been merged. No other migration was applied; no other table was touched."
+    },
+    {
+      "time": "2026-08-24T15:50:00Z",
+      "actor": "flow-lead",
+      "message": "Founder authorized a repository-reconciliation-only turn (no Supabase write, no re-apply): renamed supabase/migrations/20260824140000_opportunities_event_link.sql to 20260824220611_opportunities_event_link.sql to match the live-recorded ledger version. Executable SQL proven byte-identical before/after via md5 (d3036dbbf232a14a3a6cc91768bbb936, unchanged). Searched the full repo for references to the old filename: every hit was inside this state file's own historical feed/checkpoint-note entries (accurate records of what was true when written) plus the current_batch.migration_ledger_drift field, which was updated to describe the reconciliation as complete; no other file in the repo referenced the old filename. This is expected to become commit 3 on feature/event-team-builder-batch-a, on top of faf113c and 0ae2a45, pushed to the same open PR #22 — no new migration, no schema/RLS/event_attendance/applications/verifications change, no next batch."
     }
   ],
   "blockers": [],
@@ -117,11 +132,11 @@
   "qa_status": "PASS",
   "repo_status": {
     "branch": "feature/event-team-builder-batch-a (created from main at d517431)",
-    "working_tree": "uncommitted implementation changes present, not yet staged/committed — awaiting founder review before commit/push/PR",
+    "working_tree": "clean — both batch commits made and pushed, PR #22 open against main",
     "ahead_of_origin": 0,
-    "last_commit": "d5174317827170ba76e734e3ff8dd95f9e34c0d8 Merge pull request #21 (branch point; no new commit made yet on the feature branch)"
+    "last_commit": "0ae2a45839f6afd5bc4948c941069e19e59af111 Update FLOW COMMAND for Event Team Builder (feature branch head, pushed; not yet merged to main)"
   },
-  "production_touched": false,
+  "production_touched": true,
   "founder_approval_required": true,
   "usage_mode": "GREEN",
   "usage_mode_note": "Manually reported, not live-detected — this app has no API into Claude Code's session usage. Set to YELLOW/RED only when a founder or agent explicitly observes rate-limit symptoms, or switch via the 'FLOW LOW USAGE MODE' command.",
@@ -153,15 +168,21 @@
   },
   "current_batch": {
     "name": "Batch A — Event Team Builder Integration",
-    "status": "Committed and pushed, PR open — awaiting CI + founder merge authorization",
+    "status": "Migration applied to production; PR #22 open, CI green, unmerged — awaiting founder merge authorization",
     "authorized_at": "2026-08-24T13:10:00Z",
     "authorized_scope": "opportunities.event_id nullable uuid FK to events(id) on delete set null, plus index. No applications/event_attendance/verifications/Passport schema changes. Server-side same-organization enforcement. No auto-created event_attendance for staff.",
-    "migration_apply_authorized": false,
+    "migration_apply_authorized": true,
+    "migration_applied": true,
+    "migration_applied_at": "2026-08-24T15:40:00Z",
+    "migration_ledger_drift": "Reconciled — the migration file was renamed from 20260824140000_opportunities_event_link.sql to 20260824220611_opportunities_event_link.sql to match the live-recorded ledger version, per explicit founder authorization. Executable SQL confirmed byte-identical before/after rename (md5 d3036dbbf232a14a3a6cc91768bbb936). Same underlying drift-source pattern already documented for two earlier migrations in this file's 'Verified baseline facts' history (apply_migration timestamps by actual run time, not the filename) — this is the first time that pattern has been reconciled by renaming rather than left as flagged drift.",
     "push_pr_authorized": true,
     "merge_authorized": false,
     "branch": "feature/event-team-builder-batch-a",
     "feature_commit": "faf113c",
-    "implementation_status": "Two commits made per explicit founder instruction: faf113c (product/feature, 12 files) and a second governance-state commit (this file, made immediately after this edit). Pushed and PR opened next in this same authorized turn. Merge and migration apply both remain unauthorized."
+    "pr": 22,
+    "pr_url": "https://github.com/solounitystudios/flow-platform/pull/22",
+    "pr_head": "0ae2a45839f6afd5bc4948c941069e19e59af111",
+    "implementation_status": "Two commits made per explicit founder instruction: faf113c (product/feature, 12 files) and a governance-state commit. Pushed, PR #22 opened, CI green (typecheck/lint/test/build pass), mergeStateStatus CLEAN. Production migration applied and independently verified live (column/FK/index/RLS/row-preservation/no-new-trigger/no-adjacent-table-change), generated types diffed exact-match against the hand-edited lib/database.types.ts. PR #22 remains open and unmerged throughout and after the apply, per explicit instruction. Merge remains unauthorized."
   },
-  "updated_at": "2026-08-24T15:20:00Z"
+  "updated_at": "2026-08-24T15:50:00Z"
 }
