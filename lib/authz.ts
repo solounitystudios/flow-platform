@@ -50,6 +50,38 @@ export function canManageOrganizationMember(target: { role: string; profile_id: 
  */
 export const INVITABLE_ORGANIZATION_ROLES = ["admin", "recruiter", "manager"] as const;
 
+/**
+ * Mirrors creative_project_members_owner_manage's RLS with-check after
+ * supabase/migrations/20260823232600_creative_project_invite_consent.sql
+ * tightened it: the project owner may suspend any non-owner member, but
+ * never their own row and never the role='owner' row. Unlike
+ * canManageOrganizationMember, there is deliberately no reactivate/remove
+ * case to model here — that with-check no longer permits the owner to set
+ * status='active' at all (only accept_creative_project_invite() can,
+ * self-service only) and never permitted status='removed' even before that
+ * batch. A suspended member currently has no path back to active in this
+ * batch — a known, disclosed follow-up gap, not something this predicate
+ * should paper over by pretending a reactivate action exists.
+ */
+export function canSuspendCreativeProjectMember(target: { role: string; profile_id: string }, callerId: string): boolean {
+  if (target.role === "owner") return false;
+  if (target.profile_id === callerId) return false;
+  return true;
+}
+
+/**
+ * Mirrors is_creative_project_member()'s exact condition (status='active') —
+ * the same gate verifications_self_insert and confirm_verification_as_collaborator()
+ * use to decide whether a project-linked evidence claim/confirmation is
+ * allowed. A pending invitee, a suspended member, and a removed/declined
+ * member must never see the project-linked evidence entry point — accepting
+ * membership is never itself proof of a contribution. See
+ * supabase/migrations/20260823145545_verifications_creative_project_reference.sql.
+ */
+export function canSubmitCreativeProjectEvidence(status: string): boolean {
+  return status === "active";
+}
+
 export type AdminAccessState = "signed-out" | "not-admin" | "mfa-not-enrolled" | "aal1" | "aal2";
 
 /**

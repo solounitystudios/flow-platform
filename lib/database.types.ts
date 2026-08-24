@@ -4137,3 +4137,13 @@ export interface CreativeProjectInviteResult {
   ok: boolean;
   reason?: "not_authenticated" | "not_found" | "not_pending";
 }
+
+// ── leave_creative_project RPC result shape ────────────────────────────────
+// jsonb-typed at the SQL level, real shape here. No UI called this RPC
+// until Batch 17b — see
+// supabase/migrations/20260823041155_creative_projects_foundation.sql.
+
+export interface LeaveCreativeProjectResult {
+  ok: boolean;
+  reason?: "not_authenticated" | "not_a_member" | "owner_cannot_leave" | "not_active";
+}
