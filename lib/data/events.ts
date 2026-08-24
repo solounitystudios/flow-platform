@@ -198,3 +198,20 @@ export async function getEventsByCreator(creatorId: string) {
   const { data } = await supabase.from("events").select("*").eq("created_by", creatorId).order("created_at", { ascending: false });
   return data ?? [];
 }
+
+export type EventLinkCandidate = Pick<Tables<"events">, "id" | "organization_id" | "created_by" | "title" | "venue" | "city" | "state" | "status">;
+
+/** Single source of the event row `createOpportunityAction` needs for the
+ * FLOW-SEC-002 organization-integrity check (lib/authz.ts
+ * canLinkOpportunityToEvent) — server-side, never trusting a
+ * client-supplied event_id — and, on success, the same fields the
+ * "linked to event" pre-fill in PostOpportunityForm.tsx displays. One
+ * lookup serves both, per this batch's "prefer existing functions over a
+ * duplicate API" scope. `status` is included so the same server-side check
+ * can also reject a cancelled/completed event, matching the picker's own
+ * eligibility filter (app/(app)/business/post/page.tsx). */
+export async function getEventForLinking(eventId: string): Promise<EventLinkCandidate | null> {
+  const supabase = await createClient();
+  const { data } = await supabase.from("events").select("id, organization_id, created_by, title, venue, city, state, status").eq("id", eventId).maybeSingle();
+  return data ?? null;
+}

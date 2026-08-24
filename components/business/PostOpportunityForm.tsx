@@ -1,15 +1,32 @@
 "use client";
 
 import { useActionState } from "react";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, CalendarDays } from "lucide-react";
 import { Input, Select, Textarea } from "@/components/ui/Input";
 import { SubmitButton } from "@/components/ui/SubmitButton";
 import { createOpportunityAction, type ActionState } from "@/lib/actions";
 import { SKILL_CATEGORIES } from "@/lib/mock/data";
+import type { EventLinkCandidate } from "@/lib/data/events";
 
 const initialState: ActionState = {};
 
-export function PostOpportunityForm({ organizationId }: { organizationId: string }) {
+export function PostOpportunityForm({
+  organizationId,
+  eligibleEvents = [],
+  linkedEvent = null,
+}: {
+  organizationId: string;
+  /** Same-organization events eligible to link a new staffing opportunity
+   * to, for the ordinary /business/post entry point's optional picker. */
+  eligibleEvents?: EventLinkCandidate[];
+  /** Set when arriving from an event's manage page ("Post a staffing
+   * role for this event") — locks the link and pre-fills location fields,
+   * per Batch A's "make the relationship visible to the organizer" spec.
+   * Server-side validation (FLOW-SEC-002, lib/authz.ts
+   * canLinkOpportunityToEvent) is the real enforcement; this is display
+   * only. */
+  linkedEvent?: EventLinkCandidate | null;
+}) {
   const [state, formAction] = useActionState(createOpportunityAction, initialState);
 
   return (
@@ -37,10 +54,31 @@ export function PostOpportunityForm({ organizationId }: { organizationId: string
         <Input label="Slots" name="slots" type="number" min={1} defaultValue={1} />
         <Input label="Pay (per hour, $)" name="pay_dollars" type="number" step="0.01" min={0} placeholder="Leave blank for volunteer" />
       </div>
-      <Input label="Location name" name="location_name" placeholder="745 Ohio St" />
+
+      {linkedEvent ? (
+        <div className="flex items-start gap-2 rounded-xl border border-flow-200 bg-flow-50 p-3 text-sm dark:border-flow-800 dark:bg-flow-950/30">
+          <CalendarDays className="mt-0.5 h-4 w-4 shrink-0 text-flow-600" />
+          <div>
+            <input type="hidden" name="event_id" value={linkedEvent.id} />
+            <p className="font-medium text-ink-900 dark:text-white">Staffing role for {linkedEvent.title}</p>
+            <p className="text-xs text-ink-500 dark:text-ink-400">{linkedEvent.venue ?? `${linkedEvent.city}, ${linkedEvent.state}`}</p>
+          </div>
+        </div>
+      ) : eligibleEvents.length > 0 ? (
+        <Select label="Link to event (optional)" name="event_id" defaultValue="">
+          <option value="">Not linked to an event</option>
+          {eligibleEvents.map((e) => (
+            <option key={e.id} value={e.id}>
+              {e.title}
+            </option>
+          ))}
+        </Select>
+      ) : null}
+
+      <Input label="Location name" name="location_name" placeholder="745 Ohio St" defaultValue={linkedEvent?.venue ?? ""} />
       <div className="grid grid-cols-2 gap-3">
-        <Input label="City" name="city" defaultValue="Buffalo" />
-        <Select label="State" name="state" defaultValue="NY">
+        <Input label="City" name="city" defaultValue={linkedEvent?.city ?? "Buffalo"} />
+        <Select label="State" name="state" defaultValue={linkedEvent?.state ?? "NY"}>
           <option value="NY">New York</option>
           <option value="OH">Ohio</option>
           <option value="PA">Pennsylvania</option>

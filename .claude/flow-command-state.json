@@ -1,7 +1,7 @@
 {
   "$schema_note": "Structured status for the FLOW COMMAND founder dashboard (/admin/command). Contains no secrets. Updated by flow-lead at meaningful milestones only, not on every tool call. See .claude/FLOW_ORCHESTRATION.md 'Status reporting (FLOW COMMAND)' for the update contract.",
-  "mission": "No active mission — awaiting next batch selection. Latest merged product work: PR #20 (Connect completed work to Passport evidence — see last_completed_mission below, dashboard-tracked in full this time). Prior to that: a governance/repo-hygiene reconciliation (PR #19, doc-only) and, before that, three product PRs (#16-#18, Creative Projects follow-on work) that this dashboard did not individually track — stated from verified Git/GitHub history only in the feed below, no fabricated process detail.",
-  "phase": "Founder Approval",
+  "mission": "Batch A — Event Team Builder Integration. Founder-authorized: let event organizers build an event team using the existing opportunities/applications/work pipeline (no second staffing marketplace). Locked founder decisions: (1) event/opportunity organization integrity enforced server-side, not just UI-filtered; (2) staff participation stays on the professional work lifecycle — no automatic event_attendance ticket is created for staff. Scope: additive nullable opportunities.event_id column + index only; no applications/event_attendance/verifications/Passport schema changes; no RLS changes unless qa-security proves one necessary. Explicitly out of scope this batch: Passport-at-Events credentials, staff check-in, zones, Pulse, Replay, promoter reputation, Event Score, sponsor/vendor marketplace expansion, after-party relationships, festival mode, sports layer, paid ticketing/Stripe. Implementation + local QA complete; per explicit founder instruction the session stopped here for founder review — no commit, push, PR, migration apply, or release-manager pass has happened yet.",
+  "phase": "Release Check",
   "phases": [
     "Planning",
     "Build",
@@ -13,27 +13,27 @@
     {
       "name": "Planning",
       "status": "done",
-      "note": "flow-lead confirmed the assumed gap in the brief (markCompletedAction never calling evaluate_achievements()) was false — an existing on_application_updated DB trigger already handles it on every completion transition. Scope corrected to the one real gap: no worker-facing path from a completed gig into evidence submission."
+      "note": "Read-only architecture audit (this session, HEAD d517431) surveyed the Events/Work/Passport/Map/Organizations/Rewards systems and recommended Event Team Builder as the lowest-risk, highest-reuse next batch: the opportunities/applications lifecycle is production-hardened and directly reusable, needing only an additive event_id link. Founder authorized this exact scope and locked two decisions (org-integrity server-side enforcement; staff ≠ attendee, no auto ticket) rather than leaving them to implementation-time judgment."
     },
     {
       "name": "Build",
       "status": "done",
-      "note": "passport-reputation implemented a CTA on completed /work entries deep-linking into the existing EvidencePanel/submitEvidenceAction flow, pre-filled with the gig title. First pass added a redundant duplicate evaluate_achievements() call to lib/actions.ts; caught in QA and reverted — lib/actions.ts confirmed byte-identical to main."
+      "note": "Primary interactive session implemented directly (single-writer) on feature/event-team-builder-batch-a. Migration 20260824140000_opportunities_event_link.sql (nullable opportunities.event_id FK + index only, created locally, NOT applied to production). lib/database.types.ts hand-updated to match (live Supabase has no staging project this session could generate from with the migration unapplied). New: lib/authz.ts canLinkOpportunityToEvent (FLOW-SEC-002, pure/testable), lib/data/events.ts getEventForLinking, lib/data/opportunities.ts getOpportunitiesForEvent. lib/actions.ts createOpportunityAction now accepts+server-side-validates event_id. PostOpportunityForm.tsx gained an optional event link (picker or locked display). business/events/[id]/page.tsx gained a Staffing section reusing existing OpportunityRow/getApplicantCounts. Zero changes to applications/event_attendance/verifications schema or lifecycle code."
     },
     {
       "name": "QA",
       "status": "done",
-      "note": "qa-security ran build/typecheck/lint/test (154/154) clean; caught the redundant achievement-call duplication above. Verified CTA scoped strictly to application.status === \"completed\", no self-verify violation, no auto-created evidence/verification/credential rows, existing submitEvidenceAction untouched."
+      "note": "Local verification: lint 0 errors/1 pre-existing warning, typecheck clean, test 162/162 (154 pre-existing + 8 new FLOW-SEC-002 unit tests, tests/integration/flow-sec-002.rls.test.ts added as it.todo staging-only per existing repo convention), build clean (48 routes). Three read-only background reviewers used per founder authorization, none wrote any file: schema-auditor PASS (migration shape/FK/index/ordering/types hand-edit all correct, confirmed unapplied to live project mmwgedzsdhabygcrvqdm; flagged as an accepted tradeoff that event_id integrity is enforced only in the one current write path, not DB-level — matches this batch's authorized scope); qa-security PASS (independently reproduced all 4 verification commands, traced the cross-org exploit scenario through actual code and confirmed no bypass, confirmed zero event_attendance writes anywhere in the diff, confirmed the Staffing section sits behind the existing owner-only redirect gate; one non-blocking observation: the UI's cancelled/completed-event picker filter isn't re-enforced server-side, same-organization only so not a security gap, left as-is per QA's own recommendation); jobs-opportunities reviewer PASS (confirmed zero diff to the applications lifecycle/trigger, no duplicate marketplace/engine, exact convention match with the business dashboard's existing opportunity-row pattern, worker-facing code untouched, Evidence CTA path needs zero changes)."
     },
     {
       "name": "Release Check",
       "status": "done",
-      "note": "release-manager confirmed the diff limited to exactly app/(app)/settings/page.tsx, components/applications/WorkCard.tsx, components/settings/EvidencePanel.tsx (+24/-4), no schema/migration changes. PR #20 opened, CI green (typecheck/lint/test/build), mergeStateStatus CLEAN, no unrelated files."
+      "note": "Fresh release-manager-style review authorized and completed on feature/event-team-builder-batch-a (main@d517431, origin/main unmoved, merge-base confirmed identical — no conflict risk). Repository truth confirmed: working tree contains exactly the 13 expected files, nothing unrelated. release-manager (fresh, read-only) independently reviewed the full diff/migration/types/security-predicate/architecture and verdict READY, with one caveat — it lacked Supabase tool access to itself confirm the migration's live-unapplied status, relying on the earlier schema-auditor finding. This session closed that gap directly via a fresh read-only Supabase query (list_migrations + list_tables on project mmwgedzsdhabygcrvqdm): latest live migration is 20260823234842 (creative_project_invite_consent), 20260824140000 is absent, and live public.opportunities has zero event_id column/FK (all live event_id references belong to unrelated tables — flow_ledger, event_attendance, conversations). Fresh lint/typecheck/test/build re-run clean this same session: 168/168 tests. release-manager recommends landing as two commits (feature commit + separate governance/state-file commit) once commit is authorized — not yet acted on."
     },
     {
       "name": "Founder Approval",
-      "status": "done",
-      "note": "Founder explicitly authorized push, PR, and merge in-session. PR #20 merged via fast-forward merge commit a1e6cc57938c24af9c01fa34be6ad15983a0b262. main verified == origin/main post-merge, working tree clean."
+      "status": "pending",
+      "note": "Commit, push, PR #22, and production migration apply are all complete and founder-authorized (see feed below). Migration supabase/migrations/20260824220611_opportunities_event_link.sql is live in production, independently verified (column/FK/index/RLS/row-preservation/no-adjacent-table-change) and reconciled to match the live ledger's recorded version/filename. Generated production types matched the hand-edited lib/database.types.ts exactly. PR #22 remains OPEN and unmerged. The only remaining step is explicit founder authorization to merge PR #22 — not yet given."
     }
   ],
   "agents": [],
@@ -67,6 +67,56 @@
       "time": "2026-08-24T12:02:00Z",
       "actor": "flow-lead",
       "message": "Follow-up governance/repo-hygiene pass (still no product code, no schema, no migrations touched). Recorded the four verified baseline facts above (Work Now, integration tests, migration drift, passport_summary) as a canonical 'Verified baseline facts' section in FLOW_ORCHESTRATION.md so future sessions don't re-audit the same ground. Added a single-writer session rule to General safety rules. Clarified the FLOW COMMAND update contract so this file can't silently go stale past a merged batch again (Git/GitHub history stated as the tiebreaker source of truth). Corrected this file's two artificial 00:00:00Z placeholder timestamps to real capture times. Recorded the next-batch recommendation below as awaiting founder approval, no implementation scope added."
+    },
+    {
+      "time": "2026-08-24T13:00:00Z",
+      "actor": "flow-lead",
+      "message": "PR #21 (this file's own prior reconciliation) merged via standard merge commit d5174317827170ba76e734e3ff8dd95f9e34c0d8. Confirmed local main == origin/main == d517431, working tree clean, before starting any new work."
+    },
+    {
+      "time": "2026-08-24T13:05:00Z",
+      "actor": "flow-lead",
+      "message": "Read-only FLOW Events expansion architecture audit run against HEAD d517431 (no edits): reconciled 21 proposed concepts (Event Workspace/OS, Host Command Center, FLOW Pulse, Zones, Party Seeker/Map Discovery, after-party relationships, festival mode, Team Builder, Passport-at-Events, Promoter Reputation, Event Score, Promoter Passport, Sponsor ROI, Sponsor/Vendor Marketplace, Organizer CRM, Event Replay, City Takeover, Sports Layer, Nationwide Network, paid ticketing) against actual schema/code. Verified directly: paid event registration is already hard-blocked by the enforce_attendance_lifecycle() trigger, zero Stripe/payment code exists anywhere, opportunities/applications lifecycle is production-hardened and reusable for staffing/vendor roles with only an additive event_id link, verifications.reference_table has no 'event' value yet, no organization-level reputation exists, city/state are plain text columns with no city-specific architecture. Recommended Event Team Builder as the safest, highest-reuse next batch. Baseline verified clean at HEAD d517431 (lint 0 errors/1 pre-existing warning, typecheck clean, 154/154 tests, build clean)."
+    },
+    {
+      "time": "2026-08-24T13:10:00Z",
+      "actor": "flow-lead",
+      "message": "Founder authorized implementation of Batch A — Event Team Builder Integration, with two explicit locked decisions (event/opportunity organization-integrity enforced server-side; staff participation never auto-creates an event_attendance ticket) and an explicit schema/scope boundary (opportunities.event_id nullable FK + index only). Founder authorized creating the migration file locally but explicitly withheld authorization to apply it to Supabase production, push, open a PR, or merge — those remain gated on a separate later authorization after QA/release-check. Superseding the prior next_batch_recommendation below, which the founder did not select."
+    },
+    {
+      "time": "2026-08-24T14:00:00Z",
+      "actor": "flow-lead",
+      "message": "Batch A implemented on feature/event-team-builder-batch-a: migration 20260824140000_opportunities_event_link.sql (opportunities.event_id nullable FK + index, created locally only, confirmed not applied to production), lib/authz.ts canLinkOpportunityToEvent (FLOW-SEC-002, pure predicate enforcing same-organization linking, with a same-creator fallback for organization-less personal events to close a null===null identity-spoofing gap the founder's literal rule didn't explicitly address), lib/data/events.ts getEventForLinking, lib/data/opportunities.ts getOpportunitiesForEvent, createOpportunityAction server-side event_id validation, PostOpportunityForm.tsx optional event link, business/events/[id] Staffing section reusing the existing OpportunityRow/getApplicantCounts pattern. Added tests/security/flow-sec-002.test.ts (8 real tests) and tests/integration/flow-sec-002.rls.test.ts (it.todo, staging-only, matching the existing FLOW-SEC-001 convention). Local verification: lint clean (1 pre-existing warning), typecheck clean, 162/162 tests, build clean. Three read-only background reviewers (schema-auditor, qa-security, jobs-opportunities) all reported PASS with no blockers — schema-auditor confirmed the migration is unapplied to the live project and flagged (as an accepted, in-scope tradeoff) that event_id integrity is enforced only in the app layer, not a DB trigger; qa-security traced the cross-org exploit scenario through the actual code and confirmed no bypass, and noted one non-blocking UI/server validation asymmetry (cancelled/completed events aren't re-excluded server-side, same-org only, not a security gap); jobs-opportunities confirmed zero changes to the applications lifecycle and no duplicate marketplace/engine. Stopped here for founder review per explicit instruction — no commit, push, PR, or migration apply."
+    },
+    {
+      "time": "2026-08-24T14:30:00Z",
+      "actor": "flow-lead",
+      "message": "Founder-requested narrow consistency fix applied on the same branch (no new schema/migration/RLS/event_attendance/lifecycle change): getEventForLinking (lib/data/events.ts) now also selects status; canLinkOpportunityToEvent (lib/authz.ts) now rejects a cancelled or completed target event before the organization-matching check runs, closing the gap where the UI already excluded these events from the picker but the server didn't re-enforce it. Added 6 new real tests to tests/security/flow-sec-002.test.ts (14 total in that file) plus one it.todo to the staging-only integration matrix. lint/typecheck/test/build re-run clean — 168/168 tests. qa-security re-reviewed this exact narrow diff (confirmed via file-mtime isolation that only lib/authz.ts, lib/data/events.ts, and the two flow-sec-002 test files changed) and traced the status check's early-return placement to confirm the completed+cross-org case is denied by the status check itself, not a coincidental org-mismatch fallthrough, and that draft/published remain unaffected: PASS. Still stopped for founder review — no commit, push, PR, or migration apply."
+    },
+    {
+      "time": "2026-08-24T15:00:00Z",
+      "actor": "flow-lead",
+      "message": "Founder authorized the RELEASE CHECK gate. Repository truth reconfirmed: branch feature/event-team-builder-batch-a, merge-base with main == origin/main == d517431 (unmoved, no conflict risk), working tree exactly the 13 expected files. Fresh release-manager (read-only, fresh context) independently reviewed the complete diff, migration, hand-edited types, FLOW-SEC-002 predicate, and product architecture: verdict READY, no blockers, recommending a two-commit split (feature + governance state file) once commit is authorized. release-manager could not itself verify via Supabase tooling that the migration remains unapplied to production (no such access in its session); this session closed that gap directly with a fresh read-only Supabase query against project mmwgedzsdhabygcrvqdm confirming the live migration history still ends at 20260823234842 and live public.opportunities carries no event_id column/FK. Fresh lint/typecheck/test/build re-run clean this session: 168/168 tests. Release Check checkpoint marked done; Founder Approval remains pending; migration_apply_authorized and push_pr_merge_authorized remain false. No commit, push, PR, merge, or migration apply performed."
+    },
+    {
+      "time": "2026-08-24T15:20:00Z",
+      "actor": "flow-lead",
+      "message": "Founder authorized commit + push + PR (explicitly not merge, not migration apply, not the next batch). Created exactly two commits per instruction: faf113c 'Add event team builder integration' (the 12 product/feature files) and a second commit for .claude/flow-command-state.json alone ('Update FLOW COMMAND for Event Team Builder'). Pushing and opening one PR to main next in this same turn — migration_apply_authorized and merge_authorized remain false."
+    },
+    {
+      "time": "2026-08-24T15:35:00Z",
+      "actor": "flow-lead",
+      "message": "Founder authorized the final pre-production migration check (read-only) on PR #22. Re-confirmed PR OPEN/MERGEABLE/CLEAN at head 0ae2a45, CI passing, migration file content unchanged, and live production still had no event_id column/FK/index and no 20260824140000 entry in the migration ledger. Verdict: READY FOR PRODUCTION MIGRATION AUTHORIZATION. No apply performed in this step."
+    },
+    {
+      "time": "2026-08-24T15:40:00Z",
+      "actor": "flow-lead",
+      "message": "Founder explicitly authorized production application of supabase/migrations/20260824140000_opportunities_event_link.sql, with PR #22 required to remain open/unmerged throughout. Re-verified every precondition immediately before applying (PR state unchanged, live schema still clean, migration file content unchanged), then applied via apply_migration. Live verification after apply: opportunities.event_id exists (uuid, nullable, no default); opportunities_event_id_fkey exists (event_id -> events(id) ON DELETE SET NULL); opportunities_event_id_idx exists (non-unique btree); the 1 existing opportunities row is intact with event_id NULL; all 4 RLS policies on opportunities (admin_read, creator_manage, member_read, public_read) are byte-identical to the pre-apply baseline; no new trigger was created (trg_on_opportunity_cancelled is pre-existing, unrelated); applications (10 cols), event_attendance (12 cols, its own pre-existing unrelated event_id from the ticket composite key), and verifications (18 cols) schemas are completely unchanged. VERSION DRIFT FOUND AND REPORTED PER INSTRUCTION, NOT RENAMED: the live ledger recorded this migration as 20260824220611_opportunities_event_link, not the repo filename's 20260824140000 — the same drift pattern already documented for two prior migrations in this file's 'Verified baseline facts' history (apply_migration timestamps by actual run time, not filename). Generated production TypeScript types were pulled and diffed line-by-line (whitespace-normalized) against the hand-edited lib/database.types.ts opportunities block: exact match, zero mismatch, no file change made. Fresh lint/typecheck/test/build re-run clean: 168/168 tests, build exit 0. PR #22 reconfirmed OPEN/MERGEABLE/CLEAN at the same head SHA with CI still passing throughout and after. PR #22 has NOT been merged. No other migration was applied; no other table was touched."
+    },
+    {
+      "time": "2026-08-24T15:50:00Z",
+      "actor": "flow-lead",
+      "message": "Founder authorized a repository-reconciliation-only turn (no Supabase write, no re-apply): renamed supabase/migrations/20260824140000_opportunities_event_link.sql to 20260824220611_opportunities_event_link.sql to match the live-recorded ledger version. Executable SQL proven byte-identical before/after via md5 (d3036dbbf232a14a3a6cc91768bbb936, unchanged). Searched the full repo for references to the old filename: every hit was inside this state file's own historical feed/checkpoint-note entries (accurate records of what was true when written) plus the current_batch.migration_ledger_drift field, which was updated to describe the reconciliation as complete; no other file in the repo referenced the old filename. This is expected to become commit 3 on feature/event-team-builder-batch-a, on top of faf113c and 0ae2a45, pushed to the same open PR #22 — no new migration, no schema/RLS/event_attendance/applications/verifications change, no next batch."
     }
   ],
   "blockers": [],
@@ -81,13 +131,13 @@
   },
   "qa_status": "PASS",
   "repo_status": {
-    "branch": "main",
-    "working_tree": "clean at session start (verified at cb8ee55); this reconciliation's governance-doc edits are the only changes made, pending founder review",
+    "branch": "feature/event-team-builder-batch-a (created from main at d517431)",
+    "working_tree": "clean — both batch commits made and pushed, PR #22 open against main",
     "ahead_of_origin": 0,
-    "last_commit": "cb8ee559846a41c04f57396a30440db19c2c3879 Merge pull request #18 from solounitystudios/feature/creative-project-ui-v1 (local main == origin/main, verified)"
+    "last_commit": "0ae2a45839f6afd5bc4948c941069e19e59af111 Update FLOW COMMAND for Event Team Builder (feature branch head, pushed; not yet merged to main)"
   },
-  "production_touched": false,
-  "founder_approval_required": false,
+  "production_touched": true,
+  "founder_approval_required": true,
   "usage_mode": "GREEN",
   "usage_mode_note": "Manually reported, not live-detected — this app has no API into Claude Code's session usage. Set to YELLOW/RED only when a founder or agent explicitly observes rate-limit symptoms, or switch via the 'FLOW LOW USAGE MODE' command.",
   "active_agent_count": 0,
@@ -111,10 +161,28 @@
   },
   "next_batch_recommendation": {
     "name": "Activity/Outcome → Evidence → Passport integration completion",
-    "status": "awaiting founder approval",
+    "status": "superseded — founder authorized Batch A (Event Team Builder Integration) instead on 2026-08-24; this recommendation was not selected and is kept here only for history",
     "reason": "Completed work currently updates application status but does not fully carry the outcome into the verification/evidence/Passport loop.",
     "owner": "passport-reputation",
     "recorded_at": "2026-08-24T12:02:00Z"
   },
-  "updated_at": "2026-08-24T12:02:00Z"
+  "current_batch": {
+    "name": "Batch A — Event Team Builder Integration",
+    "status": "Migration applied to production; PR #22 open, CI green, unmerged — awaiting founder merge authorization",
+    "authorized_at": "2026-08-24T13:10:00Z",
+    "authorized_scope": "opportunities.event_id nullable uuid FK to events(id) on delete set null, plus index. No applications/event_attendance/verifications/Passport schema changes. Server-side same-organization enforcement. No auto-created event_attendance for staff.",
+    "migration_apply_authorized": true,
+    "migration_applied": true,
+    "migration_applied_at": "2026-08-24T15:40:00Z",
+    "migration_ledger_drift": "Reconciled — the migration file was renamed from 20260824140000_opportunities_event_link.sql to 20260824220611_opportunities_event_link.sql to match the live-recorded ledger version, per explicit founder authorization. Executable SQL confirmed byte-identical before/after rename (md5 d3036dbbf232a14a3a6cc91768bbb936). Same underlying drift-source pattern already documented for two earlier migrations in this file's 'Verified baseline facts' history (apply_migration timestamps by actual run time, not the filename) — this is the first time that pattern has been reconciled by renaming rather than left as flagged drift.",
+    "push_pr_authorized": true,
+    "merge_authorized": false,
+    "branch": "feature/event-team-builder-batch-a",
+    "feature_commit": "faf113c",
+    "pr": 22,
+    "pr_url": "https://github.com/solounitystudios/flow-platform/pull/22",
+    "pr_head": "0ae2a45839f6afd5bc4948c941069e19e59af111",
+    "implementation_status": "Two commits made per explicit founder instruction: faf113c (product/feature, 12 files) and a governance-state commit. Pushed, PR #22 opened, CI green (typecheck/lint/test/build pass), mergeStateStatus CLEAN. Production migration applied and independently verified live (column/FK/index/RLS/row-preservation/no-new-trigger/no-adjacent-table-change), generated types diffed exact-match against the hand-edited lib/database.types.ts. PR #22 remains open and unmerged throughout and after the apply, per explicit instruction. Merge remains unauthorized."
+  },
+  "updated_at": "2026-08-24T15:50:00Z"
 }

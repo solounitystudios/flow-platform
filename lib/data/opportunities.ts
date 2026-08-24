@@ -158,3 +158,14 @@ export async function getOpportunitiesByCreator(creatorId: string) {
   const { data } = await supabase.from("opportunities").select("*").eq("created_by", creatorId).order("created_at", { ascending: false });
   return data ?? [];
 }
+
+/** Staffing opportunities linked to one event, for the event manage
+ * page's "Staffing" section (Batch A: Event Team Builder). Raw rows only —
+ * callers pair this with the existing `getApplicantCounts` (lib/data/
+ * applications.ts) exactly like the business dashboard's "Your postings"
+ * section does, rather than duplicating that count logic here. */
+export async function getOpportunitiesForEvent(eventId: string): Promise<Tables<"opportunities">[]> {
+  const supabase = await createClient();
+  const { data } = await supabase.from("opportunities").select("*").eq("event_id", eventId).order("created_at", { ascending: false });
+  return data ?? [];
+}
