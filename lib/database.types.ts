@@ -1946,6 +1946,7 @@ export type Database = {
           created_by: string
           description: string | null
           ends_at: string | null
+          event_id: string | null
           id: string
           instant_book: boolean
           is_remote: boolean
@@ -1968,6 +1969,7 @@ export type Database = {
           created_by: string
           description?: string | null
           ends_at?: string | null
+          event_id?: string | null
           id?: string
           instant_book?: boolean
           is_remote?: boolean
@@ -1990,6 +1992,7 @@ export type Database = {
           created_by?: string
           description?: string | null
           ends_at?: string | null
+          event_id?: string | null
           id?: string
           instant_book?: boolean
           is_remote?: boolean
@@ -2026,6 +2029,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "reliability_breakdown"
             referencedColumns: ["profile_id"]
+          },
+          {
+            foreignKeyName: "opportunities_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "opportunities_organization_id_fkey"

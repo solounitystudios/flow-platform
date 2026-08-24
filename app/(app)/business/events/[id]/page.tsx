@@ -1,14 +1,18 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { ArrowLeft, Users2 } from "lucide-react";
+import { ArrowLeft, Briefcase, Plus, Users2 } from "lucide-react";
 import { getCurrentUser } from "@/lib/data/profile";
 import { createClient } from "@/lib/supabase/server";
 import { getAttendeesForEvent } from "@/lib/data/events";
+import { getOpportunitiesForEvent } from "@/lib/data/opportunities";
+import { getApplicantCounts } from "@/lib/data/applications";
 import { Card, CardBody } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { AttendeeCard } from "@/components/business/AttendeeCard";
 import { CheckInForm } from "@/components/business/CheckInForm";
+import { OpportunityRow } from "@/components/business/OpportunityRow";
 import { formatDateTime } from "@/lib/utils";
 
 export default async function ManageEventPage({ params }: { params: Promise<{ id: string }> }) {
@@ -24,6 +28,13 @@ export default async function ManageEventPage({ params }: { params: Promise<{ id
   const attendees = await getAttendeesForEvent(id);
   const active = attendees.filter((a) => a.status === "registered" || a.status === "attended");
   const other = attendees.filter((a) => a.status === "no_show" || a.status === "cancelled");
+
+  // Batch A (Event Team Builder): staffing opportunities linked to this
+  // event, reusing the same opportunity row/applicant-count components and
+  // data functions the business dashboard's "Your postings" section uses —
+  // no separate event-staffing dashboard.
+  const staffing = await getOpportunitiesForEvent(id);
+  const applicantCounts = await getApplicantCounts(staffing.map((o) => o.id));
 
   return (
     <div className="space-y-5">
@@ -45,6 +56,35 @@ export default async function ManageEventPage({ params }: { params: Promise<{ id
           <CheckInForm eventId={id} />
         </CardBody>
       </Card>
+
+      <section className="space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="flex items-center gap-1.5 font-bold text-ink-900 dark:text-white">
+            <Briefcase className="h-4 w-4" /> Staffing ({staffing.length})
+          </h2>
+          <Button href={`/business/post?event_id=${id}`} size="sm" variant="outline">
+            <Plus className="h-3.5 w-3.5" /> Add role
+          </Button>
+        </div>
+
+        {staffing.length === 0 ? (
+          <EmptyState
+            title="No staffing roles yet"
+            body="Post a role — bartender, security, DJ, check-in staff — and FLOW workers can apply."
+            action={
+              <Button href={`/business/post?event_id=${id}`} size="sm">
+                Post a staffing role
+              </Button>
+            }
+          />
+        ) : (
+          <div className="space-y-2.5">
+            {staffing.map((o) => (
+              <OpportunityRow key={o.id} opportunity={o} applicantCount={applicantCounts.get(o.id) ?? 0} />
+            ))}
+          </div>
+        )}
+      </section>
 
       <section className="space-y-3">
         <h2 className="flex items-center gap-1.5 font-bold text-ink-900 dark:text-white">

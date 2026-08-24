@@ -22,10 +22,13 @@ It's the natural next phase once a staging Supabase project exists.
   organization owner/member protections, and the open-redirect guard.
 - **`tests/integration/`** — tests that need real infrastructure (a live
   Supabase project, real auth users). **Not part of the required baseline**
-  (`npm run test`) and **not run in CI**. Currently one file, entirely
-  `it.todo(...)`: FLOW-SEC-001's full RLS-level matrix (suspended member,
-  unrelated user, anonymous, direct-Supabase-bypass) needs a staging Supabase
-  project this repo doesn't have yet — see that file's header for the plan.
+  (`npm run test`) and **not run in CI**. Every file here is entirely
+  `it.todo(...)` today: none of them can run until a staging Supabase
+  project exists (see .claude/FLOW_ORCHESTRATION.md's Supabase safety
+  rules) — see each file's header for its own plan, e.g.
+  `flow-sec-001.rls.test.ts` (organization attribution) and
+  `flow-sec-002.rls.test.ts` (Batch A: event/opportunity organization
+  integrity).
 
 Every pure-logic module under test lives in a dependency-free file (no
 `next/headers`, no `@/lib/supabase/*` imports) specifically so it can be

@@ -29,6 +29,51 @@ export function canAttributeToOrganization(ownedOrganizationId: string | null, t
 }
 
 /**
+ * FLOW-SEC-002 — Event ↔ Opportunity organization integrity (Batch A:
+ * Event Team Builder).
+ *
+ * Founder-locked rule: a staffing opportunity may only be linked to an
+ * event owned by the *same* organization — never UI-filtering alone.
+ * `createOpportunityAction` (lib/actions.ts) independently fetches the
+ * target event server-side (never trusts a client-supplied event row) and
+ * calls this predicate exactly like `canAttributeToOrganization` above; it
+ * is the single source of truth for the rule, so a client bypassing the
+ * form can't reach a different outcome than the UI shows.
+ *
+ * `event === null` models "an event_id was supplied but no such event
+ * exists" (the caller looked it up and got nothing back) — always DENY.
+ * A `null` event_id itself (no link requested) is not this function's
+ * concern; the caller skips calling it entirely in that case, same as
+ * `canAttributeToOrganization` skips no-org postings.
+ *
+ * For an organization-owned event, the linked opportunity must be
+ * attributed to that exact same organization. For a personal
+ * (organization-less) event, only that event's own creator may link a
+ * personal (organization-less) opportunity to it — treating "same
+ * creator" as the personal-event equivalent of "same organization" closes
+ * what would otherwise be an identity-spoofing gap: two different users'
+ * organization-less rows would both satisfy a naive `null === null`
+ * organization check.
+ *
+ * A `cancelled`/`completed` event is always rejected, matching the
+ * eligible-events picker's own filter (app/(app)/business/post/page.tsx) —
+ * before this check existed, a direct POST bypassing that picker could
+ * still link to one of the organizer's own past/cancelled events even
+ * though the UI never offered it. `draft`/`published` (and any other
+ * status not yet in that terminal set) are unaffected.
+ */
+export function canLinkOpportunityToEvent(
+  event: { organization_id: string | null; created_by: string; status: string } | null,
+  opportunityOrganizationId: string | null,
+  callerId: string,
+): boolean {
+  if (!event) return false;
+  if (event.status === "cancelled" || event.status === "completed") return false;
+  if (event.organization_id !== null) return opportunityOrganizationId === event.organization_id;
+  return opportunityOrganizationId === null && event.created_by === callerId;
+}
+
+/**
  * Mirrors the `organization_members_owner_manage` RLS policy: the org owner
  * may suspend/reactivate/remove any non-owner member, but never the
  * `role = 'owner'` row and never their own row (self-management through

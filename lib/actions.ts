@@ -5,7 +5,8 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getRequestOrigin, isSafeInternalPath } from "@/lib/url";
 import { getOrganizationByOwner } from "@/lib/data/organization";
-import { canAttributeToOrganization } from "@/lib/authz";
+import { getEventForLinking } from "@/lib/data/events";
+import { canAttributeToOrganization, canLinkOpportunityToEvent } from "@/lib/authz";
 import type { CheckInResult, RedeemResult, ConnectionRpcResult, ConversationRpcResult, MessageRpcResult } from "@/lib/database.types";
 
 export interface ActionState {
@@ -211,6 +212,7 @@ export async function createOpportunityAction(_prev: ActionState, formData: Form
   const category = String(formData.get("category") ?? "") || null;
   const is_remote = formData.get("is_remote") === "on";
   const instant_book = formData.get("instant_book") === "on";
+  const event_id = String(formData.get("event_id") ?? "") || null;
 
   if (!title) return { error: "Give the opportunity a title." };
 
@@ -223,6 +225,20 @@ export async function createOpportunityAction(_prev: ActionState, formData: Form
   if (organization_id) {
     const org = await getOrganizationByOwner(user.id);
     if (!canAttributeToOrganization(org?.id ?? null, organization_id)) return { error: "You can only post on behalf of a business you own." };
+  }
+
+  // FLOW-SEC-002 (Batch A: Event Team Builder): never trust a
+  // client-supplied event_id either, for the same reason as above — a
+  // Server Action is directly POST-able regardless of what the rendered
+  // form/picker offered. Independently re-fetch the event server-side and
+  // re-check organization integrity with canLinkOpportunityToEvent; the UI
+  // only ever shows eligible same-organization events, but that's not the
+  // enforcement boundary.
+  if (event_id) {
+    const event = await getEventForLinking(event_id);
+    if (!canLinkOpportunityToEvent(event, organization_id, user.id)) {
+      return { error: "You can only link an opportunity to an event owned by the same organization." };
+    }
   }
 
   const { error } = await supabase.from("opportunities").insert({
@@ -241,6 +257,7 @@ export async function createOpportunityAction(_prev: ActionState, formData: Form
     category,
     is_remote,
     instant_book,
+    event_id,
   });
 
   if (error) return { error: error.message };
