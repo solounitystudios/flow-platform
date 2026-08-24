@@ -23,13 +23,15 @@ export function EvidencePanel({
   credentialTypes,
   skills,
   creativeProjects,
+  defaultTitle,
 }: {
   verifications: Verification[];
   credentialTypes: CredentialType[];
   skills: Tables<"skills">[];
   creativeProjects: MyCreativeProject[];
+  defaultTitle?: string;
 }) {
-  const [showForm, setShowForm] = useState(false);
+  const [showForm, setShowForm] = useState(!!defaultTitle);
   const [source, setSource] = useState<"self_reported" | "external_link">("self_reported");
   const [state, formAction] = useActionState(submitEvidenceAction, initialState);
   const typeLabel = new Map(credentialTypes.map((t) => [t.key, t.label]));
@@ -71,7 +73,7 @@ export function EvidencePanel({
               </option>
             ))}
           </Select>
-          <Input label="Title" name="title" placeholder="e.g. ServSafe certification" required />
+          <Input label="Title" name="title" placeholder="e.g. ServSafe certification" defaultValue={defaultTitle} required />
           <Select label="Related skill (optional)" name="skill_id">
             <option value="">None</option>
             {skills.map((s) => (
