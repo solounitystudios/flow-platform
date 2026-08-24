@@ -1,6 +1,6 @@
 {
   "$schema_note": "Structured status for the FLOW COMMAND founder dashboard (/admin/command). Contains no secrets. Updated by flow-lead at meaningful milestones only, not on every tool call. See .claude/FLOW_ORCHESTRATION.md 'Status reporting (FLOW COMMAND)' for the update contract.",
-  "mission": "No active mission — awaiting next batch selection. Since Batch 16 (PR #15, tracked in detail below), three further PRs merged that this dashboard did not individually track: PR #16 (chore/batch16-recovery-closure), PR #17 (feature/creative-project-invite-consent — self-accept invite flow for Creative Project members), PR #18 (feature/creative-project-ui-v1 — Creative Projects UI). These are stated from verified Git/GitHub history only, not from a flow-lead-tracked mission record — no per-batch process detail is claimed for them. A reconciliation preflight ran 2026-08-24 (see feed) resolving conflicting migration/test-count/Work-Now claims from two prior audits and closing a Creative Projects ownership gap; no product code was touched.",
+  "mission": "No active mission — awaiting next batch selection. Latest merged product work: PR #20 (Connect completed work to Passport evidence — see last_completed_mission below, dashboard-tracked in full this time). Prior to that: a governance/repo-hygiene reconciliation (PR #19, doc-only) and, before that, three product PRs (#16-#18, Creative Projects follow-on work) that this dashboard did not individually track — stated from verified Git/GitHub history only in the feed below, no fabricated process detail.",
   "phase": "Founder Approval",
   "phases": [
     "Planning",
@@ -13,27 +13,27 @@
     {
       "name": "Planning",
       "status": "done",
-      "note": "Design predates this reconciliation session and could not be independently re-verified: widen verifications_reference_table_check for 'creative_project', new credential_types row 'creative', tighten verifications_self_insert + confirm_verification_as_collaborator() for active-project-membership on both claimant and witness."
+      "note": "flow-lead confirmed the assumed gap in the brief (markCompletedAction never calling evaluate_achievements()) was false — an existing on_application_updated DB trigger already handles it on every completion transition. Scope corrected to the one real gap: no worker-facing path from a completed gig into evidence submission."
     },
     {
       "name": "Build",
       "status": "done",
-      "note": "The migration and its 6 app-layer consumer files already existed as uncommitted working-tree changes when this recovery began. Content verified directly against the live database and against each other during recovery, not assumed from prior notes."
+      "note": "passport-reputation implemented a CTA on completed /work entries deep-linking into the existing EvidencePanel/submitEvidenceAction flow, pre-filled with the gig title. First pass added a redundant duplicate evaluate_achievements() call to lib/actions.ts; caught in QA and reverted — lib/actions.ts confirmed byte-identical to main."
     },
     {
       "name": "QA",
       "status": "done",
-      "note": "typecheck/lint/test/build re-run directly and independently, multiple times across this recovery: clean each time. One regression test added (tests/unit/verifications-data.test.ts, 4 cases) covering the one previously-untested pure logic unit in this batch (creative-project-vs-skill reference priority in submitEvidenceAction). RLS/security behavior (active-membership gating on self-insert and on collaborator-confirm) verified by direct code + live schema inspection, not by a database-executed test harness — tests/integration/creative-projects.rls.test.ts remains describe.todo() scaffolding, never executed in CI."
+      "note": "qa-security ran build/typecheck/lint/test (154/154) clean; caught the redundant achievement-call duplication above. Verified CTA scoped strictly to application.status === \"completed\", no self-verify violation, no auto-created evidence/verification/credential rows, existing submitEvidenceAction untouched."
     },
     {
       "name": "Release Check",
       "status": "done",
-      "note": "Recovery audit found migration 20260823145545_verifications_creative_project_reference.sql already applied live on the flow-platform Supabase project, with no corresponding commit anywhere in Git history. Reconciled by staging exactly the 7 legitimate functional files (migration + 6 app files) on feature/creative-contributions-batch16, restoring lib/database.types.ts to a minimal diff (only the required not_a_project_member addition), committing, and opening PR #15. gh pr diff confirmed exact scope match. CI green, mergeStateStatus CLEAN."
+      "note": "release-manager confirmed the diff limited to exactly app/(app)/settings/page.tsx, components/applications/WorkCard.tsx, components/settings/EvidencePanel.tsx (+24/-4), no schema/migration changes. PR #20 opened, CI green (typecheck/lint/test/build), mergeStateStatus CLEAN, no unrelated files."
     },
     {
       "name": "Founder Approval",
       "status": "done",
-      "note": "Founder explicitly authorized the Git reconciliation and, separately, the merge, both in-session. PR #15 merged via merge commit 92f0f1569e10c1c67ca0d61c5d7d7f9f5cd61c26. main verified == origin/main post-merge. No Supabase write was made at any point in this reconciliation — migration 20260823145545 was confirmed already live before this session and was not reapplied."
+      "note": "Founder explicitly authorized push, PR, and merge in-session. PR #20 merged via fast-forward merge commit a1e6cc57938c24af9c01fa34be6ad15983a0b262. main verified == origin/main post-merge, working tree clean."
     }
   ],
   "agents": [],
