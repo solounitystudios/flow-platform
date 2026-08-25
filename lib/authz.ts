@@ -127,6 +127,28 @@ export function canSubmitCreativeProjectEvidence(status: string): boolean {
   return status === "active";
 }
 
+/**
+ * Mirrors is_application_participant()'s exact condition (caller is the
+ * applicant, status='completed') — the same gate verifications_self_insert
+ * uses to decide whether an application-linked evidence claim is allowed.
+ * Deliberately NOT gated on worker_ack_at: that column has no effect
+ * anywhere else in this codebase today (set only by
+ * acknowledgeCompletionAction, read only by WorkCard.tsx to toggle a
+ * checkmark string) and requiring it here would block a legitimate,
+ * common case — an employer-confirmed completion the worker simply hasn't
+ * clicked an optional secondary button for yet — for no corresponding trust
+ * gain. `application` is `null` to model "no such application" (a bad/
+ * tampered application_id) or "not this caller's application" the same
+ * way; the caller supplies whichever is true, this function doesn't
+ * distinguish them, mirroring canLinkOpportunityToEvent's `event === null`
+ * convention. See
+ * supabase/migrations/20260824230000_verifications_application_reference.sql.
+ */
+export function canSubmitApplicationEvidence(application: { applicant_id: string; status: string } | null, callerId: string): boolean {
+  if (!application) return false;
+  return application.applicant_id === callerId && application.status === "completed";
+}
+
 export type AdminAccessState = "signed-out" | "not-admin" | "mfa-not-enrolled" | "aal1" | "aal2";
 
 /**

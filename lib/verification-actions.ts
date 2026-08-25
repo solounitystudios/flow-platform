@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { findProfileByUsername, resolveEvidenceReference } from "@/lib/data/verifications";
+import { findProfileByUsername, getApplicationEvidenceContext, resolveEvidenceReference } from "@/lib/data/verifications";
 import type { CollaboratorConfirmationResult, OrganizationVerificationResult } from "@/lib/database.types";
 
 export interface EvidenceActionState {
@@ -27,27 +27,38 @@ export async function submitEvidenceAction(_prev: EvidenceActionState, formData:
   const evidence_note = String(formData.get("evidence_note") ?? "").trim();
   const skill_id = String(formData.get("skill_id") ?? "");
   const creative_project_id = String(formData.get("creative_project_id") ?? "").trim();
+  const application_id = String(formData.get("application_id") ?? "").trim();
   const witness_username = String(formData.get("witness_username") ?? "").trim();
 
   if (!credential_type) return { error: "Choose what kind of credential this is." };
   if (!title) return { error: "Give this claim a title." };
   if (source === "external_link" && !evidence_url) return { error: "Add a link to your evidence for an external claim." };
 
-  // Naming a collaborator is optional and purely claimant-supplied at
-  // submission — it grants that profile no access by itself, it only
-  // identifies who could later confirm this specific claim via
-  // confirm_verification_as_collaborator(). The DB also enforces "not
-  // yourself" (verifications_witness_not_self_check); checked here too for
-  // a clean error message instead of a raw constraint violation.
+  const { reference_table, reference_id } = resolveEvidenceReference(skill_id, creative_project_id, application_id);
+
+  // Application-linked claims never take a client-supplied witness — the
+  // confirmer is derived server-side from the application's opportunity,
+  // exactly like verifications_self_insert/confirm_verification_as_collaborator
+  // independently re-derive it at the DB layer (defense-in-depth, not
+  // reliant on this action alone). Every other reference type keeps the
+  // existing optional freeform witness_username path unchanged.
   let witness_profile_id: string | null = null;
-  if (witness_username) {
+  if (reference_table === "application") {
+    const context = await getApplicationEvidenceContext(reference_id!, user.id);
+    if (!context || !context.eligible) return { error: "That gig isn't eligible for evidence yet — it must be your own completed work." };
+    witness_profile_id = context.confirmer_id;
+  } else if (witness_username) {
+    // Naming a collaborator is optional and purely claimant-supplied at
+    // submission — it grants that profile no access by itself, it only
+    // identifies who could later confirm this specific claim via
+    // confirm_verification_as_collaborator(). The DB also enforces "not
+    // yourself" (verifications_witness_not_self_check); checked here too
+    // for a clean error message instead of a raw constraint violation.
     const witness = await findProfileByUsername(witness_username);
     if (!witness) return { error: "That username could not be found." };
     if (witness.id === user.id) return { error: "You can't name yourself as your own collaborator." };
     witness_profile_id = witness.id;
   }
-
-  const { reference_table, reference_id } = resolveEvidenceReference(skill_id, creative_project_id);
 
   const { error } = await supabase.from("verifications").insert({
     profile_id: user.id,
@@ -136,6 +147,8 @@ const COLLABORATOR_CONFIRM_MESSAGES: Record<NonNullable<CollaboratorConfirmation
   not_found: "That claim could not be found.",
   not_authorized: "You're not the named collaborator on this claim.",
   not_a_project_member: "You're no longer an active member of the project this claim references.",
+  not_the_opportunity_creator: "You're not the business that posted this opportunity.",
+  application_not_completed: "This application is no longer marked completed.",
   not_pending: "This claim has already been resolved.",
 };
 

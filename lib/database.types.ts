@@ -3788,6 +3788,10 @@ export type Database = {
         Returns: Json
       }
       import_business_leads: { Args: { p_rows: Json }; Returns: Json }
+      is_application_participant: {
+        Args: { p_application_id: string }
+        Returns: boolean
+      }
       is_blocked_between: { Args: { a: string; b: string }; Returns: boolean }
       is_conversation_member: {
         Args: { p_conversation_id: string; p_profile_id: string }
@@ -4129,7 +4133,14 @@ export type VerificationTier = "auto_verified" | "collaborator_verified" | "orga
 
 export interface CollaboratorConfirmationResult {
   ok: boolean;
-  reason?: "not_authenticated" | "not_found" | "not_authorized" | "not_a_project_member" | "not_pending";
+  reason?:
+    | "not_authenticated"
+    | "not_found"
+    | "not_authorized"
+    | "not_a_project_member"
+    | "not_the_opportunity_creator"
+    | "application_not_completed"
+    | "not_pending";
 }
 
 export interface OrganizationVerificationResult {
