@@ -26,9 +26,10 @@ It's the natural next phase once a staging Supabase project exists.
   `it.todo(...)` today: none of them can run until a staging Supabase
   project exists (see .claude/FLOW_ORCHESTRATION.md's Supabase safety
   rules) — see each file's header for its own plan, e.g.
-  `flow-sec-001.rls.test.ts` (organization attribution) and
+  `flow-sec-001.rls.test.ts` (organization attribution),
   `flow-sec-002.rls.test.ts` (Batch A: event/opportunity organization
-  integrity).
+  integrity), and `application-evidence-reference.rls.test.ts` (Priority #1
+  Batch 1: application-linked verification evidence).
 
 Every pure-logic module under test lives in a dependency-free file (no
 `next/headers`, no `@/lib/supabase/*` imports) specifically so it can be

@@ -87,11 +87,8 @@ export function WorkCard({ application }: { application: MyApplicationRow }) {
               <Check className="h-3.5 w-3.5" /> Acknowledge completion
             </Button>
           )}
-          <Link
-            href={`/settings?evidenceTitle=${encodeURIComponent(`${opp.title} at ${org?.name ?? "this business"}`)}`}
-            className="mt-2 block text-xs font-medium text-flow-600 hover:underline"
-          >
-            Submit skill evidence for this gig
+          <Link href={`/settings?evidenceApplicationId=${application.id}`} className="mt-2 block text-xs font-medium text-flow-600 hover:underline">
+            Submit evidence for this gig
           </Link>
         </div>
       )}

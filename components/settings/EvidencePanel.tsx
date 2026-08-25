@@ -5,7 +5,7 @@ import { Plus, Clock, ShieldCheck, XCircle, AlertTriangle, Ban, Link2, Check } f
 import { Input, Textarea, Select } from "@/components/ui/Input";
 import { SubmitButton } from "@/components/ui/SubmitButton";
 import { submitEvidenceAction, type EvidenceActionState } from "@/lib/verification-actions";
-import type { Verification, CredentialType, MyCreativeProject } from "@/lib/data/verifications";
+import type { Verification, CredentialType, MyCreativeProject, ApplicationEvidenceContext } from "@/lib/data/verifications";
 import type { Tables } from "@/lib/database.types";
 
 const initialState: EvidenceActionState = {};
@@ -24,14 +24,24 @@ export function EvidencePanel({
   skills,
   creativeProjects,
   defaultTitle,
+  applicationEvidence,
 }: {
   verifications: Verification[];
   credentialTypes: CredentialType[];
   skills: Tables<"skills">[];
   creativeProjects: MyCreativeProject[];
   defaultTitle?: string;
+  /** Set when arriving from WorkCard.tsx's "Submit evidence for this gig"
+   * link (?evidenceApplicationId=...). Server-derived — never trust the
+   * query string itself for identity, only which application to look up
+   * (see getApplicationEvidenceContext, lib/data/verifications.ts). When
+   * present and eligible, the reference/witness are fixed to that
+   * application and the skill/creative-project/witness-username inputs are
+   * hidden entirely rather than left as a bypassable no-op. */
+  applicationEvidence?: ApplicationEvidenceContext | null;
 }) {
-  const [showForm, setShowForm] = useState(!!defaultTitle);
+  const isApplicationClaim = !!applicationEvidence?.eligible;
+  const [showForm, setShowForm] = useState(!!defaultTitle || isApplicationClaim);
   const [source, setSource] = useState<"self_reported" | "external_link">("self_reported");
   const [state, formAction] = useActionState(submitEvidenceAction, initialState);
   const typeLabel = new Map(credentialTypes.map((t) => [t.key, t.label]));
@@ -64,44 +74,76 @@ export function EvidencePanel({
         {verifications.length === 0 && <p className="text-sm text-ink-400">No evidence submitted yet.</p>}
       </ul>
 
+      {applicationEvidence && !applicationEvidence.eligible && (
+        <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-700 dark:bg-amber-950/40 dark:text-amber-400">
+          That gig isn&apos;t eligible for evidence yet — it must be your own completed work.
+        </p>
+      )}
+
       {showForm ? (
         <form action={formAction} className="space-y-3 rounded-xl border border-dashed border-ink-300 p-4 dark:border-ink-700">
-          <Select label="Credential type" name="credential_type" required>
-            {credentialTypes.map((t) => (
-              <option key={t.key} value={t.key}>
-                {t.label}
-              </option>
-            ))}
-          </Select>
-          <Input label="Title" name="title" placeholder="e.g. ServSafe certification" defaultValue={defaultTitle} required />
-          <Select label="Related skill (optional)" name="skill_id">
-            <option value="">None</option>
-            {skills.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </Select>
-          <Select label="Related creative project (optional)" name="creative_project_id">
-            <option value="">None</option>
-            {creativeProjects.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.title}
-              </option>
-            ))}
-          </Select>
+          {isApplicationClaim && applicationEvidence ? (
+            <>
+              <input type="hidden" name="application_id" value={applicationEvidence.application_id} />
+              <input type="hidden" name="credential_type" value="work" />
+              <div className="rounded-lg bg-ink-50 px-3 py-2 text-xs text-ink-600 dark:bg-ink-800 dark:text-ink-300">
+                <p>
+                  For: <span className="font-medium text-ink-900 dark:text-white">{applicationEvidence.opportunity_title}</span>
+                  {applicationEvidence.organization_name ? ` at ${applicationEvidence.organization_name}` : ""}
+                </p>
+                <p className="mt-0.5">
+                  Will be confirmed by: <span className="font-medium text-ink-900 dark:text-white">{applicationEvidence.confirmer_name ?? "the business that posted this opportunity"}</span>
+                </p>
+              </div>
+              <Input
+                label="Title"
+                name="title"
+                defaultValue={`${applicationEvidence.opportunity_title}${applicationEvidence.organization_name ? ` at ${applicationEvidence.organization_name}` : ""}`}
+                required
+              />
+            </>
+          ) : (
+            <>
+              <Select label="Credential type" name="credential_type" required>
+                {credentialTypes.map((t) => (
+                  <option key={t.key} value={t.key}>
+                    {t.label}
+                  </option>
+                ))}
+              </Select>
+              <Input label="Title" name="title" placeholder="e.g. ServSafe certification" defaultValue={defaultTitle} required />
+              <Select label="Related skill (optional)" name="skill_id">
+                <option value="">None</option>
+                {skills.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </Select>
+              <Select label="Related creative project (optional)" name="creative_project_id">
+                <option value="">None</option>
+                {creativeProjects.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.title}
+                  </option>
+                ))}
+              </Select>
+            </>
+          )}
           <Select label="Source" name="source" value={source} onChange={(e) => setSource(e.target.value as typeof source)}>
             <option value="self_reported">Self-reported</option>
             <option value="external_link">External link</option>
           </Select>
           {source === "external_link" && <Input label="Evidence URL" name="evidence_url" type="url" required />}
           <Textarea label="Notes (optional)" name="evidence_note" />
-          <Input
-            label="Ask a collaborator to confirm (optional)"
-            name="witness_username"
-            placeholder="their FLOW username"
-            hint="They'll get a link to confirm your claim directly — this doesn't replace admin review, it's an extra path to get verified."
-          />
+          {!isApplicationClaim && (
+            <Input
+              label="Ask a collaborator to confirm (optional)"
+              name="witness_username"
+              placeholder="their FLOW username"
+              hint="They'll get a link to confirm your claim directly — this doesn't replace admin review, it's an extra path to get verified."
+            />
+          )}
           {state.error && <p className="text-sm text-red-600">{state.error}</p>}
           <div className="flex gap-2">
             <SubmitButton size="sm" pendingLabel="Submitting…">

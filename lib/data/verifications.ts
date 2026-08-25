@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { canSubmitApplicationEvidence } from "@/lib/authz";
 import type { Tables } from "@/lib/database.types";
 
 export type CredentialType = Tables<"credential_types">;
@@ -63,18 +64,21 @@ export interface MyCreativeProject {
   title: string;
 }
 
-/** A claim references at most one of skill_id / creative_project_id.
- * creative_project_id wins if both are somehow submitted — it comes from a
- * dedicated, narrower project picker rather than the general skill picker,
- * so it's the more specific signal when both are present. Pure and exported
- * so the priority rule has a direct regression test independent of
+/** A claim references at most one of skill_id / creative_project_id /
+ * application_id. creative_project_id wins if more than one is somehow
+ * submitted, then skill_id, then application_id — in practice these are
+ * mutually exclusive (the application-linked entry point from WorkCard.tsx
+ * hides the skill/creative-project pickers entirely), but the priority order
+ * is kept deterministic and tested regardless. Pure and exported so the
+ * priority rule has a direct regression test independent of
  * submitEvidenceAction's surrounding Supabase/auth plumbing. */
 export function resolveEvidenceReference(
   skillId: string,
-  creativeProjectId: string
-): { reference_table: "creative_project" | "profile_skill" | null; reference_id: string | null } {
-  const reference_table = creativeProjectId ? "creative_project" : skillId ? "profile_skill" : null;
-  const reference_id = creativeProjectId || skillId || null;
+  creativeProjectId: string,
+  applicationId: string
+): { reference_table: "creative_project" | "profile_skill" | "application" | null; reference_id: string | null } {
+  const reference_table = creativeProjectId ? "creative_project" : skillId ? "profile_skill" : applicationId ? "application" : null;
+  const reference_id = creativeProjectId || skillId || applicationId || null;
   return { reference_table, reference_id };
 }
 
@@ -94,6 +98,56 @@ export async function getMyActiveCreativeProjects(profileId: string): Promise<My
   return (data ?? [])
     .map((row) => row.project as unknown as MyCreativeProject | null)
     .filter((project): project is MyCreativeProject => project !== null);
+}
+
+export interface ApplicationEvidenceContext {
+  application_id: string;
+  opportunity_title: string;
+  organization_name: string | null;
+  confirmer_id: string;
+  confirmer_name: string | null;
+  eligible: boolean;
+}
+
+/** Server-derived context for the "submit evidence for this completed gig"
+ * deep link from WorkCard.tsx, and the single source submitEvidenceAction
+ * uses to derive witness_profile_id server-side — the query string/form
+ * only ever supplies which application_id to look up, never who confirms it
+ * or what it's titled. `eligible` mirrors canSubmitApplicationEvidence
+ * exactly (lib/authz.ts) — the same predicate submitEvidenceAction
+ * re-checks before inserting. This is a display/derivation convenience, not
+ * the authorization boundary itself; is_application_participant() at the DB
+ * layer (verifications_self_insert's WITH CHECK) is what actually enforces
+ * it. Returns null if applicationId doesn't resolve to a readable
+ * application+opportunity at all — RLS (applications_parties_read) scopes
+ * that read to the applicant, the opportunity's creator, or an active org
+ * member, same as everywhere else in this codebase. */
+export async function getApplicationEvidenceContext(applicationId: string, viewerId: string): Promise<ApplicationEvidenceContext | null> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("applications")
+    .select(
+      "id, applicant_id, status, opportunity:opportunities(title, created_by, organization:organizations(name), creator:profiles!opportunities_created_by_fkey(full_name, username))"
+    )
+    .eq("id", applicationId)
+    .maybeSingle();
+
+  if (!data || !data.opportunity) return null;
+  const opp = data.opportunity as unknown as {
+    title: string;
+    created_by: string;
+    organization: { name: string } | null;
+    creator: { full_name: string | null; username: string | null } | null;
+  };
+
+  return {
+    application_id: data.id,
+    opportunity_title: opp.title,
+    organization_name: opp.organization?.name ?? null,
+    confirmer_id: opp.created_by,
+    confirmer_name: opp.creator?.full_name || opp.creator?.username || null,
+    eligible: canSubmitApplicationEvidence({ applicant_id: data.applicant_id, status: data.status }, viewerId),
+  };
 }
 
 /** A single claim, with the claimant's public profile joined in. RLS

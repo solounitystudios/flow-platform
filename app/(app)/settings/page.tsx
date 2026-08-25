@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { getAllSkills, getCurrentUser, getFullProfile } from "@/lib/data/profile";
 import { getMyIntents } from "@/lib/data/intents";
-import { getMyVerifications, getCredentialTypes, getMyActiveCreativeProjects } from "@/lib/data/verifications";
+import { getMyVerifications, getCredentialTypes, getMyActiveCreativeProjects, getApplicationEvidenceContext } from "@/lib/data/verifications";
 import { getMyReferrals } from "@/lib/data/referrals";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { ProfileForm } from "@/components/settings/ProfileForm";
@@ -15,9 +15,9 @@ import { Button } from "@/components/ui/Button";
 export default async function SettingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ evidenceTitle?: string }>;
+  searchParams: Promise<{ evidenceTitle?: string; evidenceApplicationId?: string }>;
 }) {
-  const { evidenceTitle } = await searchParams;
+  const { evidenceTitle, evidenceApplicationId } = await searchParams;
 
   const user = await getCurrentUser();
   if (!user) redirect("/login");
@@ -25,13 +25,14 @@ export default async function SettingsPage({
   const full = await getFullProfile(user.id);
   if (!full) redirect("/onboarding");
 
-  const [allSkills, intents, verifications, credentialTypes, referrals, creativeProjects] = await Promise.all([
+  const [allSkills, intents, verifications, credentialTypes, referrals, creativeProjects, applicationEvidence] = await Promise.all([
     getAllSkills(),
     getMyIntents(user.id),
     getMyVerifications(user.id),
     getCredentialTypes(),
     getMyReferrals(user.id),
     getMyActiveCreativeProjects(user.id),
+    evidenceApplicationId ? getApplicationEvidenceContext(evidenceApplicationId, user.id) : Promise.resolve(null),
   ]);
 
   return (
@@ -74,6 +75,7 @@ export default async function SettingsPage({
             skills={allSkills}
             creativeProjects={creativeProjects}
             defaultTitle={evidenceTitle}
+            applicationEvidence={applicationEvidence}
           />
         </CardBody>
       </Card>
