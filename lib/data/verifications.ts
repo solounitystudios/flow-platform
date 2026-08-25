@@ -120,11 +120,11 @@ export interface ApplicationEvidenceContext {
  * layer (verifications_self_insert's WITH CHECK) is what actually enforces
  * it. Returns null if applicationId doesn't resolve to a readable
  * application+opportunity at all — RLS (applications_parties_read) scopes
- * that read to the applicant, the opportunity's creator, or an active org
- * member, same as everywhere else in this codebase. */
+ * that read to just the applicant or the opportunity's creator, same as
+ * everywhere else in this codebase. */
 export async function getApplicationEvidenceContext(applicationId: string, viewerId: string): Promise<ApplicationEvidenceContext | null> {
   const supabase = await createClient();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("applications")
     .select(
       "id, applicant_id, status, opportunity:opportunities(title, created_by, organization:organizations(name), creator:profiles!opportunities_created_by_fkey(full_name, username))"
@@ -132,6 +132,10 @@ export async function getApplicationEvidenceContext(applicationId: string, viewe
     .eq("id", applicationId)
     .maybeSingle();
 
+  if (error) {
+    console.error("[getApplicationEvidenceContext] query failed:", error.message);
+    return null;
+  }
   if (!data || !data.opportunity) return null;
   const opp = data.opportunity as unknown as {
     title: string;
