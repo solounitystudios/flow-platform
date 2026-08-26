@@ -1,7 +1,7 @@
 {
   "$schema_note": "Structured status for the FLOW COMMAND founder dashboard (/admin/command). Contains no secrets. Updated by flow-lead at meaningful milestones only, not on every tool call. See .claude/FLOW_ORCHESTRATION.md 'Status reporting (FLOW COMMAND)' for the update contract.",
-  "mission": "No active mission — Batch A (Event Team Builder Integration) is COMPLETE and merged. Let event organizers build an event team using the existing opportunities/applications/work pipeline (no second staffing marketplace). Locked founder decisions honored throughout: (1) event/opportunity organization integrity enforced server-side, not just UI-filtered; (2) staff participation stays on the professional work lifecycle — no automatic event_attendance ticket is created for staff. Delivered: additive nullable opportunities.event_id column + index only (now live in production); no applications/event_attendance/verifications/Passport schema changes; no RLS changes. Explicitly out of scope this batch, not started: Passport-at-Events credentials, staff check-in, zones, Pulse, Replay, promoter reputation, Event Score, sponsor/vendor marketplace expansion, after-party relationships, festival mode, sports layer, paid ticketing/Stripe. Awaiting founder selection of the next batch.",
-  "phase": "Founder Approval",
+  "mission": "Active mission: Activities V1, PR A (Activities Foundation) — the first of a planned three-PR sequence (A: foundation/auth/basic UI/map, B: rewards+evidence+notifications, C: event/org embedding+discovery polish). Founder approved the architecture from this session's audit and made two binding decisions: (1) a dedicated first-class ownership slice, `activities-participation` (new agent file + FLOW_ORCHESTRATION.md ownership-map row added this session), explicitly NOT subordinate to `events` or `passport-reputation`; (2) PR A is trimmed to schema+auth+basic UI+map only — reward trigger, Passport evidence UI, passport_summary changes, notifications, paid registration, Wallet, Analytics, Work Now expansion, templates/recurrence, and richer event-embedding UX are all explicitly deferred to PR B/C. schema-auditor review is required before the migration is written, per founder instruction.",
+  "phase": "Build",
   "phases": [
     "Planning",
     "Build",
@@ -13,27 +13,27 @@
     {
       "name": "Planning",
       "status": "done",
-      "note": "Read-only architecture audit (this session, HEAD d517431) surveyed the Events/Work/Passport/Map/Organizations/Rewards systems and recommended Event Team Builder as the lowest-risk, highest-reuse next batch: the opportunities/applications lifecycle is production-hardened and directly reusable, needing only an additive event_id link. Founder authorized this exact scope and locked two decisions (org-integrity server-side enforcement; staff ≠ attendee, no auto ticket) rather than leaving them to implementation-time judgment."
+      "note": "Founder issued a product-interpretation correction (Activities are a distinct first-class participation/discovery object — Opportunity/Event/Organization -> Activity -> Participation/Outcome -> Evidence/Passport — NOT folded into Events or Passport evidence as a prior session's audit had implied), authorized a read-only Activities V1 forensic architecture audit, then approved that architecture with two binding decisions: a dedicated `activities-participation` ownership slice, and a trimmed PR A scope (schema+auth+basic UI+map only, rewards/evidence/notifications/paid-registration/Wallet/Analytics/Work-Now-expansion deferred to PR B/C)."
     },
     {
       "name": "Build",
-      "status": "done",
-      "note": "Primary interactive session implemented directly (single-writer) on feature/event-team-builder-batch-a. Migration 20260824140000_opportunities_event_link.sql (nullable opportunities.event_id FK + index only, created locally, NOT applied to production). lib/database.types.ts hand-updated to match (live Supabase has no staging project this session could generate from with the migration unapplied). New: lib/authz.ts canLinkOpportunityToEvent (FLOW-SEC-002, pure/testable), lib/data/events.ts getEventForLinking, lib/data/opportunities.ts getOpportunitiesForEvent. lib/actions.ts createOpportunityAction now accepts+server-side-validates event_id. PostOpportunityForm.tsx gained an optional event link (picker or locked display). business/events/[id]/page.tsx gained a Staffing section reusing existing OpportunityRow/getApplicantCounts. Zero changes to applications/event_attendance/verifications schema or lifecycle code."
+      "status": "in_progress",
+      "note": "Governance reconciliation + ownership additions committed first (this file, FLOW_ORCHESTRATION.md, new .claude/agents/activities-participation.md), per founder instruction to keep governance separate from implementation. schema-auditor review requested next, before the migration is written; feature branch feature/activities-foundation-v1 to follow."
     },
     {
       "name": "QA",
-      "status": "done",
-      "note": "Local verification: lint 0 errors/1 pre-existing warning, typecheck clean, test 162/162 (154 pre-existing + 8 new FLOW-SEC-002 unit tests, tests/integration/flow-sec-002.rls.test.ts added as it.todo staging-only per existing repo convention), build clean (48 routes). Three read-only background reviewers used per founder authorization, none wrote any file: schema-auditor PASS (migration shape/FK/index/ordering/types hand-edit all correct, confirmed unapplied to live project mmwgedzsdhabygcrvqdm; flagged as an accepted tradeoff that event_id integrity is enforced only in the one current write path, not DB-level — matches this batch's authorized scope); qa-security PASS (independently reproduced all 4 verification commands, traced the cross-org exploit scenario through actual code and confirmed no bypass, confirmed zero event_attendance writes anywhere in the diff, confirmed the Staffing section sits behind the existing owner-only redirect gate; one non-blocking observation: the UI's cancelled/completed-event picker filter isn't re-enforced server-side, same-organization only so not a security gap, left as-is per QA's own recommendation); jobs-opportunities reviewer PASS (confirmed zero diff to the applications lifecycle/trigger, no duplicate marketplace/engine, exact convention match with the business dashboard's existing opportunity-row pattern, worker-facing code untouched, Evidence CTA path needs zero changes)."
+      "status": "pending",
+      "note": null
     },
     {
       "name": "Release Check",
-      "status": "done",
-      "note": "Fresh release-manager-style review authorized and completed on feature/event-team-builder-batch-a (main@d517431, origin/main unmoved, merge-base confirmed identical — no conflict risk). Repository truth confirmed: working tree contains exactly the 13 expected files, nothing unrelated. release-manager (fresh, read-only) independently reviewed the full diff/migration/types/security-predicate/architecture and verdict READY, with one caveat — it lacked Supabase tool access to itself confirm the migration's live-unapplied status, relying on the earlier schema-auditor finding. This session closed that gap directly via a fresh read-only Supabase query (list_migrations + list_tables on project mmwgedzsdhabygcrvqdm): latest live migration is 20260823234842 (creative_project_invite_consent), 20260824140000 is absent, and live public.opportunities has zero event_id column/FK (all live event_id references belong to unrelated tables — flow_ledger, event_attendance, conversations). Fresh lint/typecheck/test/build re-run clean this same session: 168/168 tests. release-manager recommends landing as two commits (feature commit + separate governance/state-file commit) once commit is authorized — not yet acted on."
+      "status": "pending",
+      "note": null
     },
     {
       "name": "Founder Approval",
-      "status": "done",
-      "note": "Founder authorized final merge of PR #22. Fresh gate re-run immediately before merge: OPEN/MERGEABLE/CLEAN at head 2fd0762, CI pass, same 13 files; live ledger reconfirmed to still hold 20260824220611_opportunities_event_link with no re-apply. Merged via standard merge commit (gh pr merge 22 --merge). Post-merge: local main fast-forwarded to origin/main at d4ea4bc4c7dc691fe9108522f4b6ea344e66ecaf, working tree clean, gh pr view confirms state MERGED with matching mergeCommit. Post-merge smoke gate (typecheck + test) re-run clean: 168/168 tests. Batch A is complete."
+      "status": "pending",
+      "note": null
     }
   ],
   "agents": [],
@@ -122,76 +122,73 @@
       "time": "2026-08-24T16:00:00Z",
       "actor": "flow-lead",
       "message": "Founder authorized final merge. Fresh gate immediately before merge: PR #22 OPEN/MERGEABLE/CLEAN at head 2fd0762ea1522e20a3a8592516dc4c9ede938b57, CI (typecheck/lint/test/build) pass, same 13 files; live Supabase ledger reconfirmed to still hold exactly 20260824220611/opportunities_event_link with no re-apply performed. Merged PR #22 via gh pr merge --merge (standard merge commit, not squash) -> d4ea4bc4c7dc691fe9108522f4b6ea344e66ecaf. git fetch + checkout main + pull --ff-only: local main == origin/main == d4ea4bc, working tree clean. gh pr view confirms state MERGED, mergedAt 2026-08-24T22:20:22Z, mergeCommit d4ea4bc matching exactly. Post-merge smoke gate from merged main: typecheck clean, test 168/168. Batch A — Event Team Builder Integration is COMPLETE: migration live and verified, PR merged, repository and production reconciled. This edit itself creates a new governance-only diff on main (not yet committed) — flagged per instruction rather than auto-committing/pushing/opening a new PR. No next batch started."
+    },
+    {
+      "time": "2026-08-26T01:46:51Z",
+      "actor": "flow-lead",
+      "message": "Fresh-truth governance reconciliation of this file (no product code, no schema, no migrations touched). Re-verified immediately before writing: main == origin/main == f64a597694d42ee3d82a6deb9ea407638324878b, zero open PRs, zero unmerged local branches (all 20 fully absorbed into main), working tree clean. Confirmed via GitHub history that PR #23 ('Close Event Team Builder Batch A', merged 2026-08-24T22:27:12Z) and PR #24 ('feat(passport): link completed applications to evidence', merged 2026-08-25T03:21:05Z, migration 20260824230000_verifications_application_reference) both landed after this file's prior update at PR #22/d4ea4bc, and this file had gone stale by two full merges. Fresh typecheck/lint/test re-run clean this session: typecheck clean, lint 0 errors/1 pre-existing warning, 182/182 unit+security tests (14 files) pass — up from 168 due to PR #24's new coverage. Integration-test staging-only limitation confirmed still present and grown in scope, not regressed: 5 files / 120 it.todo cases (0 executing), vs. the previously documented 3 files/76 — the additional cases came from creative-projects.rls, organization-location.rls, and application-evidence-reference.rls suites added since the baseline was written; still blocked purely on the absence of a staging Supabase project. Immediately after this session's separate Phase 2 read-only architecture audit, founder's next-batch intent is recorded below as Activities V1, explicitly distinct from Events/Passport per founder's product-interpretation correction. This edit itself is expected to land as its own governance-only commit, separate from any future Activities implementation commit, per repository convention (mirrors the PR #21/PR #23 pattern) — not yet committed, pending founder go-ahead to commit/push/PR."
     }
   ],
   "blockers": [],
   "files_touched": [
     ".claude/flow-command-state.json",
     ".claude/FLOW_ORCHESTRATION.md",
-    ".claude/agents/passport-reputation.md"
+    ".claude/agents/activities-participation.md"
   ],
   "schema_impact": {
     "changed": false,
-    "notes": "This reconciliation touched no migrations and made no Supabase write. The two live migration-history drift items found (20260823145545 name-field cosmetic drift; 20260823232600 real version-number drift, both content-verified identical to their repo source) were left as-is per instruction not to modify migration history for cosmetics — flagged to supabase-backend as safe-to-defer hygiene items."
+    "notes": "This reconciliation touched no migrations and made no Supabase write. No new schema-drift items found beyond the two already-documented, deferred hygiene items in 'Verified baseline facts' (FLOW_ORCHESTRATION.md) — not re-verified this session, out of scope for this governance-only pass."
   },
   "qa_status": "PASS",
   "repo_status": {
     "branch": "main",
-    "working_tree": "clean except this state-file edit (post-merge governance record, uncommitted)",
+    "working_tree": "clean except this state-file edit (governance reconciliation, uncommitted)",
     "ahead_of_origin": 0,
-    "last_commit": "d4ea4bc4c7dc691fe9108522f4b6ea344e66ecaf Merge pull request #22 from solounitystudios/feature/event-team-builder-batch-a (local main == origin/main, verified)"
+    "last_commit": "f64a597694d42ee3d82a6deb9ea407638324878b Merge pull request #24 from solounitystudios/feature/application-evidence-reference (local main == origin/main, verified fresh immediately before this edit)"
   },
-  "production_touched": true,
+  "production_touched": false,
   "founder_approval_required": false,
   "usage_mode": "GREEN",
   "usage_mode_note": "Manually reported, not live-detected — this app has no API into Claude Code's session usage. Set to YELLOW/RED only when a founder or agent explicitly observes rate-limit symptoms, or switch via the 'FLOW LOW USAGE MODE' command.",
   "active_agent_count": 0,
   "parallelism_limited": false,
   "last_completed_mission": {
-    "name": "PR #22 — Event Team Builder Integration (Batch A, most recent merge to main)",
-    "commit": "d4ea4bc4c7dc691fe9108522f4b6ea344e66ecaf",
-    "summary": "Lets event organizers post staffing opportunities (bartender, security, DJ, check-in staff, etc.) linked to a specific event, reusing the existing production-hardened opportunities/applications/work lifecycle instead of a second staffing marketplace. Added a Staffing section to the event manage page and an optional event link to the opportunity-posting form, both reusing existing components. FLOW-SEC-002 (lib/authz.ts canLinkOpportunityToEvent) enforces server-side, independent of UI filtering: nonexistent event, cross-organization event, and cancelled/completed event are all rejected; an organization-less personal event may only be linked by its own creator. Staff participation never auto-creates an event_attendance ticket — attendance and work stay fully separate. 14 new unit tests (tests/security/flow-sec-002.test.ts) plus a staging-only it.todo integration matrix. Preceded by a full read-only FLOW Events expansion architecture audit (this session) that recommended this exact batch as the safest, highest-reuse next step.",
-    "agents_used": ["schema-auditor", "qa-security", "jobs-opportunities", "release-manager"],
-    "migration": "20260824220611_opportunities_event_link (applied to production and independently verified: column/FK/index/RLS/row-preservation/no-adjacent-table-change all confirmed live; repo filename reconciled to match the live-recorded version, executable SQL byte-identical throughout)",
-    "qa_status": "PASS",
+    "name": "PR #24 — Link completed applications to Passport evidence (most recent merge to main)",
+    "commit": "f64a597694d42ee3d82a6deb9ea407638324878b",
+    "summary": "Gives completed applications a direct, reachable path into the verification/evidence pipeline: verifications gained an application reference (migration 20260824230000_verifications_application_reference), closing the loop the founder's 2026-08-24 next-batch recommendation had originally flagged (completed work updated application status but didn't fully carry the outcome into evidence/Passport). A same-batch fix commit (23c932b) addressed QA findings before merge. Preceded by PR #23, a governance-only closeout of Batch A (Event Team Builder) — no product code.",
+    "agents_used": ["passport-reputation (implementation, inferred from commit prefix and file ownership)", "qa-security (QA findings addressed pre-merge per commit 23c932b)"],
+    "migration": "20260824230000_verifications_application_reference (present in repo; live-apply status not re-verified this session — this reconciliation made no Supabase calls. Verify before treating as confirmed-live if a future session needs that fact.)",
+    "qa_status": "PASS (per commit history — QA findings addressed in 23c932b before merge)",
     "lint_status": "PASS",
     "typecheck_status": "PASS",
-    "build_status": "PASS",
-    "test_count": "168/168",
-    "production_touched": true,
+    "build_status": "not re-run this session (typecheck+lint+test re-run clean; full build deferred, no code changed since last confirmed clean build)",
+    "test_count": "182/182",
+    "production_touched": false,
     "pushed": true,
     "merged": true,
-    "pr": 22,
-    "merge_commit": "d4ea4bc4c7dc691fe9108522f4b6ea344e66ecaf",
-    "prior_mission_pr18_detail": "PR #18 — Creative Project UI V1, merge commit cb8ee559846a41c04f57396a30440db19c2c3879: most recent merged work on main before this batch (PRs #16/#17/#18, Creative Projects follow-on work, plus governance-only PR #19-#21 in between). Preserved here for continuity; see Git history for full detail."
+    "pr": 24,
+    "merge_commit": "f64a597694d42ee3d82a6deb9ea407638324878b",
+    "prior_mission_pr22_detail": "PR #22 — Event Team Builder Integration, merge commit d4ea4bc4c7dc691fe9108522f4b6ea344e66ecaf, followed by governance-only PR #23. Preserved here for continuity; see Git history for full detail."
   },
   "next_batch_recommendation": {
-    "name": "Activity/Outcome → Evidence → Passport integration completion",
-    "status": "superseded — founder authorized Batch A (Event Team Builder Integration) instead on 2026-08-24; this recommendation was not selected and is kept here only for history",
-    "reason": "Completed work currently updates application status but does not fully carry the outcome into the verification/evidence/Passport loop.",
-    "owner": "passport-reputation",
-    "recorded_at": "2026-08-24T12:02:00Z"
+    "name": "Activities V1 — first-class participation/discovery object",
+    "status": "architecture audit complete, awaiting founder scope approval — not yet authorized for implementation",
+    "reason": "Founder corrected the product model: Activities (workshops, volunteer shifts, training sessions, mentoring, recreational/community activities, etc.) are a distinct participation/discovery object in the chain Opportunity/Event/Organization -> Activity -> Participation/Outcome -> Evidence/Passport. Explicitly NOT the same as Events, and NOT folded directly into Passport evidence. An Event may optionally contain zero or more Activities later; an Activity is not necessarily an Event, and not necessarily tied to an Organization or Event at all (standalone activities like a neighborhood cleanup must be supported).",
+    "owner": "TBD pending founder scope approval — likely a new dedicated ownership slice or split between events/passport-reputation/map-discovery depending on the approved schema",
+    "recorded_at": "2026-08-26T01:50:00Z"
   },
   "current_batch": {
-    "name": "Batch A — Event Team Builder Integration",
-    "status": "COMPLETE — merged to main",
-    "authorized_at": "2026-08-24T13:10:00Z",
-    "authorized_scope": "opportunities.event_id nullable uuid FK to events(id) on delete set null, plus index. No applications/event_attendance/verifications/Passport schema changes. Server-side same-organization enforcement. No auto-created event_attendance for staff.",
-    "migration_apply_authorized": true,
-    "migration_applied": true,
-    "migration_applied_at": "2026-08-24T15:40:00Z",
-    "migration_ledger_drift": "Reconciled — the migration file was renamed from 20260824140000_opportunities_event_link.sql to 20260824220611_opportunities_event_link.sql to match the live-recorded ledger version, per explicit founder authorization. Executable SQL confirmed byte-identical before/after rename (md5 d3036dbbf232a14a3a6cc91768bbb936).",
+    "name": "Activities V1 — PR A: Activities Foundation",
+    "status": "BUILD — governance/ownership setup committed, implementation starting",
+    "authorized_at": "2026-08-26T02:00:00Z",
+    "authorized_scope": "activities + activity_participants tables, indexes, RLS, lifecycle-enforcement trigger, org/event linking integrity, flow_ledger.activity_id (only if required for future reward compatibility), verifications_reference_table_check widened to permit 'activity_participation' (schema only, no evidence UX), lib/data/activities.ts, lib/authz.ts (canManageActivity/canLinkActivityToEvent/canLinkActivityToOrganization), create/join/cancel/check-in/complete/no-show actions, /activities + /activities/[id] + one host create/manage entry point, activitiesToMapItems + MapEntityType extension, full test suite (lifecycle/authz/cross-org/capacity/map-selector/staging-RLS). Explicitly deferred to PR B/C: reward trigger, Passport evidence UI, passport_summary changes, notifications, paid registration, Wallet, Analytics, Work Now expansion, templates/recurrence, advanced host analytics, recommendation/ranking logic.",
+    "migration_apply_authorized": false,
+    "migration_applied": false,
     "push_pr_authorized": true,
-    "merge_authorized": true,
-    "merged": true,
-    "merged_at": "2026-08-24T22:20:22Z",
-    "branch": "feature/event-team-builder-batch-a",
-    "feature_commit": "faf113c",
-    "pr": 22,
-    "pr_url": "https://github.com/solounitystudios/flow-platform/pull/22",
-    "pr_final_head": "2fd0762ea1522e20a3a8592516dc4c9ede938b57",
-    "merge_commit": "d4ea4bc4c7dc691fe9108522f4b6ea344e66ecaf",
-    "implementation_status": "Three commits on feature/event-team-builder-batch-a (faf113c product/feature, 0ae2a45 governance state, 2fd0762 migration-version reconciliation), merged to main via standard merge commit d4ea4bc. Production migration applied and independently verified live before merge (column/FK/index/RLS/row-preservation/no-new-trigger/no-adjacent-table-change), generated types diffed exact-match against lib/database.types.ts. Post-merge: local main == origin/main == d4ea4bc, working tree clean, PR #22 state MERGED confirmed via gh, post-merge smoke gate (typecheck + 168/168 tests) clean. Batch A is complete; no next batch started."
+    "merge_authorized": false,
+    "merged": false,
+    "branch": "feature/activities-foundation-v1 (to be created after this governance commit merges)",
+    "implementation_status": "Governance/ownership commit prepared (this file + FLOW_ORCHESTRATION.md + new activities-participation agent file). schema-auditor review to run next; migration/code not yet written. Founder authorized push+PR for PR A but explicitly instructed to stop at the merge gate."
   },
-  "updated_at": "2026-08-24T16:00:00Z"
+  "updated_at": "2026-08-26T02:00:00Z"
 }
