@@ -33,6 +33,7 @@ crosses boundaries, but the owning agent should be the one asked first.
 | `admin-control-center` | `app/admin/**`, `components/admin/**`, `lib/admin/**` |
 | `jobs-opportunities` | `app/(app)/gigs/**`, `app/(app)/work/**`, `app/(app)/business/opportunities/**`, `app/(app)/business/post/**`, `lib/data/opportunities.ts`, `lib/opportunity-filters.ts`, `lib/work.ts`, `components/opportunities/**`, `components/business/PostOpportunityForm.tsx` |
 | `events` | `app/(app)/events/**`, `app/(app)/business/events/**`, `app/(app)/tickets/**`, `lib/data/events.ts`, `components/events/**` |
+| `activities-participation` | `app/(app)/activities/**`, `components/activities/**`, `lib/data/activities.ts`, the `activities`/`activity_participants` tables and their lifecycle, the activity-related exports of `lib/actions.ts`/`lib/authz.ts`, the `activitiesToMapItems` selector in `lib/map-selectors.ts` |
 | `passport-reputation` | `app/(app)/passport/**`, `app/(app)/recommendations/**`, `app/p/[username]/**`, `app/(app)/creative-projects/**`, `lib/passport.ts`, `lib/verification-actions.ts`, `lib/intent-actions.ts`, `lib/intent-constants.ts`, `lib/creative-project-actions.ts`, `lib/creative-project-display.ts`, `lib/data/creative-projects.ts`, `components/passport/**`, `components/recommendations/**`, `components/creative-projects/**` |
 | `map-discovery` | `app/(app)/live/**`, `app/(app)/discover/**`, `app/(app)/search/**`, `lib/data/discover.ts`, `components/search/**`, `components/opportunities/LiveMap.tsx` |
 | `employer-business` | `app/(app)/business/**` (shell/dashboard), `app/employer/**`, organization profile/verification UI |
@@ -57,6 +58,22 @@ dedicated agent is currently justified by its size or by any use outside
 Passport verification. Revisit only if Creative Projects grows a purpose
 genuinely independent of Passport (e.g. becomes its own discovery/marketplace
 surface).
+
+Activities (`activities`/`activity_participants`) is a **dedicated,
+first-class ownership slice**, deliberately not folded into `events` or
+`passport-reputation` — the founder explicitly rejected both foldings.
+Activities are a distinct participation/discovery object in the chain
+`Opportunity/Event/Organization -> Activity -> Participation/Outcome ->
+Evidence/Passport`: a workshop, volunteer shift, training session, class,
+networking/mentoring session, or recreational/community activity that may
+optionally belong to an `event_id` and/or `organization_id`, or stand
+entirely alone. `activities-participation` owns the object, its lifecycle,
+its data-access layer, its host/manage flows, and its map-pin normalization
+— it coordinates with, but is never subordinate to: `events` (optional
+containment only), `employer-business`/`admin-control-center` (hosting
+context), `passport-reputation` (evidence/verification handoff),
+`payments-commerce` (completion-triggered rewards), and `map-discovery`
+(final say on shared map rendering beyond the one normalization function).
 
 ### Files everyone shares — coordinate before touching
 
