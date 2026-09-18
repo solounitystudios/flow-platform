@@ -21,7 +21,7 @@ App runs at `http://localhost:3000`.
 
 ## What's real vs. demo data
 
-- **Real, Supabase-backed:** sign up / log in / sessions, your own profile, skills, Passport visibility and achievements, business profile creation, posting/managing opportunities and events as a business (including ticket check-in), the full opportunity and event lifecycles (apply/accept/complete, register/cancel/no-show), FLOW Points redemption, notifications, Discover (real members with a public passport + real businesses), Connections — send/accept/decline/cancel/remove requests, block/unblock, and report — and Messages: real-time direct messages between connections, event group chats, and opportunity applicant↔employer chats (see "Connections & blocking" and "Messages" below).
+- **Real, Supabase-backed:** sign up / log in / sessions, your own profile, skills, Passport visibility and achievements, business profile creation, posting/managing opportunities and events as a business (including ticket check-in), the full opportunity and event lifecycles (apply/accept/complete, register/cancel/no-show), Activities — host a workshop/volunteer shift/training/class/networking/mentoring/creative-session/recreational/community activity (optionally attached to an organization and/or event, or standing alone), join/cancel as a participant, and the host check-in / no-show / complete lifecycle (see "Activities" below) — FLOW Points redemption, notifications, Discover (real members with a public passport + real businesses), Connections — send/accept/decline/cancel/remove requests, block/unblock, and report — and Messages: real-time direct messages between connections, event group chats, and opportunity applicant↔employer chats (see "Connections & blocking" and "Messages" below).
 - **Demo/mock data** (`lib/mock/data.ts`): supplements the above so browse screens never look empty before the platform has enough real multi-city content — extra opportunities, events, rewards-catalog entries, and Discover profiles/businesses are blended in alongside real rows. Mock rows mirror the real database schema field-for-field so they can be phased out as real content grows. See `lib/mock/passport-adapter.ts` for how demo profiles resolve on `/p/[username]`.
 
 ## Scripts
@@ -33,7 +33,7 @@ App runs at `http://localhost:3000`.
 
 ## Database
 
-Schema, RLS policies, and the `passport_summary` view live in the Supabase project (`flow-platform`). Key tables: `profiles`, `skills`, `profile_skills`, `organizations`, `opportunities`, `applications`, `events`, `event_attendance`, `recommendations`, `verifications`, `flow_ledger`, `rewards`, `reward_redemptions`, `achievements`, `profile_achievements`, `connections`, `connection_events`, `connection_reports`, `admins`, `conversations`, `conversation_members`, `messages`.
+Schema, RLS policies, and the `passport_summary` view live in the Supabase project (`flow-platform`). Key tables: `profiles`, `skills`, `profile_skills`, `organizations`, `opportunities`, `applications`, `events`, `event_attendance`, `activities`, `activity_participants`, `recommendations`, `verifications`, `flow_ledger`, `rewards`, `reward_redemptions`, `achievements`, `profile_achievements`, `connections`, `connection_events`, `connection_reports`, `admins`, `conversations`, `conversation_members`, `messages`.
 
 Migrations for the Connections and Messages work live in `supabase/migrations/` — see that directory's `README.md` for what is and isn't captured there yet.
 
@@ -47,6 +47,12 @@ Migrations for the Connections and Messages work live in `supabase/migrations/` 
 - `report_profile` — writes to `connection_reports`, readable only by the reporter and anyone listed in `admins` (a table nobody can write to through the API — admins are provisioned by running SQL directly against the project).
 
 All of these RPCs have `EXECUTE` revoked from `anon` *and* `PUBLIC` — only signed-in users can call them. (Worth flagging: revoking from `anon` alone turned out to be a no-op the first time, because Postgres grants `EXECUTE` to `PUBLIC` by default at function-creation time and `anon` inherits through that, not a direct grant. `has_function_privilege('anon', ...)` still returned `true` after an `anon`-only revoke; fixed by also revoking from `PUBLIC`. `is_blocked_between()` is the one deliberate exception — it stays `PUBLIC`-executable since the `profiles_block_restrict` policy needs to call it for anonymous, logged-out profile views too.)
+
+### Activities
+
+`activities` is a distinct participation/discovery object in the chain `Opportunity/Event/Organization -> Activity -> Participation/Outcome -> Evidence/Passport` — a workshop, volunteer shift, training session, class, networking/mentoring session, creative session, or recreational/community activity. It may optionally belong to an `organization_id` and/or `event_id`, or stand entirely alone; it is never subordinate to either. `activity_participants` tracks each person's join/attendance state (`registered` / `attended` / `completed` / `no_show` / `cancelled`), with a race-safe (row-locked) capacity check and lifecycle validity enforced by a `BEFORE INSERT/UPDATE` trigger, mirroring the existing `event_attendance` pattern. Host-only transitions (check-in, no-show, complete) go through `SECURITY DEFINER` RPCs (`check_in_activity_participant`, `mark_activity_no_show`, `complete_activity_participant`) rather than a raw client-side status update, matching how ticket check-in already works for Events.
+
+This is PR A of a three-PR Activities sequence — foundation, auth, and basic UI/map pin only. **Explicitly deferred** to later PRs: FLOW Points/ledger rewards on completion, Passport evidence submission UI, notifications, paid registration, org-admin multi-manage, and full Discover/map filtering (an Activity renders as a pin on `/live` today, but `/discover`'s list/filter surface doesn't yet include Activities).
 
 ### Messages
 

@@ -149,6 +149,62 @@ export function canSubmitApplicationEvidence(application: { applicant_id: string
   return application.applicant_id === callerId && application.status === "completed";
 }
 
+/**
+ * Activities V1 — creator-only manage check, mirroring `activities_creator_manage`'s
+ * `USING ((select auth.uid()) = created_by)` (supabase/migrations/20260826020000_activities_foundation.sql).
+ * `activity === null` models "no such activity" (a bad/tampered activity_id)
+ * — always DENY, same `null` convention as `canLinkOpportunityToEvent`'s
+ * `event === null`. Organization-attribution integrity on create/update is
+ * a *separate* concern — see `canLinkActivityToOrganization` below — this
+ * predicate only answers "can this caller manage this specific activity
+ * row" (host check-in/complete/no-show actions, edit, cancel).
+ */
+export function canManageActivity(activity: { created_by: string } | null, callerId: string): boolean {
+  if (!activity) return false;
+  return activity.created_by === callerId;
+}
+
+/**
+ * Activities V1 — organization attribution integrity for a new or edited
+ * Activity. Deliberately just `canAttributeToOrganization` under an
+ * Activities-specific name: `activities_creator_manage`'s WITH CHECK
+ * (supabase/migrations/20260826020000_activities_foundation.sql) enforces
+ * the exact same rule FLOW-SEC-001 already established for opportunities/
+ * events — an unattributed (`null`) activity is always allowed, otherwise
+ * the caller must own the target organization. No member-level Activity
+ * posting right exists yet (deferred, matching FLOW-SEC-001's own scope),
+ * and there is no admin bypass. Kept as a distinctly-named export (rather
+ * than requiring every call site to import `canAttributeToOrganization` and
+ * remember it applies here too) so `lib/actions.ts`'s Activities code reads
+ * self-documented.
+ */
+export function canLinkActivityToOrganization(ownedOrganizationId: string | null, targetOrganizationId: string | null): boolean {
+  return canAttributeToOrganization(ownedOrganizationId, targetOrganizationId);
+}
+
+/**
+ * Activities V1 — Activity ↔ Event organization integrity, mirroring
+ * `canLinkOpportunityToEvent` (FLOW-SEC-002) exactly, including its
+ * personal/organization-less-event creator fallback and its
+ * cancelled/completed rejection. Unlike `activities.organization_id`
+ * (enforced at the DB level — see `canLinkActivityToOrganization` above),
+ * `event_id` has no access-control effect of its own (per FLOW-SEC-001's
+ * own commentary on why `opportunities.event_id` didn't need a DB-level
+ * check either), so this integrity check is app-layer only, called from
+ * the same create/update action that resolves the target event server-side
+ * — never trusting a client-supplied event row.
+ */
+export function canLinkActivityToEvent(
+  event: { organization_id: string | null; created_by: string; status: string } | null,
+  activityOrganizationId: string | null,
+  callerId: string,
+): boolean {
+  if (!event) return false;
+  if (event.status === "cancelled" || event.status === "completed") return false;
+  if (event.organization_id !== null) return activityOrganizationId === event.organization_id;
+  return activityOrganizationId === null && event.created_by === callerId;
+}
+
 export type AdminAccessState = "signed-out" | "not-admin" | "mfa-not-enrolled" | "aal1" | "aal2";
 
 /**

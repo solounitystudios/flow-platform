@@ -5,6 +5,18 @@
 export type OpportunityType = "gig" | "job" | "project" | "volunteer";
 export type OpportunityStatus = "draft" | "open" | "filled" | "completed" | "cancelled";
 export type EventStatus = "draft" | "published" | "cancelled" | "completed";
+export type ActivityType =
+  | "workshop"
+  | "volunteer_shift"
+  | "training"
+  | "class"
+  | "networking"
+  | "mentoring"
+  | "creative_session"
+  | "recreational"
+  | "community";
+export type ActivityStatus = "draft" | "published" | "cancelled" | "completed";
+export type ActivityParticipantStatus = "registered" | "attended" | "completed" | "no_show" | "cancelled";
 
 export interface MockPerson {
   id: string;
@@ -85,6 +97,35 @@ export interface MockEvent {
   cover_url: string;
   price_cents: number;
   category: string;
+}
+
+/** The joinable Activity object itself (workshop, volunteer shift, training
+ * session, etc.) — distinct from `MockActivityItem` below, which is an
+ * unrelated Passport/timeline feed-entry type (a record that something
+ * happened, e.g. "gig_completed"). Do not confuse the two: this type
+ * represents the thing a person can do; `MockActivityItem` represents a
+ * feed entry about something that already happened (which could, in a
+ * future PR, include an entry generated from this type's participation
+ * outcome — but they remain separate types either way). */
+export interface MockActivity {
+  id: string;
+  organization: Pick<MockOrganization, "id" | "name" | "logo_url" | "verified"> | null;
+  eventId: string | null;
+  eventTitle: string | null;
+  title: string;
+  description: string;
+  activity_type: ActivityType;
+  status: ActivityStatus;
+  city: string;
+  state: string;
+  venue: string | null;
+  address: string | null;
+  lat: number | null;
+  lng: number | null;
+  starts_at: string | null;
+  ends_at: string | null;
+  capacity: number | null;
+  registered: number;
 }
 
 export interface MockRecommendation {
