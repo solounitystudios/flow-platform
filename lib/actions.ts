@@ -6,7 +6,8 @@ import { createClient } from "@/lib/supabase/server";
 import { getRequestOrigin, isSafeInternalPath } from "@/lib/url";
 import { getOrganizationByOwner } from "@/lib/data/organization";
 import { getEventForLinking } from "@/lib/data/events";
-import { canAttributeToOrganization, canLinkOpportunityToEvent } from "@/lib/authz";
+import { getActivityForManage, getEventForActivityLinking } from "@/lib/data/activities";
+import { canAttributeToOrganization, canLinkOpportunityToEvent, canManageActivity, canLinkActivityToOrganization, canLinkActivityToEvent } from "@/lib/authz";
 import type { CheckInResult, RedeemResult, ConnectionRpcResult, ConversationRpcResult, MessageRpcResult } from "@/lib/database.types";
 
 export interface ActionState {
@@ -641,6 +642,189 @@ export async function updateEventStatusAction(id: string, status: string) {
   revalidatePath("/business");
   revalidatePath(`/business/events/${id}`);
   revalidatePath("/events");
+}
+
+// ── Activities ──────────────────────────────────────────────────────────
+// Activities V1, PR A (foundation). Owned by activities-participation — see
+// .claude/agents/activities-participation.md and
+// supabase/migrations/20260826020000_activities_foundation.sql.
+
+export async function createActivityAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Your session expired. Please log in again." };
+
+  const title = String(formData.get("title") ?? "").trim();
+  const description = String(formData.get("description") ?? "");
+  const activity_type = String(formData.get("activity_type") ?? "workshop");
+  const organization_id = String(formData.get("organization_id") ?? "") || null;
+  const event_id = String(formData.get("event_id") ?? "") || null;
+  const venue = String(formData.get("venue") ?? "") || null;
+  const address = String(formData.get("address") ?? "") || null;
+  const city = String(formData.get("city") ?? "Buffalo");
+  const state = String(formData.get("state") ?? "NY");
+  const capacityRaw = formData.get("capacity");
+  const capacity = capacityRaw ? Number(capacityRaw) : null;
+  const starts_at = formData.get("starts_at") ? new Date(String(formData.get("starts_at"))).toISOString() : null;
+  const ends_at = formData.get("ends_at") ? new Date(String(formData.get("ends_at"))).toISOString() : null;
+
+  if (!title) return { error: "Give the activity a title." };
+
+  // Mirrors createOpportunityAction/createEventAction's FLOW-SEC-001 check
+  // exactly (lib/authz.ts canLinkActivityToOrganization is
+  // canAttributeToOrganization under an Activities-specific name) — never
+  // trust a client-supplied organization_id; only the organization's owner
+  // may attribute an activity to it. activities_creator_manage's RLS
+  // WITH CHECK enforces this identical rule independently.
+  if (organization_id) {
+    const org = await getOrganizationByOwner(user.id);
+    if (!canLinkActivityToOrganization(org?.id ?? null, organization_id)) {
+      return { error: "You can only host an activity on behalf of a business you own." };
+    }
+  }
+
+  // Mirrors createOpportunityAction's FLOW-SEC-002 check exactly — never
+  // trust a client-supplied event_id, independently re-fetch the target
+  // event server-side and re-check organization integrity.
+  if (event_id) {
+    const event = await getEventForActivityLinking(event_id);
+    if (!canLinkActivityToEvent(event, organization_id, user.id)) {
+      return { error: "You can only link an activity to an event owned by the same organization." };
+    }
+  }
+
+  const { error } = await supabase.from("activities").insert({
+    created_by: user.id,
+    organization_id,
+    event_id,
+    title,
+    description,
+    activity_type,
+    venue,
+    address,
+    city,
+    state,
+    capacity: capacity && capacity > 0 ? capacity : null,
+    starts_at,
+    ends_at,
+    status: "published",
+  });
+
+  if (error) return { error: sanitizeDbError("activities", error) };
+
+  revalidatePath("/business");
+  revalidatePath("/activities");
+  if (event_id) revalidatePath(`/business/events/${event_id}`);
+  redirect("/activities");
+}
+
+export async function updateActivityStatusAction(id: string, status: string): Promise<LifecycleResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Your session expired. Please log in again." };
+
+  // Explicit predicate check (rather than relying only on the implicit
+  // `activities_creator_manage` RLS no-op-on-mismatch) so a non-owner gets
+  // a real error message instead of a silent, unexplained no-op — same
+  // reasoning canSubmitApplicationEvidence's callers use.
+  const activity = await getActivityForManage(id);
+  if (!canManageActivity(activity, user.id)) return { error: "Only the activity's host can change its status." };
+
+  const { error } = await supabase.from("activities").update({ status }).eq("id", id);
+  if (error) return { error: sanitizeDbError("activities", error) };
+
+  revalidatePath("/business");
+  revalidatePath(`/activities/${id}`);
+  revalidatePath("/activities");
+  return {};
+}
+
+export interface JoinActivityResult extends LifecycleResult {
+  participantId?: string;
+}
+
+/** Joins an activity, or reactivates a previously cancelled participation
+ * for the same activity — exactly one activity_participants row can ever
+ * exist per (activity_id, profile_id), so this upserts on that key instead
+ * of inserting, same convention as registerForEventAction.
+ * enforce_activity_participation_lifecycle (the BEFORE INSERT/UPDATE
+ * trigger) fully owns status/timestamps on every accepted transition, and
+ * its cancelled -> registered reactivation branch re-checks the same
+ * eligibility rules as a brand-new join. */
+export async function joinActivityAction(activityId: string): Promise<JoinActivityResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Log in to join this activity." };
+
+  const { data, error } = await supabase
+    .from("activity_participants")
+    .upsert({ activity_id: activityId, profile_id: user.id, status: "registered" }, { onConflict: "activity_id,profile_id" })
+    .select("id")
+    .single();
+
+  if (error) return { error: sanitizeDbError("activities", error) };
+
+  revalidatePath(`/activities/${activityId}`);
+  return { participantId: data.id };
+}
+
+export async function cancelActivityParticipationAction(participantId: string): Promise<LifecycleResult> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("activity_participants")
+    .update({ status: "cancelled", cancelled_at: new Date().toISOString() })
+    .eq("id", participantId);
+  if (error) return { error: sanitizeDbError("activities", error) };
+
+  revalidatePath("/activities");
+  return {};
+}
+
+export interface ActivityCheckInActionResult {
+  error?: string;
+  result?: { ok: boolean; reason?: string; checked_in_at?: string };
+}
+
+/** Host-only check-in — goes through check_in_activity_participant
+ * (SECURITY DEFINER RPC), never a raw client-side status update, per
+ * events.md's hard rule for this exact kind of state transition (mirrors
+ * checkInByProfileAction exactly; Activities have no QR-pass/checkin_code
+ * concept in this PR, so there is no code-based check-in equivalent yet). */
+export async function checkInActivityParticipantAction(activityId: string, profileId: string): Promise<ActivityCheckInActionResult> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("check_in_activity_participant", { p_activity_id: activityId, p_profile_id: profileId });
+  if (error) return { error: sanitizeDbError("activities", error) };
+
+  revalidatePath(`/activities/${activityId}`);
+  return { result: data as unknown as { ok: boolean; reason?: string; checked_in_at?: string } };
+}
+
+export async function markActivityNoShowAction(activityId: string, profileId: string): Promise<ActivityCheckInActionResult> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("mark_activity_no_show", { p_activity_id: activityId, p_profile_id: profileId });
+  if (error) return { error: sanitizeDbError("activities", error) };
+
+  revalidatePath(`/activities/${activityId}`);
+  return { result: data as unknown as { ok: boolean; reason?: string } };
+}
+
+/** Host-only completion, mirroring the same RPC pattern — the participant
+ * must already be 'attended' (complete_activity_participant enforces this
+ * itself, and enforce_activity_participation_lifecycle's
+ * attended -> completed branch re-enforces it independently). */
+export async function completeActivityParticipantAction(activityId: string, profileId: string): Promise<ActivityCheckInActionResult> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("complete_activity_participant", { p_activity_id: activityId, p_profile_id: profileId });
+  if (error) return { error: sanitizeDbError("activities", error) };
+
+  revalidatePath(`/activities/${activityId}`);
+  return { result: data as unknown as { ok: boolean; reason?: string } };
 }
 
 // ── Rewards ─────────────────────────────────────────────────────────────

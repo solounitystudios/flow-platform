@@ -16,7 +16,7 @@
 // through the same functions here, so the map can never show one thing
 // while the results list shows another. Do not reimplement any of this
 // bucketing logic inside a component.
-import type { MockEvent, MockOpportunity, MockOrganization, OpportunityType } from "@/lib/types";
+import type { MockActivity, MockEvent, MockOpportunity, MockOrganization, OpportunityType } from "@/lib/types";
 
 /**
  * The underlying kind of thing a pin represents — independent of whether
@@ -28,7 +28,7 @@ import type { MockEvent, MockOpportunity, MockOrganization, OpportunityType } fr
  * the underlying opportunity is represented exactly once either way, never
  * duplicated into a second pin/card.
  */
-export type MapEntityType = "gig" | "job" | "volunteer" | "event" | "business";
+export type MapEntityType = "gig" | "job" | "volunteer" | "event" | "business" | "activity";
 
 /**
  * The canonical, user-facing Map V2 category. Exactly one of these is
@@ -41,7 +41,7 @@ export type MapEntityType = "gig" | "job" | "volunteer" | "event" | "business";
  */
 export type MapLayer = "all" | "work_now" | MapEntityType;
 
-export const MAP_LAYERS: MapLayer[] = ["all", "work_now", "gig", "job", "volunteer", "event", "business"];
+export const MAP_LAYERS: MapLayer[] = ["all", "work_now", "gig", "job", "volunteer", "event", "activity", "business"];
 
 export const MAP_LAYER_LABEL: Record<MapLayer, string> = {
   all: "All",
@@ -50,6 +50,7 @@ export const MAP_LAYER_LABEL: Record<MapLayer, string> = {
   job: "Jobs",
   volunteer: "Volunteer",
   event: "Events",
+  activity: "Activities",
   business: "Businesses",
 };
 
@@ -68,6 +69,7 @@ export const MAP_LAYER_EMPTY_COPY: Record<MapLayer, string> = {
   job: "No jobs available right now.",
   volunteer: "No volunteer opportunities available right now.",
   event: "No upcoming events with a mappable location right now.",
+  activity: "No upcoming activities with a mappable location right now.",
   business: "No businesses sharing a public location yet.",
 };
 
@@ -125,7 +127,7 @@ export interface MapItem {
   slots?: number | null;
   slotsFilled?: number | null;
 
-  /** Events only. */
+  /** Events and Activities only. */
   capacity?: number | null;
   registered?: number | null;
 
@@ -221,6 +223,40 @@ export function eventsToMapItems(events: MockEvent[]): MapItem[] {
       organizationName: e.organization?.name ?? null,
       capacity: e.capacity,
       registered: e.registered,
+    }));
+}
+
+/**
+ * Converts already-fetched published activities (the shape returned by
+ * lib/data/activities.ts's getUpcomingActivities/getActivitiesForEvent/
+ * getActivitiesForOrganization) into map pins. Structurally identical to
+ * eventsToMapItems on purpose — same hasCoordinates gate, same href
+ * pattern — an Activity is a distinct entityType, never merged into the
+ * "event" pin bucket even when it has an event_id, since an Activity is
+ * never subordinate to its optional parent Event.
+ */
+export function activitiesToMapItems(activities: MockActivity[]): MapItem[] {
+  return activities
+    .filter(
+      (a): a is MockActivity & { lat: number; lng: number } => hasCoordinates(a.lat, a.lng)
+    )
+    .map((a) => ({
+      id: a.id,
+      entityType: "activity" as const,
+      isWorkNow: false,
+      title: a.title,
+      latitude: a.lat,
+      longitude: a.lng,
+      city: a.city,
+      state: a.state,
+      status: a.status,
+      verified: a.organization?.verified ?? false,
+      starts_at: a.starts_at,
+      expires_at: a.ends_at,
+      href: `/activities/${a.id}`,
+      organizationName: a.organization?.name ?? null,
+      capacity: a.capacity,
+      registered: a.registered,
     }));
 }
 
@@ -326,6 +362,10 @@ export function filterOpportunitiesForLayer(opportunities: MockOpportunity[], la
 
 export function filterEventsForLayer(events: MockEvent[], layer: MapLayer): MockEvent[] {
   return layer === "all" || layer === "event" ? events : [];
+}
+
+export function filterActivitiesForLayer(activities: MockActivity[], layer: MapLayer): MockActivity[] {
+  return layer === "all" || layer === "activity" ? activities : [];
 }
 
 export function filterOrganizationsForLayer(organizations: MockOrganization[], layer: MapLayer): MockOrganization[] {

@@ -13,7 +13,7 @@ import MapGL, {
 import type { GeoJSONSource } from "maplibre-gl";
 import type { Feature, FeatureCollection, Point } from "geojson";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { BadgeCheck, Briefcase, Building2, CalendarDays, DollarSign, HandHeart, Loader2, LocateFixed, MapPin as MapPinIcon, TriangleAlert, Users2, Zap } from "lucide-react";
+import { BadgeCheck, Briefcase, Building2, CalendarDays, DollarSign, HandHeart, Loader2, LocateFixed, MapPin as MapPinIcon, Sparkles, TriangleAlert, Users2, Zap } from "lucide-react";
 import { CITY_CENTER } from "@/lib/mock/data";
 import { distanceInfo, formatDistanceLabel, type UserLocation } from "@/lib/geo";
 import { formatCents, formatDateTime, relativeTime } from "@/lib/utils";
@@ -65,11 +65,12 @@ const DISPLAY_META: Record<MapEntityType | "work_now", { icon: typeof Briefcase;
   job: { icon: Briefcase, hex: "#2a6ff5" },
   volunteer: { icon: HandHeart, hex: "#22c55e" },
   event: { icon: CalendarDays, hex: "#f5b731" },
+  activity: { icon: Sparkles, hex: "#14b8a6" },
   business: { icon: Building2, hex: "#707a90" },
   work_now: { icon: Zap, hex: "#ef4444" },
 };
 
-const DISPLAY_BUCKETS: (MapEntityType | "work_now")[] = ["gig", "job", "volunteer", "event", "business", "work_now"];
+const DISPLAY_BUCKETS: (MapEntityType | "work_now")[] = ["gig", "job", "volunteer", "event", "activity", "business", "work_now"];
 
 /**
  * Which visual bucket a given (already layer-filtered) item renders under.
@@ -717,6 +718,40 @@ export function LiveMap({
               meta.push(
                 <span key="attend" className="flex items-center gap-1">
                   <Users2 className="h-3 w-3" /> {selected.registered} going{spotsLeft > 0 ? ` · ${spotsLeft} spots left` : ""}
+                </span>,
+              );
+            }
+          } else if (selected.entityType === "activity") {
+            // Activity — title, host (subtitle), date/time (optional — an
+            // undated activity simply omits this line, never a fabricated
+            // time), location, capacity. Structurally identical to the
+            // event branch above by design (same MapItem fields), but kept
+            // as its own branch rather than merged into it: an Activity is
+            // never subordinate to Events, including here, and "View &
+            // Join" (not "& Register") reflects Activities' lighter
+            // join/RSVP mechanic vs. Events' ticketed registration.
+            if (selected.verified) tag.push(<Badge key="verified" tone="verified">Verified</Badge>);
+            subtitle = selected.organizationName ?? undefined;
+            action = { label: "View & Join", href: selected.href };
+            if (selected.starts_at) {
+              meta.push(
+                <span key="time" className="flex items-center gap-1">
+                  <CalendarDays className="h-3 w-3" /> {formatDateTime(selected.starts_at)}
+                </span>,
+              );
+            }
+            if (locationLabel) {
+              meta.push(
+                <span key="loc" className="flex items-center gap-1">
+                  <MapPinIcon className="h-3 w-3" /> {locationLabel}
+                </span>,
+              );
+            }
+            if (selected.capacity != null && selected.registered != null) {
+              const spotsLeft = selected.capacity - selected.registered;
+              meta.push(
+                <span key="attend" className="flex items-center gap-1">
+                  <Users2 className="h-3 w-3" /> {selected.registered} joined{spotsLeft > 0 ? ` · ${spotsLeft} spots left` : ""}
                 </span>,
               );
             }

@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.15"
+    PostgrestVersion: "14.5"
   }
   public: {
     Tables: {
@@ -37,6 +37,204 @@ export type Database = {
           title?: string
         }
         Relationships: []
+      }
+      activities: {
+        Row: {
+          activity_type: string
+          address: string | null
+          capacity: number | null
+          city: string
+          created_at: string
+          created_by: string
+          description: string | null
+          ends_at: string | null
+          event_id: string | null
+          id: string
+          lat: number | null
+          lng: number | null
+          organization_id: string | null
+          starts_at: string | null
+          state: string
+          status: string
+          title: string
+          updated_at: string
+          venue: string | null
+        }
+        Insert: {
+          activity_type: string
+          address?: string | null
+          capacity?: number | null
+          city?: string
+          created_at?: string
+          created_by: string
+          description?: string | null
+          ends_at?: string | null
+          event_id?: string | null
+          id?: string
+          lat?: number | null
+          lng?: number | null
+          organization_id?: string | null
+          starts_at?: string | null
+          state?: string
+          status?: string
+          title: string
+          updated_at?: string
+          venue?: string | null
+        }
+        Update: {
+          activity_type?: string
+          address?: string | null
+          capacity?: number | null
+          city?: string
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          ends_at?: string | null
+          event_id?: string | null
+          id?: string
+          lat?: number | null
+          lng?: number | null
+          organization_id?: string | null
+          starts_at?: string | null
+          state?: string
+          status?: string
+          title?: string
+          updated_at?: string
+          venue?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "activities_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "passport_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activities_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activities_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "reliability_breakdown"
+            referencedColumns: ["profile_id"]
+          },
+          {
+            foreignKeyName: "activities_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activities_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activities_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      activity_participants: {
+        Row: {
+          activity_id: string
+          cancelled_at: string | null
+          checked_in_at: string | null
+          checked_in_by: string | null
+          created_at: string
+          id: string
+          joined_at: string
+          profile_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          activity_id: string
+          cancelled_at?: string | null
+          checked_in_at?: string | null
+          checked_in_by?: string | null
+          created_at?: string
+          id?: string
+          joined_at?: string
+          profile_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          activity_id?: string
+          cancelled_at?: string | null
+          checked_in_at?: string | null
+          checked_in_by?: string | null
+          created_at?: string
+          id?: string
+          joined_at?: string
+          profile_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "activity_participants_activity_id_fkey"
+            columns: ["activity_id"]
+            isOneToOne: false
+            referencedRelation: "activities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activity_participants_checked_in_by_fkey"
+            columns: ["checked_in_by"]
+            isOneToOne: false
+            referencedRelation: "passport_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activity_participants_checked_in_by_fkey"
+            columns: ["checked_in_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activity_participants_checked_in_by_fkey"
+            columns: ["checked_in_by"]
+            isOneToOne: false
+            referencedRelation: "reliability_breakdown"
+            referencedColumns: ["profile_id"]
+          },
+          {
+            foreignKeyName: "activity_participants_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "passport_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activity_participants_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activity_participants_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "reliability_breakdown"
+            referencedColumns: ["profile_id"]
+          },
+        ]
       }
       admin_audit_log: {
         Row: {
@@ -1349,6 +1547,7 @@ export type Database = {
       }
       flow_ledger: {
         Row: {
+          activity_id: string | null
           amount_cents: number
           created_at: string
           description: string | null
@@ -1362,6 +1561,7 @@ export type Database = {
           source: string | null
         }
         Insert: {
+          activity_id?: string | null
           amount_cents?: number
           created_at?: string
           description?: string | null
@@ -1375,6 +1575,7 @@ export type Database = {
           source?: string | null
         }
         Update: {
+          activity_id?: string | null
           amount_cents?: number
           created_at?: string
           description?: string | null
@@ -1388,6 +1589,13 @@ export type Database = {
           source?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "flow_ledger_activity_id_fkey"
+            columns: ["activity_id"]
+            isOneToOne: false
+            referencedRelation: "activities"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "flow_ledger_event_id_fkey"
             columns: ["event_id"]
@@ -3676,6 +3884,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      accept_creative_project_invite: {
+        Args: { p_project_id: string }
+        Returns: Json
+      }
       accept_employer_invitation: {
         Args: { p_token_hash: string }
         Returns: Json
@@ -3698,6 +3910,10 @@ export type Database = {
         Args: { p_lead_id: string; p_new_stage: string; p_note?: string }
         Returns: Json
       }
+      check_in_activity_participant: {
+        Args: { p_activity_id: string; p_profile_id: string }
+        Returns: Json
+      }
       check_in_ticket: {
         Args: {
           p_checkin_code?: string
@@ -3705,6 +3921,10 @@ export type Database = {
           p_method?: string
           p_profile_id?: string
         }
+        Returns: Json
+      }
+      complete_activity_participant: {
+        Args: { p_activity_id: string; p_profile_id: string }
         Returns: Json
       }
       complete_invited_employer_onboarding: {
@@ -3734,6 +3954,10 @@ export type Database = {
           p_notes?: string
           p_reason_code?: string
         }
+        Returns: Json
+      }
+      decline_creative_project_invite: {
+        Args: { p_project_id: string }
         Returns: Json
       }
       delete_message: { Args: { p_message_id: string }; Returns: Json }
@@ -3779,14 +4003,6 @@ export type Database = {
         Args: { p_organization_id: string; p_role: string }
         Returns: boolean
       }
-      accept_creative_project_invite: {
-        Args: { p_project_id: string }
-        Returns: Json
-      }
-      decline_creative_project_invite: {
-        Args: { p_project_id: string }
-        Returns: Json
-      }
       import_business_leads: { Args: { p_rows: Json }; Returns: Json }
       is_application_participant: {
         Args: { p_application_id: string }
@@ -3806,8 +4022,9 @@ export type Database = {
         Args: { p_min_role?: string; p_organization_id: string }
         Returns: boolean
       }
-      leave_creative_project: {
-        Args: { p_project_id: string }
+      leave_creative_project: { Args: { p_project_id: string }; Returns: Json }
+      mark_activity_no_show: {
+        Args: { p_activity_id: string; p_profile_id: string }
         Returns: Json
       }
       mark_conversation_read: {
@@ -3877,12 +4094,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -3906,11 +4123,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -3931,11 +4148,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -3956,11 +4173,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -3973,11 +4190,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
