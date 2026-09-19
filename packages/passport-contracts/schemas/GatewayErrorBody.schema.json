@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "error": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "enum": [
+            "invalid_request",
+            "invalid_schema",
+            "unsupported_schema_version",
+            "unauthorized",
+            "forbidden_scope",
+            "replayed_request",
+            "unknown_capture_request",
+            "unknown_evidence",
+            "request_expired",
+            "request_not_open",
+            "subject_mismatch",
+            "location_not_permitted",
+            "operator_not_permitted",
+            "integrity_mismatch",
+            "metadata_missing",
+            "idempotency_conflict",
+            "payload_too_large",
+            "rate_limited",
+            "not_configured",
+            "internal_error"
+          ]
+        },
+        "message": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "retryable": {
+          "type": "boolean"
+        },
+        "correlation_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "pattern": "^[A-Za-z0-9._:\\-]+$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "code",
+        "message",
+        "retryable",
+        "correlation_id"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "error"
+  ],
+  "additionalProperties": false
+}

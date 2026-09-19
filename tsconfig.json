@@ -25,6 +25,9 @@
     "paths": {
       "@/*": [
         "./*"
+      ],
+      "@flow/passport-contracts": [
+        "./packages/passport-contracts/src/index.ts"
       ]
     }
   },

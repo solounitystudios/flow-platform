@@ -11,7 +11,9 @@
     "test": "vitest run tests/unit tests/security",
     "test:security": "vitest run tests/security",
     "test:flow:quick": "vitest run tests/unit tests/security",
-    "test:integration": "vitest run tests/integration"
+    "test:integration": "vitest run tests/integration",
+    "test:db": "tests/db/replay.sh",
+    "contracts:schemas": "UPDATE_SCHEMAS=1 vitest run tests/unit/passport-contracts.test.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.7.0",
@@ -23,7 +25,8 @@
     "qrcode": "^1.5.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "react-map-gl": "^7.1.9"
+    "react-map-gl": "^7.1.9",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",

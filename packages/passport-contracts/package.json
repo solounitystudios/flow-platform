@@ -1,0 +1,22 @@
+{
+  "name": "@flow/passport-contracts",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Versioned wire contracts for FLOW Passport Core: subject refs, claims, evidence, consent, authority, relationships, events, and the Flow Platform <-> Flow Capture integration messages. Types, schemas and the request-signing protocol only — no database access, no UI, no verification decisions.",
+  "license": "UNLICENSED",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./schemas/*": "./schemas/*"
+  },
+  "files": [
+    "src",
+    "schemas",
+    "README.md"
+  ],
+  "dependencies": {
+    "zod": "^4.6.5"
+  }
+}
