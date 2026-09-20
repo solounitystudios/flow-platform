@@ -18,6 +18,7 @@
             "unknown_evidence",
             "request_expired",
             "request_not_open",
+            "invalid_transition",
             "subject_mismatch",
             "location_not_permitted",
             "operator_not_permitted",

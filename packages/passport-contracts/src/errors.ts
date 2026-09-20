@@ -17,6 +17,7 @@ export const GATEWAY_ERRORS = {
   unknown_evidence: { status: 404, retryable: false },
   request_expired: { status: 410, retryable: false },
   request_not_open: { status: 409, retryable: false },
+  invalid_transition: { status: 409, retryable: false },
   subject_mismatch: { status: 422, retryable: false },
   location_not_permitted: { status: 422, retryable: false },
   operator_not_permitted: { status: 422, retryable: false },

@@ -8,8 +8,20 @@ import {
   AUTHORITY_STATUSES,
   AUTHORITY_TYPES,
   CLAIM_STATUSES,
+  CAPTURE_EVIDENCE_TYPES,
+  CAPTURE_FAILURE_REASONS,
+  CAPTURE_PURPOSES,
+  CAPTURE_RELATED_TYPES,
+  CAPTURE_REQUEST_STATUSES,
   CLAIM_VISIBILITIES,
+  CONNECTION_ERROR_CATEGORIES,
+  CONNECTION_STATUSES,
+  CONSENT_BASES,
   CONSENT_PURPOSES,
+  CaptureRequest,
+  DATA_POLICIES,
+  EvidenceSummary,
+  GATEWAY_ERRORS,
   CONSENT_STATUSES,
   DATA_CATEGORIES,
   EVIDENCE_SOURCE_KINDS,
@@ -23,6 +35,7 @@ import {
   VERIFICATION_METHODS,
 } from "@flow/passport-contracts";
 import {
+  CAPTURE_TRANSITIONS,
   CLAIM_TRANSITIONS,
   CONSENT_TRANSITIONS,
   PURPOSE_ALLOWED_CATEGORIES,
@@ -183,6 +196,54 @@ describe("SQL <-> contracts parity: consent + relationships", () => {
     for (const fn of ["passport_has_authority", "passport_subject_owner_ok", "passport_can_act_as_verifier", "passport_can_request_as", "passport_disclose", "passport_record_verification"]) {
       expect(functionBody(fn), fn).not.toMatch(/passport_relationships/);
     }
+  });
+});
+
+describe("SQL <-> contracts parity: capture + integrations", () => {
+  const capture = "passport_capture_requests";
+  it("capture statuses", () => expect(quotedListAfter("status text not null default 'requested' check (status in (", capture)).toEqual(sorted(CAPTURE_REQUEST_STATUSES)));
+  it("capture purposes", () => expect(quotedListAfter("purpose text not null check (purpose in (", capture)).toEqual(sorted(CAPTURE_PURPOSES)));
+  it("capture evidence types (what Capture can actually produce)", () => expect(quotedListAfter("evidence_type text not null check (evidence_type in (", capture)).toEqual(sorted(CAPTURE_EVIDENCE_TYPES)));
+  it("capture related types", () => expect(quotedListAfter("related_type text check (related_type is null or related_type in (", capture)).toEqual(sorted(CAPTURE_RELATED_TYPES)));
+  it("capture data policies", () => {
+    expect(quotedListAfter("location_policy text not null default 'forbidden' check (location_policy in (", capture)).toEqual(sorted(DATA_POLICIES));
+    expect(quotedListAfter("operator_identity_policy text not null default 'forbidden' check (operator_identity_policy in (", capture)).toEqual(sorted(DATA_POLICIES));
+  });
+  it("capture consent bases", () => expect(quotedListAfter("consent_basis text not null check (consent_basis in (", capture)).toEqual(sorted(CONSENT_BASES)));
+  it("capture failure reasons", () => expect(quotedListAfter("failure_reason text check (failure_reason is null or failure_reason in (", capture)).toEqual(sorted(CAPTURE_FAILURE_REASONS)));
+
+  it("capture transitions", () => {
+    const pairs = [...functionBody("passport_capture_transition_allowed").matchAll(/\('([a-z_]+)', '([a-z_]+)'\)/g)].map((m) => `${m[1]}>${m[2]}`).sort();
+    const expected = Object.entries(CAPTURE_TRANSITIONS).flatMap(([from, tos]) => tos.map((to) => `${from}>${to}`)).sort();
+    expect(pairs).toEqual(expected);
+  });
+
+  it("connection statuses and error categories", () => {
+    expect(quotedListAfter("status text not null default 'healthy' check (status in (", "passport_integration_connections")).toEqual(sorted(CONNECTION_STATUSES));
+    expect(quotedListAfter("last_error_category text check (last_error_category is null or last_error_category in (", "passport_integration_connections")).toEqual(sorted(CONNECTION_ERROR_CATEGORIES));
+  });
+
+  it("every business reason a gateway RPC can return is a public gateway error code", () => {
+    for (const fn of ["passport_gateway_get_capture_request", "passport_gateway_report_capture_status", "passport_gateway_ingest_evidence_package", "passport_gateway_get_evidence_summary"]) {
+      const reasons = [...functionBody(fn).matchAll(/'reason', '([a-z_]+)'/g)].map((m) => m[1]);
+      expect(reasons.length, fn).toBeGreaterThan(0);
+      for (const reason of reasons) expect(Object.keys(GATEWAY_ERRORS), `${fn} -> ${reason}`).toContain(reason);
+    }
+  });
+
+  it("the wire-shape key lists asserted by the DB suite equal the zod contracts (DB output == list == contract)", () => {
+    const dbTest = fs.readFileSync(path.resolve(__dirname, "../db/passport_v2_capture_gateway.test.sql"), "utf8");
+    const keysAsserted = (label: string) => {
+      const line = dbTest.split("\n").find((l) => l.includes(label));
+      expect(line, label).toBeTruthy();
+      return [...(line as string).matchAll(/'([a-z_]+)'/g)].map((m) => m[1]).filter((k) => !["request", "summary"].includes(k) && !label.includes(k)).sort();
+    };
+    const request = keysAsserted("the wire shape matches the CaptureRequest contract exactly").filter((k) => k !== "C");
+    expect(request.length).toBeGreaterThan(15);
+    expect(request).toEqual(Object.keys(CaptureRequest.shape).sort());
+    const summary = keysAsserted("summary shape matches the EvidenceSummary contract").filter((k) => k !== "C");
+    expect(summary.length).toBeGreaterThan(7);
+    expect(summary).toEqual(Object.keys(EvidenceSummary.shape).sort());
   });
 });
 

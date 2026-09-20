@@ -10,3 +10,13 @@ create or replace function auth.jwt() returns jsonb language sql stable as $$
   )::jsonb
 $$;
 grant execute on function auth.jwt() to anon, authenticated, service_role;
+
+-- The bare image's auth.uid() only reads the legacy request.jwt.claim.sub GUC.
+-- PostgREST (and hosted Supabase's auth.uid()) supply the request.jwt.claims JSON,
+-- so read either — exactly what the hosted definition does.
+create or replace function auth.uid() returns uuid language sql stable as $$
+  select coalesce(
+    nullif(current_setting('request.jwt.claim.sub', true), ''),
+    (nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'sub')
+  )::uuid
+$$;

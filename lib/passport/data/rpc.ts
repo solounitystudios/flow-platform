@@ -209,6 +209,45 @@ export const respondRelationship = (supabase: Client, id: string, accept: boolea
 export const endRelationship = (supabase: Client, id: string, reason?: string) =>
   supabase.rpc("passport_end_relationship", { p_id: id, p_reason: reason }).then((response) => normalizeRpc("passport_end_relationship", response));
 
+// ── capture requests (Flow side) ────────────────────────────────────────
+
+export interface CreateCaptureRequestInput {
+  subjectType: string;
+  subjectId: string;
+  purpose: string;
+  evidenceType: "photo" | "video" | "audio" | "document";
+  /** Caller-generated, stable per intended request — makes a retried click safe. */
+  idempotencyKey: string;
+  relatedType?: string;
+  relatedId?: string;
+  requiredMetadata?: string[];
+  locationPolicy?: "forbidden" | "optional";
+  operatorIdentityPolicy?: "forbidden" | "optional";
+  consentGrantId?: string;
+  ttlHours?: number;
+}
+
+export const createCaptureRequest = (supabase: Client, input: CreateCaptureRequestInput) =>
+  supabase
+    .rpc("passport_create_capture_request", {
+      p_subject_type: input.subjectType,
+      p_subject_id: input.subjectId,
+      p_purpose: input.purpose,
+      p_evidence_type: input.evidenceType,
+      p_idempotency_key: input.idempotencyKey,
+      p_related_type: input.relatedType,
+      p_related_id: input.relatedId,
+      p_required_metadata: input.requiredMetadata ?? [],
+      p_location_policy: input.locationPolicy ?? "forbidden",
+      p_operator_identity_policy: input.operatorIdentityPolicy ?? "forbidden",
+      p_consent_grant_id: input.consentGrantId,
+      p_ttl_hours: input.ttlHours ?? 72,
+    })
+    .then((response) => normalizeRpc<{ id: string; correlation_id: string; expires_at: string; duplicate: boolean }>("passport_create_capture_request", response));
+
+export const cancelCaptureRequest = (supabase: Client, id: string) =>
+  supabase.rpc("passport_cancel_capture_request", { p_id: id }).then((response) => normalizeRpc("passport_cancel_capture_request", response));
+
 // ── messages ────────────────────────────────────────────────────────────
 
 /** Member-facing text for a reason code. Unknown codes fall back to a safe generic. */
@@ -286,6 +325,25 @@ const REASON_MESSAGES: Record<string, string> = {
   self_relationship: "You can't relate something to itself.",
   already_exists: "That relationship already exists.",
   not_endable: "That relationship has already ended.",
+  invalid_request: "That request isn't valid.",
+  invalid_idempotency_key: "That request couldn't be created. Try again.",
+  invalid_ttl: "That time limit isn't allowed.",
+  invalid_related: "That related item isn't valid.",
+  consent_scope_insufficient: "The sharing you were granted doesn't cover that.",
+  related_not_supported: "That item can't be linked to a capture.",
+  too_many_open_requests: "There are already too many open capture requests.",
+  not_open: "That capture request is already closed.",
+  // Gateway-only reasons (returned to the Capture service, never shown to members) — kept explicit
+  // so a new reason code can't ship without a deliberate decision about its wording.
+  unknown_capture_request: "That capture request couldn't be found.",
+  unknown_evidence: "That evidence couldn't be found.",
+  request_not_open: "That capture request is closed.",
+  invalid_transition: "That status change isn't allowed.",
+  location_not_permitted: "Location wasn't requested.",
+  operator_not_permitted: "Operator identity wasn't requested.",
+  metadata_missing: "Required details are missing.",
+  idempotency_conflict: "That was already submitted with different content.",
+  invalid_schema: "The submission isn't valid.",
   rpc_error: "Something went wrong. Try again.",
 };
 

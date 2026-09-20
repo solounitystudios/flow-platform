@@ -2960,6 +2960,116 @@ export type Database = {
           },
         ]
       }
+      passport_capture_requests: {
+        Row: {
+          capture_session_id: string | null
+          completed_at: string | null
+          consent_basis: string
+          consent_grant_id: string | null
+          correlation_id: string
+          created_at: string
+          evidence_type: string
+          expires_at: string
+          failure_reason: string | null
+          id: string
+          idempotency_key: string
+          location_policy: string
+          operator_identity_policy: string
+          purpose: string
+          related_id: string | null
+          related_type: string | null
+          requested_by: string | null
+          requester_id: string
+          requester_type: string
+          required_metadata: string[]
+          status: string
+          subject_id: string
+          subject_type: string
+          updated_at: string
+        }
+        Insert: {
+          capture_session_id?: string | null
+          completed_at?: string | null
+          consent_basis: string
+          consent_grant_id?: string | null
+          correlation_id?: string
+          created_at?: string
+          evidence_type: string
+          expires_at: string
+          failure_reason?: string | null
+          id?: string
+          idempotency_key: string
+          location_policy?: string
+          operator_identity_policy?: string
+          purpose: string
+          related_id?: string | null
+          related_type?: string | null
+          requested_by?: string | null
+          requester_id: string
+          requester_type: string
+          required_metadata?: string[]
+          status?: string
+          subject_id: string
+          subject_type: string
+          updated_at?: string
+        }
+        Update: {
+          capture_session_id?: string | null
+          completed_at?: string | null
+          consent_basis?: string
+          consent_grant_id?: string | null
+          correlation_id?: string
+          created_at?: string
+          evidence_type?: string
+          expires_at?: string
+          failure_reason?: string | null
+          id?: string
+          idempotency_key?: string
+          location_policy?: string
+          operator_identity_policy?: string
+          purpose?: string
+          related_id?: string | null
+          related_type?: string | null
+          requested_by?: string | null
+          requester_id?: string
+          requester_type?: string
+          required_metadata?: string[]
+          status?: string
+          subject_id?: string
+          subject_type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "passport_capture_requests_consent_grant_id_fkey"
+            columns: ["consent_grant_id"]
+            isOneToOne: false
+            referencedRelation: "passport_consent_grants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "passport_capture_requests_requested_by_fkey"
+            columns: ["requested_by"]
+            isOneToOne: false
+            referencedRelation: "passport_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "passport_capture_requests_requested_by_fkey"
+            columns: ["requested_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "passport_capture_requests_requested_by_fkey"
+            columns: ["requested_by"]
+            isOneToOne: false
+            referencedRelation: "reliability_breakdown"
+            referencedColumns: ["profile_id"]
+          },
+        ]
+      }
       passport_claim_evidence: {
         Row: {
           attached_at: string
@@ -3276,8 +3386,8 @@ export type Database = {
           schema_version: string
           seq: number
           source_system: string
-          subject_id: string
-          subject_type: string
+          subject_id: string | null
+          subject_type: string | null
         }
         Insert: {
           actor_id: string
@@ -3291,8 +3401,8 @@ export type Database = {
           schema_version?: string
           seq?: never
           source_system?: string
-          subject_id: string
-          subject_type: string
+          subject_id?: string | null
+          subject_type?: string | null
         }
         Update: {
           actor_id?: string
@@ -3306,8 +3416,8 @@ export type Database = {
           schema_version?: string
           seq?: never
           source_system?: string
-          subject_id?: string
-          subject_type?: string
+          subject_id?: string | null
+          subject_type?: string | null
         }
         Relationships: []
       }
@@ -3374,6 +3484,13 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "passport_evidence_capture_request_fk"
+            columns: ["capture_request_id"]
+            isOneToOne: false
+            referencedRelation: "passport_capture_requests"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "passport_evidence_created_by_fkey"
             columns: ["created_by"]
             isOneToOne: false
@@ -3395,6 +3512,102 @@ export type Database = {
             referencedColumns: ["profile_id"]
           },
         ]
+      }
+      passport_gateway_nonces: {
+        Row: {
+          client_id: string
+          expires_at: string
+          nonce: string
+        }
+        Insert: {
+          client_id: string
+          expires_at: string
+          nonce: string
+        }
+        Update: {
+          client_id?: string
+          expires_at?: string
+          nonce?: string
+        }
+        Relationships: []
+      }
+      passport_gateway_receipts: {
+        Row: {
+          client_id: string
+          created_at: string
+          id: string
+          idempotency_key: string
+          kind: string
+          object_key: string | null
+          payload_sha256: string
+          result: Json
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          id?: string
+          idempotency_key: string
+          kind: string
+          object_key?: string | null
+          payload_sha256: string
+          result: Json
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          id?: string
+          idempotency_key?: string
+          kind?: string
+          object_key?: string | null
+          payload_sha256?: string
+          result?: Json
+        }
+        Relationships: []
+      }
+      passport_integration_connections: {
+        Row: {
+          connector_key: string
+          created_at: string
+          id: string
+          last_attempt_at: string | null
+          last_error_category: string | null
+          last_success_at: string | null
+          owner_id: string | null
+          owner_type: string | null
+          scope: string[]
+          stale_after_seconds: number
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          connector_key: string
+          created_at?: string
+          id?: string
+          last_attempt_at?: string | null
+          last_error_category?: string | null
+          last_success_at?: string | null
+          owner_id?: string | null
+          owner_type?: string | null
+          scope?: string[]
+          stale_after_seconds?: number
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          connector_key?: string
+          created_at?: string
+          id?: string
+          last_attempt_at?: string | null
+          last_error_category?: string | null
+          last_success_at?: string | null
+          owner_id?: string | null
+          owner_type?: string | null
+          scope?: string[]
+          stale_after_seconds?: number
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       passport_relationships: {
         Row: {
@@ -4665,6 +4878,12 @@ export type Database = {
         Args: { p_granted_by: string; p_profile_id: string; p_reason: string }
         Returns: undefined
       }
+      _passport_capture_request_json: {
+        Args: {
+          v: Database["public"]["Tables"]["passport_capture_requests"]["Row"]
+        }
+        Returns: Json
+      }
       _passport_emit_event: {
         Args: {
           p_actor_id: string
@@ -4679,6 +4898,7 @@ export type Database = {
         }
         Returns: string
       }
+      _passport_expire_capture: { Args: { p_id: string }; Returns: boolean }
       _resolve_verification: {
         Args: {
           p_actor_id: string
@@ -4905,6 +5125,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      passport_cancel_capture_request: { Args: { p_id: string }; Returns: Json }
       passport_cancel_verification_request: {
         Args: { p_verification_id: string }
         Returns: Json
@@ -4912,6 +5133,14 @@ export type Database = {
       passport_canonical_subject_type: {
         Args: { p_type: string }
         Returns: string
+      }
+      passport_capture_related_ok: {
+        Args: { p_id: string; p_subject_id: string; p_type: string }
+        Returns: boolean
+      }
+      passport_capture_transition_allowed: {
+        Args: { p_from: string; p_to: string }
+        Returns: boolean
       }
       passport_claim_category: {
         Args: { p_claim_type: string }
@@ -4932,6 +5161,23 @@ export type Database = {
       passport_controls: {
         Args: { p_id: string; p_principal: string; p_type: string }
         Returns: boolean
+      }
+      passport_create_capture_request: {
+        Args: {
+          p_consent_grant_id?: string
+          p_evidence_type: string
+          p_idempotency_key: string
+          p_location_policy?: string
+          p_operator_identity_policy?: string
+          p_purpose: string
+          p_related_id?: string
+          p_related_type?: string
+          p_required_metadata?: string[]
+          p_subject_id: string
+          p_subject_type: string
+          p_ttl_hours?: number
+        }
+        Returns: Json
       }
       passport_create_claim: {
         Args: {
@@ -4972,8 +5218,33 @@ export type Database = {
         Args: { p_id: string; p_type: string }
         Returns: boolean
       }
+      passport_expire_due_capture_requests: { Args: never; Returns: number }
       passport_expire_due_claims: { Args: never; Returns: number }
       passport_expire_due_consents: { Args: never; Returns: number }
+      passport_gateway_consume_nonce: {
+        Args: { p_client: string; p_nonce: string; p_ttl_seconds?: number }
+        Returns: boolean
+      }
+      passport_gateway_get_capture_request: {
+        Args: { p_id: string }
+        Returns: Json
+      }
+      passport_gateway_get_evidence_summary: {
+        Args: { p_client: string; p_evidence_id: string }
+        Returns: Json
+      }
+      passport_gateway_ingest_evidence_package: {
+        Args: { p_client: string; p_package: Json; p_payload_sha256: string }
+        Returns: Json
+      }
+      passport_gateway_record_connection_result: {
+        Args: { p_connector: string; p_error_category?: string; p_ok: boolean }
+        Returns: Json
+      }
+      passport_gateway_report_capture_status: {
+        Args: { p_client: string; p_payload_sha256: string; p_report: Json }
+        Returns: Json
+      }
       passport_has_authority: {
         Args: {
           p_authority: string
