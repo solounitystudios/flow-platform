@@ -5146,6 +5146,10 @@ export type Database = {
         Args: { p_claim_type: string }
         Returns: string
       }
+      passport_claim_explanation: {
+        Args: { p_claim_id: string }
+        Returns: Json
+      }
       passport_claim_from_activity: {
         Args: { p_activity_id: string }
         Returns: Json

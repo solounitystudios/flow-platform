@@ -7,3 +7,5 @@ export * from "./capture-lifecycle";
 export * from "./fingerprint";
 export * from "./legacy-adapters";
 export * from "./relationships";
+export * from "./explanation";
+export * from "./projections";
