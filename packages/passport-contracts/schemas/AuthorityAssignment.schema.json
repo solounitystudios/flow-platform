@@ -23,7 +23,8 @@
             "venue",
             "event",
             "project",
-            "agency"
+            "agency",
+            "activity"
           ]
         },
         "id": {
@@ -54,7 +55,8 @@
             "venue",
             "event",
             "project",
-            "agency"
+            "agency",
+            "activity"
           ]
         },
         "id": {
@@ -156,7 +158,19 @@
       "type": "string",
       "enum": [
         "active",
-        "revoked"
+        "revoked",
+        "expired"
+      ]
+    },
+    "revoke_reason": {
+      "anyOf": [
+        {
+          "type": "string",
+          "maxLength": 200
+        },
+        {
+          "type": "null"
+        }
       ]
     },
     "revoked_at": {
@@ -183,6 +197,7 @@
     "starts_at",
     "expires_at",
     "status",
+    "revoke_reason",
     "revoked_at"
   ],
   "additionalProperties": false
