@@ -50,4 +50,5 @@ for t in "$ROOT"/tests/db/*.test.sql; do
   if ! cat "$ROOT/tests/db/_helpers.sql" "$t" | "${PSQL[@]}"; then fail=1; fi
 done
 [ "$fail" = "0" ] && echo "DB assertions OK" || { echo "DB assertions FAILED"; exit 1; }
-[ "${KEEP:-0}" = "1" ] && echo "container kept: $NAME"
+# An `[ ... ] && echo` as the last line would make a successful run exit 1 whenever KEEP is unset.
+if [ "${KEEP:-0}" = "1" ]; then echo "container kept: $NAME"; fi
