@@ -1,8 +1,9 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import type { ReactNode } from "react";
 import { Lock } from "lucide-react";
+import { createClient } from "@/lib/supabase/server";
+import { getPublicClaimsForProfile } from "@/lib/passport/data";
+import { projectClaimForPublic, type PublicClaimView } from "@/lib/passport/domain";
 import { getCurrentUser, getFullProfileByUsername } from "@/lib/data/profile";
 import { getReliabilityBreakdown } from "@/lib/data/reliability";
 import { getConnectionStatus, getSharedSkills } from "@/lib/data/connections";
@@ -12,6 +13,8 @@ import { PassportCard } from "@/components/passport/PassportCard";
 import { SkillsList } from "@/components/passport/SkillsList";
 import { RecommendationsList } from "@/components/passport/RecommendationsList";
 import { ReliabilityCard } from "@/components/passport/ReliabilityCard";
+import { PublicPassportShell as PassportShell } from "@/components/passport/PublicPassportShell";
+import { PublicVerifiedClaims } from "@/components/passport/PublicVerifiedClaims";
 import { ConnectionControl } from "@/components/social/ConnectionControl";
 import { ConnectionMoreMenu } from "@/components/social/ConnectionMoreMenu";
 import { MessageButton } from "@/components/messages/MessageButton";
@@ -91,6 +94,14 @@ export default async function PublicPassportPage({ params }: { params: Promise<{
     );
   }
 
+  // Only reached for a public Passport. RLS independently limits these rows to
+  // public + verified + unexpired; the projection then drops anything not
+  // explicitly shareable and strips every field the public may not see.
+  const now = new Date();
+  const publicClaims = (await getPublicClaimsForProfile(await createClient(), profile.id))
+    .map((row) => projectClaimForPublic(row, now))
+    .filter((claim): claim is PublicClaimView => claim !== null);
+
   return (
     <PassportShell>
       <PassportCard
@@ -144,6 +155,17 @@ export default async function PublicPassportPage({ params }: { params: Promise<{
         </Card>
       )}
 
+      {publicClaims.length > 0 && (
+        <Card>
+          <CardHeader>
+            <h2 className="font-bold text-ink-900 dark:text-white">Verified activity</h2>
+          </CardHeader>
+          <CardBody>
+            <PublicVerifiedClaims claims={publicClaims} username={username} />
+          </CardBody>
+        </Card>
+      )}
+
       <Card>
         <CardHeader>
           <h2 className="font-bold text-ink-900 dark:text-white">Skills</h2>
@@ -184,21 +206,6 @@ export default async function PublicPassportPage({ params }: { params: Promise<{
 
       <JoinCta />
     </PassportShell>
-  );
-}
-
-function PassportShell({ children }: { children: ReactNode }) {
-  return (
-    <div className="flex min-h-dvh flex-col bg-ink-50 dark:bg-ink-950">
-      <header className="flex h-16 items-center justify-between border-b border-ink-100 px-5 dark:border-ink-800">
-        <Link href="/" className="flex items-center gap-2">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-flow-gradient text-sm font-black text-white">F</span>
-          <span className="text-lg font-black tracking-tight text-ink-900 dark:text-white">FLOW</span>
-        </Link>
-        <Button href="/signup" size="sm">Join FLOW</Button>
-      </header>
-      <main className="mx-auto w-full max-w-lg flex-1 space-y-6 px-5 py-8">{children}</main>
-    </div>
   );
 }
 
