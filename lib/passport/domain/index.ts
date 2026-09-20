@@ -6,3 +6,4 @@ export * from "./connection-health";
 export * from "./capture-lifecycle";
 export * from "./fingerprint";
 export * from "./legacy-adapters";
+export * from "./relationships";

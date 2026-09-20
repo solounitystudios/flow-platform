@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { assignAuthority, claimFromActivity, createClaim, normalizeRpc, recordVerification, requestVerification } from "@/lib/passport/data";
+import { assignAuthority, claimFromActivity, createClaim, disclose, normalizeRpc, proposeRelationship, recordVerification, requestConsent, requestVerification, respondConsent } from "@/lib/passport/data";
 
 type Rpc = (fn: string, args?: Record<string, unknown>) => { then: (cb: (r: { data: unknown; error: { message: string } | null }) => unknown) => Promise<unknown> };
 
@@ -59,5 +59,35 @@ describe("RPC wrappers send the argument names the migrations define", () => {
     const { client, calls } = fakeClient({ data: { ok: true, id: "c", already_exists: false }, error: null });
     await claimFromActivity(client, "act-1");
     expect(calls[0]).toEqual({ fn: "passport_claim_from_activity", args: { p_activity_id: "act-1" } });
+  });
+});
+
+describe("consent / disclosure / relationship wrappers", () => {
+  it("requestConsent sends the RPC's argument names", async () => {
+    const { client, calls } = fakeClient({ data: { ok: true, id: "g1" }, error: null });
+    await requestConsent(client, { grantorId: "p", granteeType: "organization", granteeId: "o", purpose: "credential_check", categories: ["credentials"] });
+    expect(calls[0]).toEqual({
+      fn: "passport_request_consent",
+      args: { p_grantor: "p", p_grantee_type: "organization", p_grantee_id: "o", p_purpose: "credential_check", p_categories: ["credentials"], p_context_type: undefined, p_context_id: undefined },
+    });
+  });
+
+  it("respondConsent passes narrowing + expiry through", async () => {
+    const { client, calls } = fakeClient({ data: { ok: true, status: "active" }, error: null });
+    await respondConsent(client, { id: "g", approve: true, approvedCategories: ["credentials"], expiresAt: "2027-01-01T00:00:00Z" });
+    expect(calls[0].args).toEqual({ p_id: "g", p_approve: true, p_approved_categories: ["credentials"], p_expires_at: "2027-01-01T00:00:00Z" });
+  });
+
+  it("disclose exposes only a question and returns whatever answer shape the DB gave", async () => {
+    const { client, calls } = fakeClient({ data: { ok: true, question: "claim_valid", grant_id: "g", answer: true, expires_at: null, evaluated_at: "2026-09-01T00:00:00Z" }, error: null });
+    const result = await disclose(client, { grantId: "g", question: "claim_valid", claimType: "credential.license" });
+    expect(result).toMatchObject({ ok: true, answer: true });
+    expect(calls[0].args).toEqual({ p_grant_id: "g", p_question: "claim_valid", p_claim_type: "credential.license", p_credential_type: undefined });
+  });
+
+  it("proposeRelationship defaults metadata to an empty object", async () => {
+    const { client, calls } = fakeClient({ data: { ok: false, reason: "relation_not_available" }, error: null });
+    expect(await proposeRelationship(client, { fromType: "person", fromId: "a", relation: "guardian_of", toType: "person", toId: "b" })).toEqual({ ok: false, reason: "relation_not_available" });
+    expect(calls[0].args).toMatchObject({ p_relation: "guardian_of", p_metadata: {} });
   });
 });

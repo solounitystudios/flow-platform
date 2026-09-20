@@ -132,6 +132,83 @@ export const assignAuthority = (
 
 export const revokeAuthority = (supabase: Client, id: string, reason?: string) => supabase.rpc("passport_revoke_authority", { p_id: id, p_reason: reason }).then((response) => normalizeRpc("passport_revoke_authority", response));
 
+// ── consent + disclosure ────────────────────────────────────────────────
+
+export const requestConsent = (
+  supabase: Client,
+  input: { grantorId: string; granteeType: string; granteeId: string; purpose: string; categories: string[]; contextType?: string; contextId?: string },
+) =>
+  supabase
+    .rpc("passport_request_consent", {
+      p_grantor: input.grantorId,
+      p_grantee_type: input.granteeType,
+      p_grantee_id: input.granteeId,
+      p_purpose: input.purpose,
+      p_categories: input.categories,
+      p_context_type: input.contextType,
+      p_context_id: input.contextId,
+    })
+    .then((response) => normalizeRpc<{ id: string }>("passport_request_consent", response));
+
+export const respondConsent = (supabase: Client, input: { id: string; approve: boolean; approvedCategories?: string[]; expiresAt?: string }) =>
+  supabase
+    .rpc("passport_respond_consent", {
+      p_id: input.id,
+      p_approve: input.approve,
+      p_approved_categories: input.approvedCategories,
+      p_expires_at: input.expiresAt,
+    })
+    .then((response) => normalizeRpc<{ status: string; expires_at?: string }>("passport_respond_consent", response));
+
+export const withdrawConsentRequest = (supabase: Client, id: string) =>
+  supabase.rpc("passport_withdraw_consent_request", { p_id: id }).then((response) => normalizeRpc("passport_withdraw_consent_request", response));
+
+export const revokeConsent = (supabase: Client, id: string, reason?: string) =>
+  supabase.rpc("passport_revoke_consent", { p_id: id, p_reason: reason }).then((response) => normalizeRpc("passport_revoke_consent", response));
+
+export const expireDueConsents = async (supabase: Client): Promise<number> => {
+  const { data, error } = await supabase.rpc("passport_expire_due_consents");
+  if (error) {
+    console.error("[passport:passport_expire_due_consents]", error.message);
+    return 0;
+  }
+  return typeof data === "number" ? data : 0;
+};
+
+/** Selective disclosure: the grantee asks a narrow question and gets an answer, never data. */
+export const disclose = (supabase: Client, input: { grantId: string; question: "claim_valid" | "credential_held"; claimType?: string; credentialType?: string }) =>
+  supabase
+    .rpc("passport_disclose", {
+      p_grant_id: input.grantId,
+      p_question: input.question,
+      p_claim_type: input.claimType,
+      p_credential_type: input.credentialType,
+    })
+    .then((response) => normalizeRpc<{ question: string; grant_id: string; answer: boolean; expires_at: string | null; evaluated_at: string }>("passport_disclose", response));
+
+// ── relationships ───────────────────────────────────────────────────────
+
+export const proposeRelationship = (
+  supabase: Client,
+  input: { fromType: string; fromId: string; relation: string; toType: string; toId: string; metadata?: { [key: string]: Json | undefined } },
+) =>
+  supabase
+    .rpc("passport_propose_relationship", {
+      p_from_type: input.fromType,
+      p_from_id: input.fromId,
+      p_relation: input.relation,
+      p_to_type: input.toType,
+      p_to_id: input.toId,
+      p_metadata: input.metadata ?? {},
+    })
+    .then((response) => normalizeRpc<{ id: string; status: string }>("passport_propose_relationship", response));
+
+export const respondRelationship = (supabase: Client, id: string, accept: boolean) =>
+  supabase.rpc("passport_respond_relationship", { p_id: id, p_accept: accept }).then((response) => normalizeRpc<{ status: string }>("passport_respond_relationship", response));
+
+export const endRelationship = (supabase: Client, id: string, reason?: string) =>
+  supabase.rpc("passport_end_relationship", { p_id: id, p_reason: reason }).then((response) => normalizeRpc("passport_end_relationship", response));
+
 // ── messages ────────────────────────────────────────────────────────────
 
 /** Member-facing text for a reason code. Unknown codes fall back to a safe generic. */
@@ -184,6 +261,31 @@ const REASON_MESSAGES: Record<string, string> = {
   principal_not_found: "That person couldn't be found.",
   reason_too_long: "That reason is too long.",
   unknown_method: "That verification method isn't recognised.",
+  invalid_purpose: "That purpose isn't valid.",
+  no_categories: "Choose what information you're asking for.",
+  duplicate_category: "Each kind of information can only be listed once.",
+  invalid_category: "That kind of information isn't recognised.",
+  category_not_allowed_for_purpose: "That information isn't needed for this purpose, so it can't be requested.",
+  invalid_context: "That context isn't valid.",
+  self_request: "You can't ask yourself.",
+  rate_limited: "Too many requests today. Try again tomorrow.",
+  already_open: "There's already an open request for this.",
+  request_expired: "That request has expired.",
+  nothing_approved: "Approve at least one kind of information.",
+  approved_exceeds_request: "You can only approve what was asked for.",
+  expiry_too_far: "Access can last at most a year.",
+  expired: "That access has expired.",
+  category_not_approved: "That information wasn't shared with you.",
+  unsupported_claim_type: "That can't be checked through sharing.",
+  unsupported_question: "That question isn't supported.",
+  unknown_relation: "That relationship type isn't recognised.",
+  relation_managed_elsewhere: "That relationship is managed elsewhere in FLOW.",
+  relation_not_available: "That kind of relationship isn't available yet.",
+  invalid_relation_endpoints: "That relationship doesn't fit those two parties.",
+  invalid_metadata: "The relationship details aren't valid.",
+  self_relationship: "You can't relate something to itself.",
+  already_exists: "That relationship already exists.",
+  not_endable: "That relationship has already ended.",
   rpc_error: "Something went wrong. Try again.",
 };
 
