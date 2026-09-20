@@ -86,3 +86,15 @@ export function consentPermits(
 export function isSensitiveCategory(category: DataCategory): boolean {
   return SENSITIVE_DATA_CATEGORIES.includes(category);
 }
+
+/**
+ * Which consent category a claim type falls under (null = not disclosable via
+ * consent at all). Mirrored in SQL (`passport_claim_category`).
+ */
+export function claimCategoryFor(claimType: string): DataCategory | null {
+  if (claimType.startsWith("credential.")) return "credentials";
+  if (claimType.startsWith("skill.")) return "skills";
+  if (claimType.startsWith("attendance.") || claimType.startsWith("participation.")) return "attendance";
+  if (claimType.startsWith("attestation.")) return "recommendations";
+  return null;
+}
