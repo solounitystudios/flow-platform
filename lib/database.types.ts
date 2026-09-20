@@ -2818,6 +2818,546 @@ export type Database = {
           },
         ]
       }
+      passport_authority_assignments: {
+        Row: {
+          authority_type: string
+          created_at: string
+          created_by: string | null
+          delegator_id: string | null
+          entity_id: string
+          entity_type: string
+          expires_at: string | null
+          id: string
+          principal_id: string
+          revoke_reason: string | null
+          revoked_at: string | null
+          revoked_by: string | null
+          scope: Json
+          source: string
+          starts_at: string
+          status: string
+        }
+        Insert: {
+          authority_type: string
+          created_at?: string
+          created_by?: string | null
+          delegator_id?: string | null
+          entity_id: string
+          entity_type: string
+          expires_at?: string | null
+          id?: string
+          principal_id: string
+          revoke_reason?: string | null
+          revoked_at?: string | null
+          revoked_by?: string | null
+          scope?: Json
+          source?: string
+          starts_at?: string
+          status?: string
+        }
+        Update: {
+          authority_type?: string
+          created_at?: string
+          created_by?: string | null
+          delegator_id?: string | null
+          entity_id?: string
+          entity_type?: string
+          expires_at?: string | null
+          id?: string
+          principal_id?: string
+          revoke_reason?: string | null
+          revoked_at?: string | null
+          revoked_by?: string | null
+          scope?: Json
+          source?: string
+          starts_at?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "passport_authority_assignments_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "passport_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "passport_authority_assignments_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "passport_authority_assignments_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "reliability_breakdown"
+            referencedColumns: ["profile_id"]
+          },
+          {
+            foreignKeyName: "passport_authority_assignments_delegator_id_fkey"
+            columns: ["delegator_id"]
+            isOneToOne: false
+            referencedRelation: "passport_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "passport_authority_assignments_delegator_id_fkey"
+            columns: ["delegator_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "passport_authority_assignments_delegator_id_fkey"
+            columns: ["delegator_id"]
+            isOneToOne: false
+            referencedRelation: "reliability_breakdown"
+            referencedColumns: ["profile_id"]
+          },
+          {
+            foreignKeyName: "passport_authority_assignments_principal_id_fkey"
+            columns: ["principal_id"]
+            isOneToOne: false
+            referencedRelation: "passport_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "passport_authority_assignments_principal_id_fkey"
+            columns: ["principal_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "passport_authority_assignments_principal_id_fkey"
+            columns: ["principal_id"]
+            isOneToOne: false
+            referencedRelation: "reliability_breakdown"
+            referencedColumns: ["profile_id"]
+          },
+          {
+            foreignKeyName: "passport_authority_assignments_revoked_by_fkey"
+            columns: ["revoked_by"]
+            isOneToOne: false
+            referencedRelation: "passport_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "passport_authority_assignments_revoked_by_fkey"
+            columns: ["revoked_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "passport_authority_assignments_revoked_by_fkey"
+            columns: ["revoked_by"]
+            isOneToOne: false
+            referencedRelation: "reliability_breakdown"
+            referencedColumns: ["profile_id"]
+          },
+        ]
+      }
+      passport_claim_evidence: {
+        Row: {
+          attached_at: string
+          attached_by: string | null
+          claim_id: string
+          detached_at: string | null
+          evidence_id: string
+          role: string
+        }
+        Insert: {
+          attached_at?: string
+          attached_by?: string | null
+          claim_id: string
+          detached_at?: string | null
+          evidence_id: string
+          role?: string
+        }
+        Update: {
+          attached_at?: string
+          attached_by?: string | null
+          claim_id?: string
+          detached_at?: string | null
+          evidence_id?: string
+          role?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "passport_claim_evidence_attached_by_fkey"
+            columns: ["attached_by"]
+            isOneToOne: false
+            referencedRelation: "passport_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "passport_claim_evidence_attached_by_fkey"
+            columns: ["attached_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "passport_claim_evidence_attached_by_fkey"
+            columns: ["attached_by"]
+            isOneToOne: false
+            referencedRelation: "reliability_breakdown"
+            referencedColumns: ["profile_id"]
+          },
+          {
+            foreignKeyName: "passport_claim_evidence_claim_id_fkey"
+            columns: ["claim_id"]
+            isOneToOne: false
+            referencedRelation: "passport_claims"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "passport_claim_evidence_evidence_id_fkey"
+            columns: ["evidence_id"]
+            isOneToOne: false
+            referencedRelation: "passport_evidence"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      passport_claims: {
+        Row: {
+          claim_type: string
+          created_at: string
+          created_by: string | null
+          effective_at: string | null
+          expires_at: string | null
+          id: string
+          issuer_id: string | null
+          issuer_kind: string
+          issuer_label: string | null
+          issuer_type: string | null
+          sensitivity: string
+          source_ref: string | null
+          source_system: string
+          status: string
+          status_reason_code: string | null
+          subject_id: string
+          subject_type: string
+          superseded_by: string | null
+          updated_at: string
+          value: Json
+          visibility: string
+        }
+        Insert: {
+          claim_type: string
+          created_at?: string
+          created_by?: string | null
+          effective_at?: string | null
+          expires_at?: string | null
+          id?: string
+          issuer_id?: string | null
+          issuer_kind?: string
+          issuer_label?: string | null
+          issuer_type?: string | null
+          sensitivity?: string
+          source_ref?: string | null
+          source_system?: string
+          status?: string
+          status_reason_code?: string | null
+          subject_id: string
+          subject_type: string
+          superseded_by?: string | null
+          updated_at?: string
+          value?: Json
+          visibility?: string
+        }
+        Update: {
+          claim_type?: string
+          created_at?: string
+          created_by?: string | null
+          effective_at?: string | null
+          expires_at?: string | null
+          id?: string
+          issuer_id?: string | null
+          issuer_kind?: string
+          issuer_label?: string | null
+          issuer_type?: string | null
+          sensitivity?: string
+          source_ref?: string | null
+          source_system?: string
+          status?: string
+          status_reason_code?: string | null
+          subject_id?: string
+          subject_type?: string
+          superseded_by?: string | null
+          updated_at?: string
+          value?: Json
+          visibility?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "passport_claims_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "passport_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "passport_claims_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "passport_claims_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "reliability_breakdown"
+            referencedColumns: ["profile_id"]
+          },
+          {
+            foreignKeyName: "passport_claims_superseded_by_fkey"
+            columns: ["superseded_by"]
+            isOneToOne: false
+            referencedRelation: "passport_claims"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      passport_events: {
+        Row: {
+          actor_id: string
+          actor_type: string
+          correlation_id: string | null
+          event_type: string
+          id: string
+          occurred_at: string
+          payload: Json
+          refs: Json
+          schema_version: string
+          seq: number
+          source_system: string
+          subject_id: string
+          subject_type: string
+        }
+        Insert: {
+          actor_id: string
+          actor_type: string
+          correlation_id?: string | null
+          event_type: string
+          id?: string
+          occurred_at?: string
+          payload?: Json
+          refs?: Json
+          schema_version?: string
+          seq?: never
+          source_system?: string
+          subject_id: string
+          subject_type: string
+        }
+        Update: {
+          actor_id?: string
+          actor_type?: string
+          correlation_id?: string | null
+          event_type?: string
+          id?: string
+          occurred_at?: string
+          payload?: Json
+          refs?: Json
+          schema_version?: string
+          seq?: never
+          source_system?: string
+          subject_id?: string
+          subject_type?: string
+        }
+        Relationships: []
+      }
+      passport_evidence: {
+        Row: {
+          artifacts: Json
+          capture_request_id: string | null
+          captured_at: string | null
+          created_at: string
+          created_by: string | null
+          evidence_type: string
+          id: string
+          integrity: Json | null
+          issued_at: string | null
+          producer: string
+          provenance: Json
+          sensitivity: string
+          source_kind: string
+          source_ref: string | null
+          source_system: string
+          status: string
+          subject_id: string
+          subject_type: string
+        }
+        Insert: {
+          artifacts?: Json
+          capture_request_id?: string | null
+          captured_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          evidence_type: string
+          id?: string
+          integrity?: Json | null
+          issued_at?: string | null
+          producer?: string
+          provenance?: Json
+          sensitivity?: string
+          source_kind: string
+          source_ref?: string | null
+          source_system?: string
+          status?: string
+          subject_id: string
+          subject_type: string
+        }
+        Update: {
+          artifacts?: Json
+          capture_request_id?: string | null
+          captured_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          evidence_type?: string
+          id?: string
+          integrity?: Json | null
+          issued_at?: string | null
+          producer?: string
+          provenance?: Json
+          sensitivity?: string
+          source_kind?: string
+          source_ref?: string | null
+          source_system?: string
+          status?: string
+          subject_id?: string
+          subject_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "passport_evidence_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "passport_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "passport_evidence_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "passport_evidence_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "reliability_breakdown"
+            referencedColumns: ["profile_id"]
+          },
+        ]
+      }
+      passport_verifications: {
+        Row: {
+          claim_id: string
+          decided_at: string | null
+          decided_by: string | null
+          decision: string | null
+          expires_at: string | null
+          id: string
+          method: string
+          reason_code: string | null
+          requested_at: string
+          requested_by: string | null
+          revocation_context: Json | null
+          status: string
+          verifier_id: string | null
+          verifier_type: string
+        }
+        Insert: {
+          claim_id: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decision?: string | null
+          expires_at?: string | null
+          id?: string
+          method: string
+          reason_code?: string | null
+          requested_at?: string
+          requested_by?: string | null
+          revocation_context?: Json | null
+          status?: string
+          verifier_id?: string | null
+          verifier_type: string
+        }
+        Update: {
+          claim_id?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decision?: string | null
+          expires_at?: string | null
+          id?: string
+          method?: string
+          reason_code?: string | null
+          requested_at?: string
+          requested_by?: string | null
+          revocation_context?: Json | null
+          status?: string
+          verifier_id?: string | null
+          verifier_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "passport_verifications_claim_id_fkey"
+            columns: ["claim_id"]
+            isOneToOne: false
+            referencedRelation: "passport_claims"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "passport_verifications_decided_by_fkey"
+            columns: ["decided_by"]
+            isOneToOne: false
+            referencedRelation: "passport_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "passport_verifications_decided_by_fkey"
+            columns: ["decided_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "passport_verifications_decided_by_fkey"
+            columns: ["decided_by"]
+            isOneToOne: false
+            referencedRelation: "reliability_breakdown"
+            referencedColumns: ["profile_id"]
+          },
+          {
+            foreignKeyName: "passport_verifications_requested_by_fkey"
+            columns: ["requested_by"]
+            isOneToOne: false
+            referencedRelation: "passport_summary"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "passport_verifications_requested_by_fkey"
+            columns: ["requested_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "passport_verifications_requested_by_fkey"
+            columns: ["requested_by"]
+            isOneToOne: false
+            referencedRelation: "reliability_breakdown"
+            referencedColumns: ["profile_id"]
+          },
+        ]
+      }
       pilot_agreements: {
         Row: {
           accepted_at: string | null
@@ -3871,6 +4411,20 @@ export type Database = {
         Args: { p_granted_by: string; p_profile_id: string; p_reason: string }
         Returns: undefined
       }
+      _passport_emit_event: {
+        Args: {
+          p_actor_id: string
+          p_actor_type: string
+          p_correlation_id?: string
+          p_payload?: Json
+          p_refs?: Json
+          p_source_system?: string
+          p_subject_id: string
+          p_subject_type: string
+          p_type: string
+        }
+        Returns: string
+      }
       _resolve_verification: {
         Args: {
           p_actor_id: string
@@ -4049,6 +4603,153 @@ export type Database = {
         }
         Returns: undefined
       }
+      passport_add_evidence: {
+        Args: {
+          p_artifacts: Json
+          p_evidence_type: string
+          p_provenance?: Json
+          p_sensitivity?: string
+          p_subject_id: string
+          p_subject_type: string
+        }
+        Returns: Json
+      }
+      passport_artifacts_valid: {
+        Args: { p_artifacts: Json }
+        Returns: boolean
+      }
+      passport_assign_authority: {
+        Args: {
+          p_authority: string
+          p_claim_type_prefixes?: string[]
+          p_entity_id: string
+          p_entity_type: string
+          p_expires_at?: string
+          p_principal: string
+          p_purposes?: string[]
+        }
+        Returns: Json
+      }
+      passport_attach_evidence: {
+        Args: { p_claim_id: string; p_evidence_id: string; p_role?: string }
+        Returns: Json
+      }
+      passport_can_act_as_verifier: {
+        Args: {
+          p_claim_type: string
+          p_method: string
+          p_verifier_id: string
+          p_verifier_type: string
+        }
+        Returns: boolean
+      }
+      passport_cancel_verification_request: {
+        Args: { p_verification_id: string }
+        Returns: Json
+      }
+      passport_canonical_subject_type: {
+        Args: { p_type: string }
+        Returns: string
+      }
+      passport_claim_from_activity: {
+        Args: { p_activity_id: string }
+        Returns: Json
+      }
+      passport_claim_transition_allowed: {
+        Args: { p_from: string; p_to: string }
+        Returns: boolean
+      }
+      passport_create_claim: {
+        Args: {
+          p_claim_type: string
+          p_effective_at?: string
+          p_expires_at?: string
+          p_sensitivity?: string
+          p_subject_id: string
+          p_subject_type: string
+          p_submit?: boolean
+          p_value?: Json
+          p_visibility?: string
+        }
+        Returns: Json
+      }
+      passport_detach_evidence: {
+        Args: { p_claim_id: string; p_evidence_id: string }
+        Returns: Json
+      }
+      passport_entity_exists: {
+        Args: { p_id: string; p_type: string }
+        Returns: boolean
+      }
+      passport_expire_due_claims: { Args: never; Returns: number }
+      passport_has_authority: {
+        Args: {
+          p_authority: string
+          p_claim_type?: string
+          p_entity_id: string
+          p_entity_type: string
+          p_purpose?: string
+        }
+        Returns: boolean
+      }
+      passport_is_claim_reviewer: {
+        Args: { p_claim_id: string }
+        Returns: boolean
+      }
+      passport_is_evidence_reviewer: {
+        Args: { p_evidence_id: string }
+        Returns: boolean
+      }
+      passport_method_policy: {
+        Args: { p_method: string }
+        Returns: {
+          available: boolean
+          can_yield_verified: boolean
+          independent: boolean
+          platform_admin: boolean
+          required_authority: string
+        }[]
+      }
+      passport_record_verification: {
+        Args: {
+          p_decision: string
+          p_expires_at?: string
+          p_reason_code?: string
+          p_verification_id: string
+        }
+        Returns: Json
+      }
+      passport_request_verification: {
+        Args: {
+          p_claim_id: string
+          p_method: string
+          p_verifier_id?: string
+          p_verifier_type: string
+        }
+        Returns: Json
+      }
+      passport_revoke_authority: {
+        Args: { p_id: string; p_reason?: string }
+        Returns: Json
+      }
+      passport_revoke_claim: {
+        Args: { p_claim_id: string; p_reason_code: string }
+        Returns: Json
+      }
+      passport_set_claim_visibility: {
+        Args: { p_claim_id: string; p_visibility: string }
+        Returns: Json
+      }
+      passport_subject_is_public: {
+        Args: { p_id: string; p_type: string }
+        Returns: boolean
+      }
+      passport_subject_owner_ok: {
+        Args: { p_id: string; p_type: string }
+        Returns: boolean
+      }
+      passport_subject_type_ok: { Args: { p_type: string }; Returns: boolean }
+      passport_submit_claim: { Args: { p_claim_id: string }; Returns: Json }
       recompute_reliability: {
         Args: { p_profile_id: string }
         Returns: undefined
