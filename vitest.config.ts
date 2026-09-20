@@ -13,6 +13,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "."),
+      "@flow/passport-contracts": path.resolve(__dirname, "packages/passport-contracts/src/index.ts"),
     },
   },
 });
