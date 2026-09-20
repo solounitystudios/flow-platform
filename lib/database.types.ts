@@ -4659,6 +4659,10 @@ export type Database = {
         Args: { p_from: string; p_to: string }
         Returns: boolean
       }
+      passport_controls: {
+        Args: { p_id: string; p_principal: string; p_type: string }
+        Returns: boolean
+      }
       passport_create_claim: {
         Args: {
           p_claim_type: string
@@ -4710,6 +4714,27 @@ export type Database = {
           required_authority: string
         }[]
       }
+      passport_org_controllers: {
+        Args: { p_org_id: string }
+        Returns: {
+          principal_id: string
+        }[]
+      }
+      passport_org_is_verified: { Args: { p_org_id: string }; Returns: boolean }
+      passport_public_claim_value: {
+        Args: { p_claim_type: string; p_value: Json }
+        Returns: Json
+      }
+      passport_public_claims: {
+        Args: { p_claim_id?: string; p_limit?: number; p_profile_id?: string }
+        Returns: {
+          claim_type: string
+          effective_at: string
+          expires_at: string
+          id: string
+          public_value: Json
+        }[]
+      }
       passport_record_verification: {
         Args: {
           p_decision: string
@@ -4750,6 +4775,15 @@ export type Database = {
       }
       passport_subject_type_ok: { Args: { p_type: string }; Returns: boolean }
       passport_submit_claim: { Args: { p_claim_id: string }; Returns: Json }
+      passport_verifier_independent: {
+        Args: {
+          p_subject_id: string
+          p_subject_type: string
+          p_verifier_id: string
+          p_verifier_type: string
+        }
+        Returns: boolean
+      }
       recompute_reliability: {
         Args: { p_profile_id: string }
         Returns: undefined

@@ -81,6 +81,12 @@ insert into public.organizations (id, owner_id, name) values ('02000000-0000-400
 insert into public.organization_members (organization_id, profile_id, role, status)
   values ('01000000-0000-4000-8000-000000000001', 'b0000000-0000-4000-8000-000000000002', 'admin', 'active');
 insert into public.admins (profile_id, role, active) values ('f0000000-0000-4000-8000-000000000006', 'admin', true);
+-- Org One has been verified BY FLOW (organizations.verified is never self-assigned by UPDATE; the guard trigger
+-- honours this transaction-local internal-write flag, exactly like the admin RPC that grants it). An organization's
+-- verification only counts once FLOW has verified the organization; Org Two deliberately stays unverified.
+select set_config('flow.internal_write', 'true', true);
+update public.organizations set verified = true where id = '01000000-0000-4000-8000-000000000001';
+select set_config('flow.internal_write', '', true);
 
 -- ── 1. grants: no client can write Passport tables directly ─────────────
 do $$
@@ -318,10 +324,12 @@ begin
   perform passport_test.denied(public.passport_record_verification(v, 'verified', null, now() - interval '1 day'), 'expiry_not_in_future', 'expiry must be in the future');
   r := public.passport_record_verification(v, 'verified', null, now() + interval '180 days');
   perform passport_test.ok(r, 'named peer verifies');
-  perform passport_test.check_true((select status from public.passport_claims where id = cl) = 'verified', 'claim is verified');
-  perform passport_test.check_true((select expires_at from public.passport_claims where id = cl) is not null, 'verification carried an expiry onto the claim');
   perform passport_test.denied(public.passport_record_verification(v, 'verified'), 'not_pending', 'a decision is final');
   perform passport_test.reset();
+  -- (checked from a neutral vantage point: once the peer has decided they are no longer "asked", so — correctly —
+  --  they can no longer read the claim through the owner/reviewer/admin-only base table)
+  perform passport_test.check_true((select status from public.passport_claims where id = cl) = 'verified', 'claim is verified');
+  perform passport_test.check_true((select expires_at from public.passport_claims where id = cl) is not null, 'verification carried an expiry onto the claim');
 
   perform passport_test.raises(format('update public.passport_verifications set decision = ''rejected'' where id = %L', v), 'completed verification is immutable');
   perform passport_test.raises(format('delete from public.passport_verifications where id = %L', v), 'verification history is never deleted');
@@ -442,9 +450,10 @@ begin
   perform passport_test.check_true((select status from public.passport_claims where id = cl) = 'verified', 'precondition: verified claim');
   -- simulate the window closing (postgres bypasses the guard's time, not its rules)
   update public.passport_claims set effective_at = now() - interval '3 days', expires_at = now() - interval '1 day' where id = cl;
-  -- a public, verified-but-overdue claim must not be publicly visible even before the sweep runs
+  -- (an overdue claim is not in the PUBLIC projection before the sweep either: exercised in section 15, with a
+  --  platform-sourced claim, since the projection only headlines claims Passport itself derived)
   perform passport_test.as_anon();
-  perform passport_test.check_true(passport_test.count_of(format('select count(*) from public.passport_claims where id = %L', cl)) = 0, 'an overdue claim is not publicly visible before the sweep');
+  perform passport_test.raises('select count(*) from public.passport_claims', 'anon cannot read the raw claims table (overdue or not)');
   perform passport_test.as_user(a);
   n := public.passport_expire_due_claims();
   perform passport_test.check_true(n = 1, 'sweep expired exactly the overdue claim');
@@ -469,22 +478,24 @@ begin
     values (cl, 'peer_attested', 'person', 'a0000000-0000-4000-8000-000000000001', 'completed', 'verified', now(), 'a0000000-0000-4000-8000-000000000001');
   update public.passport_claims set status = 'verified' where id = cl;
 
+  -- M1: the RAW table is not the public API. anon has no privilege on it at all, so no internal column can leak,
+  -- whatever the row's visibility. (The PUBLIC Passport is served by passport_public_claims(); see section 15.)
   perform passport_test.as_anon();
-  perform passport_test.check_true(passport_test.count_of(format('select count(*) from public.passport_claims where id = %L', cl)) = 1, 'anon sees a public, verified claim of a public passport');
-  perform passport_test.check_true(passport_test.count_of('select count(*) from public.passport_claims where visibility = ''private''') = 0, 'anon never sees private claims');
-  perform passport_test.check_true(passport_test.count_of('select count(*) from public.passport_claims where status in (''draft'',''submitted'',''under_review'',''rejected'',''revoked'')') = 0, 'anon never sees unverified/terminal claims');
+  perform passport_test.raises('select count(*) from public.passport_claims', 'anon has no privilege on the raw claims table');
+  perform passport_test.raises('select source_ref from public.passport_claims', 'anon cannot select source_ref');
+  perform passport_test.raises('select created_by from public.passport_claims', 'anon cannot select created_by');
+  perform passport_test.raises('select issuer_id from public.passport_claims', 'anon cannot select issuer_id');
+  perform passport_test.raises('select value from public.passport_claims', 'anon cannot select the raw value');
   perform passport_test.raises('select count(*) from public.passport_evidence', 'anon has no privilege on evidence at all');
 
   perform passport_test.as_user(d);
-  perform passport_test.check_true(passport_test.count_of(format('select count(*) from public.passport_claims where id = %L', cl)) = 1, 'a stranger sees the public claim');
+  perform passport_test.check_true(passport_test.count_of(format('select count(*) from public.passport_claims where id = %L', cl)) = 0, 'M1: a signed-in stranger cannot read the raw row of a public claim either (owner / asked reviewer / admin only)');
   perform passport_test.check_true(passport_test.count_of(format('select count(*) from public.passport_claims where subject_id = %L and visibility = ''private''', c)) = 0, 'a stranger sees none of C''s private claims');
   perform passport_test.check_true(passport_test.count_of(format('select count(*) from public.passport_events where subject_id = %L', c)) = 0, 'a stranger cannot read C''s audit history');
 
   -- Turning the person's passport private hides even their public claim
   perform passport_test.reset();
   update public.profiles set public_passport = false where id = c;
-  perform passport_test.as_anon();
-  perform passport_test.check_true(passport_test.count_of(format('select count(*) from public.passport_claims where id = %L', cl)) = 0, 'profiles.public_passport = false hides the public claim');
   perform passport_test.as_user(c);
   perform passport_test.check_true(passport_test.count_of(format('select count(*) from public.passport_claims where id = %L', cl)) = 1, 'owner still sees it');
   perform passport_test.check_true(passport_test.count_of(format('select count(*) from public.passport_events where subject_id = %L', c)) > 0, 'owner reads their own audit history');
@@ -568,17 +579,17 @@ begin
   perform passport_test.as_user(stranger);
   perform passport_test.denied(public.passport_set_claim_visibility(cl, 'public'), 'not_found', 'stranger cannot change visibility');
   perform passport_test.as_anon();
-  perform passport_test.check_true(passport_test.count_of(format('select count(*) from public.passport_claims where id = %L', cl)) = 0, 'private until the owner says otherwise');
+  perform passport_test.check_true((select count(*) from public.passport_public_claims(part)) = 0, 'private until the owner says otherwise');
   perform passport_test.as_user(part);
   perform passport_test.denied(public.passport_set_claim_visibility(cl, 'world'), 'invalid_disclosure', 'visibility validated');
   perform passport_test.ok(public.passport_set_claim_visibility(cl, 'public'), 'owner makes it public');
   perform passport_test.as_anon();
   -- (profiles.public_passport for C was switched off earlier in section 11; still hidden)
-  perform passport_test.check_true(passport_test.count_of(format('select count(*) from public.passport_claims where id = %L', cl)) = 0, 'public claim still hidden while the person''s passport is private');
+  perform passport_test.check_true((select count(*) from public.passport_public_claims(part)) = 0, 'public claim still hidden while the person''s passport is private');
   perform passport_test.reset();
   update public.profiles set public_passport = true where id = part;
   perform passport_test.as_anon();
-  perform passport_test.check_true(passport_test.count_of(format('select count(*) from public.passport_claims where id = %L', cl)) = 1, 'visible once passport + claim are both public');
+  perform passport_test.check_true((select count(*) from public.passport_public_claims(part)) = 1, 'visible in the public projection once passport + claim are both public');
   perform passport_test.reset();
 end $$;
 
@@ -605,9 +616,341 @@ begin
     'no client role holds write/DDL-ish privileges on any passport_* table');
   perform passport_test.check_true(
     not exists (
+      select 1 from information_schema.role_table_grants g
+      where g.table_schema = 'public' and g.table_name like 'passport\_%'
+        and g.table_name in (select tablename from pg_tables where schemaname = 'public')
+        and g.grantee = 'anon'),
+    'M1: anon holds NO privilege at all on any passport_* base table (public data flows only through allow-listed functions)');
+  perform passport_test.check_true(
+    not exists (
       select 1 from information_schema.role_routine_grants g
       where g.routine_schema = 'public' and g.routine_name like '\_passport\_%' and g.grantee in ('anon', 'authenticated', 'PUBLIC')),
     'internal _passport_* functions are not executable by any client role');
+end $$;
+
+-- ── 15. M1: the PUBLIC Passport is an allow-listed projection, never the raw table ─
+-- P completed a host-run activity (a platform-derived, verified claim) — the kind of claim a public Passport shows.
+insert into auth.users (id, email) values
+  ('93000000-0000-4000-8000-000000000001', 'm1-host@test.local'),
+  ('93000000-0000-4000-8000-000000000002', 'm1-p@test.local'),
+  ('93000000-0000-4000-8000-000000000003', 'm1-stranger@test.local'),
+  ('93000000-0000-4000-8000-000000000004', 'm1-blocked@test.local'),
+  ('93000000-0000-4000-8000-000000000005', 'm1-peer@test.local');
+do $$
+declare
+  host uuid := '93000000-0000-4000-8000-000000000001'; p uuid := '93000000-0000-4000-8000-000000000002';
+  x uuid := '93000000-0000-4000-8000-000000000003'; w uuid := '93000000-0000-4000-8000-000000000004'; y uuid := '93000000-0000-4000-8000-000000000005';
+  act uuid := '94000000-0000-4000-8000-0000000000aa'; cl uuid; forged uuid; r jsonb; j jsonb; n bigint; ghost uuid := gen_random_uuid();
+  a1 jsonb; a2 jsonb;
+begin
+  insert into public.activities (id, created_by, title, activity_type, status) values (act, host, 'Welding workshop', 'workshop', 'published');
+  perform passport_test.as_user(p);  insert into public.activity_participants (activity_id, profile_id) values (act, p);
+  perform passport_test.as_user(host); perform passport_test.ok(public.check_in_activity_participant(act, p), 'setup: check in'); perform passport_test.ok(public.complete_activity_participant(act, p), 'setup: complete');
+  perform passport_test.as_user(p);   r := public.passport_claim_from_activity(act); perform passport_test.ok(r, 'setup: P claims the outcome'); cl := (r ->> 'id')::uuid;
+  perform passport_test.reset();
+  update public.profiles set public_passport = true where id = p;
+
+  -- PRIVATE by default: undiscoverable, whoever asks, however they ask
+  perform passport_test.as_anon();
+  perform passport_test.check_true((select count(*) from public.passport_public_claims(p)) = 0, 'private claim: not in the projection (by profile)');
+  perform passport_test.check_true((select count(*) from public.passport_public_claims(null, cl)) = 0, 'private claim: not in the projection (by claim id)');
+  -- no existence oracle: a hidden claim and a claim that never existed answer IDENTICALLY
+  a1 := (select coalesce(jsonb_agg(to_jsonb(t)), '[]') from public.passport_public_claims(null, cl) t);
+  a2 := (select coalesce(jsonb_agg(to_jsonb(t)), '[]') from public.passport_public_claims(null, ghost) t);
+  perform passport_test.check_true(a1 = a2 and a1 = '[]'::jsonb, 'hidden claim and nonexistent claim are indistinguishable');
+  -- never a directory: neither a profile nor a claim id -> nothing
+  perform passport_test.check_true((select count(*) from public.passport_public_claims()) = 0, 'no profile and no claim id: nothing (no bulk enumeration)');
+
+  -- OWNER representation is intact: the owner still reads the full row; nobody else gets owner-level raw access
+  perform passport_test.as_user(p);
+  perform passport_test.check_true((select source_ref from public.passport_claims where id = cl) like 'activity_participants:%', 'OWNER: still reads the full canonical row (source_ref included)');
+  perform passport_test.ok(public.passport_set_claim_visibility(cl, 'public'), 'owner makes it public');
+  perform passport_test.as_user(x);
+  perform passport_test.check_true(passport_test.count_of(format('select count(*) from public.passport_claims where id = %L', cl)) = 0, 'OTHER signed-in user: no raw access to a PUBLIC claim');
+  perform passport_test.as_anon();
+  perform passport_test.raises(format('select source_ref from public.passport_claims where id = %L', cl), 'ANON: cannot retrieve source_ref of a public claim');
+  perform passport_test.raises(format('select created_by from public.passport_claims where id = %L', cl), 'ANON: cannot retrieve created_by');
+  perform passport_test.raises(format('select issuer_id from public.passport_claims where id = %L', cl), 'ANON: cannot retrieve the (private) issuer id');
+  perform passport_test.raises(format('select status_reason_code from public.passport_claims where id = %L', cl), 'ANON: cannot retrieve status reasons');
+  perform passport_test.raises(format('select value from public.passport_claims where id = %L', cl), 'ANON: cannot retrieve the raw value');
+  perform passport_test.raises(format('select count(*) from public.passport_verifications where claim_id = %L', cl), 'ANON: no verification internals');
+  perform passport_test.raises(format('select count(*) from public.passport_claim_evidence where claim_id = %L', cl), 'ANON: no evidence links');
+  perform passport_test.raises('select count(*) from public.passport_evidence', 'ANON: no evidence or provenance');
+
+  -- the Passport itself is still private -> even a public claim is hidden
+  perform passport_test.reset();
+  update public.profiles set public_passport = false where id = p;
+  perform passport_test.as_anon();
+  perform passport_test.check_true((select count(*) from public.passport_public_claims(p)) = 0, 'public claim of a PRIVATE passport: hidden');
+  perform passport_test.reset();
+  update public.profiles set public_passport = true where id = p;
+
+  -- ELIGIBLE: shown, and only in the allow-listed shape
+  perform passport_test.as_anon();
+  perform passport_test.check_true((select count(*) from public.passport_public_claims(p)) = 1, 'eligible claim: returned');
+  j := (select to_jsonb(t) from public.passport_public_claims(p) t);
+  perform passport_test.check_true((select array_agg(k order by k) from jsonb_object_keys(j) k) = array['claim_type','effective_at','expires_at','id','public_value'], 'exact public shape: id, claim_type, effective_at, expires_at, public_value — nothing else');
+  perform passport_test.check_true((select array_agg(k order by k) from jsonb_object_keys(j -> 'public_value') k) = array['activity_type','title'], 'public_value carries ONLY the allow-listed fields (title, activity_type)');
+  perform passport_test.check_true(j::text not like '%activity_participants%' and j::text not like '%' || host::text || '%' and j::text not like '%' || p::text || '%' and j::text not like '%' || act::text || '%' and j::text not like '%source_record%', 'no source_ref, host/issuer id, subject id, activity id or verification detail anywhere in the projection');
+  perform passport_test.check_true((select count(*) from public.passport_public_claims(null, cl)) = 1, 'the same claim is reachable by id (for its explanation page)');
+  perform passport_test.check_true((select count(*) from public.passport_public_claims(x, cl)) = 0, 'a claim id under the WRONG profile answers nothing');
+  perform passport_test.as_user(x);
+  perform passport_test.check_true((select count(*) from public.passport_public_claims(p)) = 1, 'a signed-in stranger gets the same projection as anon');
+
+  -- INELIGIBLE states each drop it (fixtures as postgres; every restore is asserted so nothing passes vacuously)
+  perform passport_test.reset();
+  update public.passport_claims set sensitivity = 'sensitive' where id = cl;
+  perform passport_test.as_anon(); perform passport_test.check_true((select count(*) from public.passport_public_claims(p)) = 0, 'SENSITIVE claim: hidden');
+  perform passport_test.reset(); update public.passport_claims set sensitivity = 'standard' where id = cl;
+  perform passport_test.as_anon(); perform passport_test.check_true((select count(*) from public.passport_public_claims(p)) = 1, 'CONTROL: back to eligible');
+  perform passport_test.reset();
+  update public.passport_claims set effective_at = now() - interval '3 days', expires_at = now() - interval '1 day' where id = cl;
+  perform passport_test.as_anon(); perform passport_test.check_true((select count(*) from public.passport_public_claims(p)) = 0, 'EXPIRED claim (before any sweep): hidden');
+  perform passport_test.reset(); update public.passport_claims set expires_at = null where id = cl;
+  perform passport_test.as_anon(); perform passport_test.check_true((select count(*) from public.passport_public_claims(p)) = 1, 'CONTROL: back to eligible');
+  perform passport_test.reset(); update public.passport_claims set status = 'stale' where id = cl;
+  perform passport_test.as_anon(); perform passport_test.check_true((select count(*) from public.passport_public_claims(p)) = 0, 'STALE claim: hidden');
+  perform passport_test.reset(); update public.passport_claims set status = 'verified' where id = cl;
+  perform passport_test.as_anon(); perform passport_test.check_true((select count(*) from public.passport_public_claims(p)) = 1, 'CONTROL: back to eligible');
+  -- blocked-user rule: a viewer the subject blocked sees nothing; another viewer still does
+  perform passport_test.reset();
+  insert into public.connections (requester_id, recipient_id, status) values (p, w, 'blocked');
+  perform passport_test.as_user(w); perform passport_test.check_true((select count(*) from public.passport_public_claims(p)) = 0, 'BLOCKED viewer: hidden');
+  perform passport_test.as_user(x); perform passport_test.check_true((select count(*) from public.passport_public_claims(p)) = 1, 'CONTROL: an unblocked viewer still sees it');
+
+  -- M4: a claim the MEMBER created (source manual) is never headlined, even with a public/verified peer-attested status
+  perform passport_test.as_user(p);
+  forged := (public.passport_create_claim('person', p, 'participation.activity', '{"title":"Led the NASA Mars mission","activity_type":"workshop"}', 'private', 'standard', now(), null, true) ->> 'id')::uuid;
+  r := public.passport_request_verification(forged, 'peer_attested', 'person', y); perform passport_test.ok(r, 'setup: forged claim, peer asked');
+  perform passport_test.as_user(y); perform passport_test.ok(public.passport_record_verification((r ->> 'id')::uuid, 'verified'), 'setup: a sock-puppet peer verifies it');
+  perform passport_test.as_user(p); perform passport_test.ok(public.passport_set_claim_visibility(forged, 'public'), 'setup: made public');
+  perform passport_test.reset();
+  perform passport_test.check_true((select status || '/' || visibility from public.passport_claims where id = forged) = 'verified/public', 'setup: the forged claim really IS verified + public');
+  perform passport_test.as_anon();
+  perform passport_test.check_true((select count(*) from public.passport_public_claims(p)) = 1 and not exists (select 1 from public.passport_public_claims(p) c where c.public_value ->> 'title' like '%NASA%'), 'M4: the member-created claim is NOT in the public projection; only the platform-derived one is');
+  perform passport_test.check_true((select count(*) from public.passport_public_claims(null, forged)) = 0, 'M4: nor by id');
+  perform passport_test.as_user(p);
+  perform passport_test.check_true(passport_test.count_of(format('select count(*) from public.passport_claims where subject_id = %L', p)) = 2, 'the owner still sees BOTH claims in the canonical table');
+
+  -- revoked (terminal) drops it too
+  perform passport_test.ok(public.passport_revoke_claim(cl, 'withdrawn_by_subject'), 'owner withdraws the activity claim');
+  perform passport_test.as_anon(); perform passport_test.check_true((select count(*) from public.passport_public_claims(p)) = 0, 'REVOKED claim: hidden');
+  perform passport_test.reset();
+end $$;
+
+-- ── 16. H2: verification independence is over CONTROL, not user ids ─────
+-- The attack that used to work: person S owns an organization, gives a SECOND account authority in it, and that
+-- account verifies S's claim "as" the organization. Different user ids, same controller. Every scenario below has a
+-- POSITIVE CONTROL (an independent verification that must still succeed) so no denial can pass because the fixture
+-- or the RPCs are simply broken.
+insert into auth.users (id, email) values
+  ('91000000-0000-4000-8000-000000000001', 'h2-s@test.local'),    -- S   the claim subject
+  ('91000000-0000-4000-8000-000000000002', 'h2-r@test.local'),    -- R   S's accomplice account (authority in S's own org A)
+  ('91000000-0000-4000-8000-000000000003', 'h2-oi@test.local'),   -- OI  owner of the INDEPENDENT org I
+  ('91000000-0000-4000-8000-000000000004', 'h2-ri@test.local'),   -- RI  reviewer for I
+  ('91000000-0000-4000-8000-000000000005', 'h2-ob@test.local'),   -- OB  owner of org B (S is an ADMIN member)
+  ('91000000-0000-4000-8000-000000000006', 'h2-rb@test.local'),   -- RB  reviewer for B
+  ('91000000-0000-4000-8000-000000000007', 'h2-om@test.local'),   -- OM  owner of org M (S is a RECRUITER member)
+  ('91000000-0000-4000-8000-000000000008', 'h2-rm@test.local'),   -- RM  reviewer for M
+  ('91000000-0000-4000-8000-000000000009', 'h2-on@test.local'),   -- ON  owner of org N (NOT verified by FLOW)
+  ('91000000-0000-4000-8000-00000000000a', 'h2-rn@test.local'),   -- RN  reviewer for N
+  ('91000000-0000-4000-8000-00000000000b', 'h2-ot@test.local'),   -- OT  owner of org T (S holds authority there)
+  ('91000000-0000-4000-8000-00000000000c', 'h2-rt@test.local');   -- RT  reviewer for T
+insert into public.organizations (id, owner_id, name) values
+  ('92000000-0000-4000-8000-000000000001', '91000000-0000-4000-8000-000000000001', 'H2 Org A (owned by S)'),
+  ('92000000-0000-4000-8000-000000000002', '91000000-0000-4000-8000-000000000003', 'H2 Org I (independent)'),
+  ('92000000-0000-4000-8000-000000000003', '91000000-0000-4000-8000-000000000005', 'H2 Org B (S admin member)'),
+  ('92000000-0000-4000-8000-000000000004', '91000000-0000-4000-8000-000000000007', 'H2 Org M (S recruiter member)'),
+  ('92000000-0000-4000-8000-000000000005', '91000000-0000-4000-8000-000000000009', 'H2 Org N (unverified)'),
+  ('92000000-0000-4000-8000-000000000006', '91000000-0000-4000-8000-00000000000b', 'H2 Org T (S holds authority)'),
+  ('92000000-0000-4000-8000-000000000007', '91000000-0000-4000-8000-000000000001', 'H2 Org A2 (S owns; subject org)'),
+  ('92000000-0000-4000-8000-000000000008', '91000000-0000-4000-8000-000000000001', 'H2 Org I2 (also owned by S)');
+insert into public.organization_members (organization_id, profile_id, role, status) values
+  ('92000000-0000-4000-8000-000000000003', '91000000-0000-4000-8000-000000000001', 'admin', 'active'),
+  ('92000000-0000-4000-8000-000000000004', '91000000-0000-4000-8000-000000000001', 'recruiter', 'active');
+select set_config('flow.internal_write', 'true', true);
+update public.organizations set verified = true where id in (select id from public.organizations where name like 'H2 Org %' and name not like 'H2 Org N%');
+select set_config('flow.internal_write', '', true);
+
+do $$
+declare
+  s  uuid := '91000000-0000-4000-8000-000000000001'; r  uuid := '91000000-0000-4000-8000-000000000002';
+  oi uuid := '91000000-0000-4000-8000-000000000003'; ri uuid := '91000000-0000-4000-8000-000000000004';
+  ob uuid := '91000000-0000-4000-8000-000000000005'; rb uuid := '91000000-0000-4000-8000-000000000006';
+  om uuid := '91000000-0000-4000-8000-000000000007'; rm uuid := '91000000-0000-4000-8000-000000000008';
+  ono uuid := '91000000-0000-4000-8000-000000000009'; rn uuid := '91000000-0000-4000-8000-00000000000a';
+  ot uuid := '91000000-0000-4000-8000-00000000000b'; rt uuid := '91000000-0000-4000-8000-00000000000c';
+  oa uuid := '92000000-0000-4000-8000-000000000001'; oi_ uuid := '92000000-0000-4000-8000-000000000002'; ob_ uuid := '92000000-0000-4000-8000-000000000003';
+  om_ uuid := '92000000-0000-4000-8000-000000000004'; on_ uuid := '92000000-0000-4000-8000-000000000005'; ot_ uuid := '92000000-0000-4000-8000-000000000006';
+  oa2 uuid := '92000000-0000-4000-8000-000000000007'; oi2 uuid := '92000000-0000-4000-8000-000000000008';
+  cl uuid; v uuid; r_ jsonb;
+begin
+  -- each owner scopes THEIR reviewer (credential.* claims) — S does the same for the accomplice inside S's own org
+  perform passport_test.as_user(s);  perform passport_test.ok(public.passport_assign_authority(r,  'organization', oa,  'evidence_reviewer', '{}', array['credential'], now() + interval '30 days'), 'setup: S gives accomplice R authority in S''s own org A');
+  perform passport_test.as_user(oi); perform passport_test.ok(public.passport_assign_authority(ri, 'organization', oi_, 'evidence_reviewer', '{}', array['credential'], now() + interval '30 days'), 'setup: independent reviewer RI');
+  perform passport_test.as_user(ob); perform passport_test.ok(public.passport_assign_authority(rb, 'organization', ob_, 'evidence_reviewer', '{}', array['credential'], now() + interval '30 days'), 'setup: reviewer RB');
+  perform passport_test.as_user(om); perform passport_test.ok(public.passport_assign_authority(rm, 'organization', om_, 'evidence_reviewer', '{}', array['credential'], now() + interval '30 days'), 'setup: reviewer RM');
+  perform passport_test.as_user(ono); perform passport_test.ok(public.passport_assign_authority(rn, 'organization', on_, 'evidence_reviewer', '{}', array['credential'], now() + interval '30 days'), 'setup: reviewer RN');
+  perform passport_test.as_user(ot); perform passport_test.ok(public.passport_assign_authority(rt, 'organization', ot_, 'evidence_reviewer', '{}', array['credential'], now() + interval '30 days'), 'setup: reviewer RT');
+  perform passport_test.ok(public.passport_assign_authority(s,  'organization', ot_, 'data_requester', array['hiring_review'], '{}', now() + interval '30 days'), 'setup: S holds an authority assignment in org T');
+  perform passport_test.reset();
+
+  -- the control sets, straight from the canonical helper (no RPC in the way)
+  perform passport_test.check_true((select array_agg(principal_id order by principal_id) from public.passport_org_controllers(oa)) = array[s, r], 'controllers(A) = its owner + the account holding authority in it');
+  perform passport_test.check_true((select array_agg(principal_id order by principal_id) from public.passport_org_controllers(ob_)) = array[s, ob, rb], 'controllers(B) includes an active ADMIN member (the legacy path''s own "owner/admin resolve" set)');
+  perform passport_test.check_true(not exists (select 1 from public.passport_org_controllers(om_) c where c.principal_id = s), 'controllers(M) does NOT include a mere recruiter member');
+  perform passport_test.check_true(s in (select principal_id from public.passport_org_controllers(ot_)), 'controllers(T) includes a holder of an active authority assignment');
+  perform passport_test.check_true(public.passport_verifier_independent('person', s, 'organization', oi_), 'CONTROL: person S vs independent org I -> independent');
+  perform passport_test.check_true(not public.passport_verifier_independent('person', s, 'organization', oa), 'person S vs org A that S owns -> NOT independent');
+  perform passport_test.check_true(not public.passport_verifier_independent('person', s, 'business', oa), 'the "business" alias cannot dodge it');
+  perform passport_test.check_true(public.passport_verifier_independent('person', s, 'system', null), 'the platform (system) verifier is always independent');
+
+  -- ── 1. the subject verifies their own claim directly → REJECT (and the legitimate peer path still works)
+  perform passport_test.as_user(s);
+  cl := (public.passport_create_claim('person', s, 'credential.license', '{"k":1}', 'private', 'standard', null, null, true) ->> 'id')::uuid;
+  perform passport_test.denied(public.passport_request_verification(cl, 'peer_attested', 'person', s), 'verifier_is_subject', '1: cannot name yourself as verifier');
+  r_ := public.passport_request_verification(cl, 'peer_attested', 'person', r);
+  perform passport_test.ok(r_, '1 CONTROL: naming an independent peer is fine'); v := (r_ ->> 'id')::uuid;
+  perform passport_test.denied(public.passport_record_verification(v, 'verified'), 'self_verification_not_allowed', '1: the subject cannot decide their own claim');
+  perform passport_test.as_user(r);
+  perform passport_test.ok(public.passport_record_verification(v, 'verified'), '1 CONTROL: the named independent peer CAN decide');
+  perform passport_test.reset();
+  perform passport_test.check_true((select status from public.passport_claims where id = cl) = 'verified', '1 CONTROL: and the claim is verified');
+
+  -- ── 2. S owns org A; a SECOND account holds reviewer authority in A → the H2 attack → REJECT, whichever way it is dressed
+  perform passport_test.as_user(s);
+  cl := (public.passport_create_claim('person', s, 'credential.license', '{"k":2}', 'private', 'standard', null, null, true) ->> 'id')::uuid;
+  perform passport_test.denied(public.passport_request_verification(cl, 'organization_verified', 'organization', oa), 'verifier_not_independent', '2: an org S owns cannot verify S''s claim');
+  perform passport_test.denied(public.passport_request_verification(cl, 'organization_verified', 'business',     oa), 'verifier_not_independent', '6: the organization issuer representation "business" changes nothing');
+  perform passport_test.denied(public.passport_request_verification(cl, 'employer_verified',     'organization', oa), 'verifier_not_independent', '6: nor does switching method (employer_verified)');
+  perform passport_test.denied(public.passport_request_verification(cl, 'licensed_provider',      'organization', oa), 'verifier_not_independent', '6: nor licensed_provider');
+  perform passport_test.denied(public.passport_request_verification(cl, 'education_provider',     'organization', oa), 'verifier_not_independent', '6: nor education_provider');
+  -- changing the authority assignment does not help either: control is about the ORG, not who is named to decide
+  perform passport_test.as_user(s);
+  perform passport_test.ok(public.passport_revoke_authority((select id from public.passport_authority_assignments where principal_id = r and entity_id = oa and status = 'active'), 'rescope'), '6 setup: revoke the accomplice''s authority');
+  perform passport_test.ok(public.passport_assign_authority(r, 'organization', oa, 'evidence_reviewer', '{}', array['credential.license'], now() + interval '30 days'), '6 setup: re-assign with a narrower, exact-match scope');
+  perform passport_test.denied(public.passport_request_verification(cl, 'organization_verified', 'organization', oa), 'verifier_not_independent', '6: a different authority assignment changes nothing');
+  -- the accomplice cannot open the request themselves either (only the subject can)
+  perform passport_test.as_user(r);
+  perform passport_test.denied(public.passport_request_verification(cl, 'organization_verified', 'organization', oa), 'not_found', '2: the accomplice cannot request on S''s behalf');
+  perform passport_test.reset();
+  -- 7: the refusals created NO decision and moved nothing
+  perform passport_test.check_true((select count(*) from public.passport_verifications where claim_id = cl) = 0, '7: no verification row exists for the refused attack');
+  perform passport_test.check_true((select status from public.passport_claims where id = cl) = 'submitted', '7: the claim did not move (not under_review, certainly not verified)');
+  -- ...and a PRIVILEGED writer cannot slip it through either: the guard trigger holds the line
+  -- (two SEPARATE statements: the decision row must already be visible, or the guard would refuse for the wrong
+  --  reason — "no decision" — and this assertion would pass even with the independence check deleted)
+  insert into public.passport_verifications (claim_id, method, verifier_type, verifier_id, status, decision, decided_at, decided_by)
+    values (cl, 'organization_verified', 'organization', oa, 'completed', 'verified', now(), r);
+  perform passport_test.check_true(exists (select 1 from public.passport_verifications where claim_id = cl and status = 'completed' and decision = 'verified'), '2/7 setup: a completed "verified" decision by the subject-controlled org IS on record');
+  perform passport_test.raises(format('update public.passport_claims set status = ''verified'' where id = %L', cl), '2/7: even a privileged writer cannot verify the claim through a subject-controlled org');
+  perform passport_test.check_true((select status from public.passport_claims where id = cl) = 'submitted', '7: still not verified after the privileged attempt');
+
+  -- ── 3. S is an ADMIN member of org B (not its nominal owner) → REJECT (owner/admin resolve verifications in this repo)
+  perform passport_test.as_user(s);
+  cl := (public.passport_create_claim('person', s, 'credential.license', '{"k":3}', 'private', 'standard', null, null, true) ->> 'id')::uuid;
+  perform passport_test.denied(public.passport_request_verification(cl, 'organization_verified', 'organization', ob_), 'verifier_not_independent', '3: an org S administers cannot verify S''s claim, though S is not its owner');
+
+  -- ── 7b. S holds an active authority assignment in org T → S speaks for T → REJECT
+  perform passport_test.denied(public.passport_request_verification(cl, 'organization_verified', 'organization', ot_), 'verifier_not_independent', '3b: an org S holds authority in cannot verify S''s claim');
+
+  -- ── 4. S is merely a RECRUITER member of org M → NOT control → allowed (an employer verifying an employee)
+  perform passport_test.as_user(s);
+  cl := (public.passport_create_claim('person', s, 'credential.license', '{"k":4}', 'private', 'standard', null, null, true) ->> 'id')::uuid;
+  r_ := public.passport_request_verification(cl, 'organization_verified', 'organization', om_);
+  perform passport_test.ok(r_, '4: a non-controlling member is not "control" — the org may verify'); v := (r_ ->> 'id')::uuid;
+  -- ── 8. control CHANGES between request and decision → the decision re-checks it
+  perform passport_test.reset();
+  update public.organization_members set role = 'admin' where organization_id = om_ and profile_id = s;
+  perform passport_test.as_user(rm);
+  perform passport_test.denied(public.passport_record_verification(v, 'verified', 'documents_checked'), 'verifier_not_independent', '8: S was promoted to admin after the request; the decision is refused NOW');
+  perform passport_test.reset();
+  perform passport_test.check_true((select status from public.passport_claims where id = cl) = 'under_review', '8/7: the claim did not become verified');
+  perform passport_test.check_true((select count(*) from public.passport_verifications where claim_id = cl and decision = 'verified') = 0, '8/7: and no successful decision exists');
+  perform passport_test.check_true((select status from public.passport_verifications where id = v) = 'requested', '8: the request is still pending, untouched');
+  update public.organization_members set role = 'recruiter' where organization_id = om_ and profile_id = s;
+  perform passport_test.as_user(rm);
+  perform passport_test.ok(public.passport_record_verification(v, 'verified', 'documents_checked'), '4/8 CONTROL: with control gone, the SAME reviewer''s decision succeeds');
+  perform passport_test.reset();
+  perform passport_test.check_true((select status from public.passport_claims where id = cl) = 'verified', '4: verified through an org S does not control');
+
+  -- ── 5. an unrelated independent, FLOW-verified organization → ALLOW
+  perform passport_test.as_user(s);
+  cl := (public.passport_create_claim('person', s, 'credential.license', '{"k":5}', 'private', 'standard', null, null, true) ->> 'id')::uuid;
+  r_ := public.passport_request_verification(cl, 'organization_verified', 'organization', oi_);
+  perform passport_test.ok(r_, '5: an independent organization may be asked'); v := (r_ ->> 'id')::uuid;
+  perform passport_test.as_user(ri);
+  perform passport_test.ok(public.passport_record_verification(v, 'verified', 'documents_checked'), '5: its authorized reviewer verifies');
+  perform passport_test.reset();
+  perform passport_test.check_true((select status from public.passport_claims where id = cl) = 'verified', '5: legitimate independent verification still works end to end');
+
+  -- ── organizations.verified is an ADDITIONAL, separately-enforced gate (established legacy rule)
+  perform passport_test.as_user(s);
+  cl := (public.passport_create_claim('person', s, 'credential.license', '{"k":6}', 'private', 'standard', null, null, true) ->> 'id')::uuid;
+  perform passport_test.denied(public.passport_request_verification(cl, 'organization_verified', 'organization', on_), 'verifier_not_verified', 'an otherwise independent org FLOW has not verified cannot verify');
+  perform passport_test.as_user(ono);
+  perform passport_test.raises(format('update public.organizations set verified = true where id = %L', on_), 'an owner cannot self-assign organizations.verified by UPDATE');
+  perform passport_test.reset();
+  insert into public.passport_verifications (claim_id, method, verifier_type, verifier_id, status, decision, decided_at, decided_by)
+    values (cl, 'organization_verified', 'organization', on_, 'completed', 'verified', now(), rn);
+  perform passport_test.raises(format('update public.passport_claims set status = ''verified'' where id = %L', cl), 'the guard also refuses an org FLOW has not verified (privileged writer, decision already on record)');
+  -- the guard is not just blocking everything: the same shape through the independent, verified org passes
+  update public.passport_claims set status = 'under_review' where id = cl;
+  insert into public.passport_verifications (claim_id, method, verifier_type, verifier_id, status, decision, decided_at, decided_by)
+    values (cl, 'organization_verified', 'organization', oi_, 'completed', 'verified', now(), ri);
+  update public.passport_claims set status = 'verified' where id = cl;
+  perform passport_test.check_true((select status from public.passport_claims where id = cl) = 'verified', 'CONTROL: the guard admits the same fixture through an independent, verified org');
+
+  -- ── 9. a claim about an ORGANIZATION: independence applies to controllers of the subject org too
+  perform passport_test.as_user(s);
+  cl := (public.passport_create_claim('organization', oa2, 'credential.organization_issued', '{}', 'private', 'standard', null, null, true) ->> 'id')::uuid;
+  perform passport_test.denied(public.passport_request_verification(cl, 'organization_verified', 'organization', oi2), 'verifier_not_independent', '9: another org with the SAME controller cannot verify an org S controls');
+  perform passport_test.denied(public.passport_request_verification(cl, 'peer_attested', 'person', s), 'verifier_not_independent', '9: nor can S as a "peer" of an org S controls');
+  r_ := public.passport_request_verification(cl, 'organization_verified', 'organization', oi_);
+  perform passport_test.ok(r_, '9 CONTROL: an independent org may verify an org claim'); v := (r_ ->> 'id')::uuid;
+  perform passport_test.as_user(ri);
+  perform passport_test.ok(public.passport_record_verification(v, 'verified', 'documents_checked'), '9 CONTROL: and its reviewer can decide');
+  perform passport_test.reset();
+
+  -- ── 10. organizations.verified is re-checked at the DECISION, not only at the request
+  perform passport_test.as_user(s);
+  cl := (public.passport_create_claim('person', s, 'credential.license', '{"k":10}', 'private', 'standard', null, null, true) ->> 'id')::uuid;
+  r_ := public.passport_request_verification(cl, 'organization_verified', 'organization', om_);
+  perform passport_test.ok(r_, '10 setup: org M is verified, so the request opens'); v := (r_ ->> 'id')::uuid;
+  perform passport_test.reset();
+  perform set_config('flow.internal_write', 'true', true);
+  update public.organizations set verified = false where id = om_;
+  perform set_config('flow.internal_write', '', true);
+  perform passport_test.as_user(rm);
+  perform passport_test.denied(public.passport_record_verification(v, 'verified', 'documents_checked'), 'verifier_not_verified', '10: FLOW withdrew the org''s verification after the request; the decision is refused NOW');
+  perform passport_test.reset();
+  perform passport_test.check_true((select status from public.passport_claims where id = cl) = 'under_review' and (select status from public.passport_verifications where id = v) = 'requested', '10: nothing moved');
+  perform set_config('flow.internal_write', 'true', true);
+  update public.organizations set verified = true where id = om_;
+  perform set_config('flow.internal_write', '', true);
+  perform passport_test.as_user(rm);
+  perform passport_test.ok(public.passport_record_verification(v, 'verified', 'documents_checked'), '10 CONTROL: with the org verified again, the same decision succeeds');
+  perform passport_test.reset();
+
+  -- ── 11. a DECIDER who controls the subject (without being its nominal owner) is refused
+  perform passport_test.as_user(s);
+  cl := (public.passport_create_claim('organization', oa2, 'credential.organization_issued', '{"k":11}', 'private', 'standard', null, null, true) ->> 'id')::uuid;
+  r_ := public.passport_request_verification(cl, 'organization_verified', 'organization', oi_);
+  perform passport_test.ok(r_, '11 setup: independent org I is asked to verify S''s org A2'); v := (r_ ->> 'id')::uuid;
+  perform passport_test.reset();
+  insert into public.organization_members (organization_id, profile_id, role, status) values (oa2, ri, 'admin', 'active');   -- RI now administers the SUBJECT org
+  perform passport_test.as_user(ri);
+  perform passport_test.denied(public.passport_record_verification(v, 'verified', 'documents_checked'), 'self_verification_not_allowed', '11: an admin of the subject org cannot decide its claim, though they are not its owner');
+  perform passport_test.reset();
+  delete from public.organization_members where organization_id = oa2 and profile_id = ri;
+  perform passport_test.as_user(ri);
+  perform passport_test.ok(public.passport_record_verification(v, 'verified', 'documents_checked'), '11 CONTROL: without that role the same reviewer can decide');
+  perform passport_test.reset();
+
+  -- ── 12. organizations.owner_id alone is control (the owner-membership mirror row is a convenience, not the rule)
+  delete from public.organization_members where organization_id = oa and profile_id = s and role = 'owner';
+  perform passport_test.check_true(s in (select principal_id from public.passport_org_controllers(oa)), '12: the owner still controls their org even if the mirror membership row is missing');
+  perform passport_test.check_true(not public.passport_verifier_independent('person', s, 'organization', oa), '12: and still cannot use it as an independent verifier');
 end $$;
 
 rollback;

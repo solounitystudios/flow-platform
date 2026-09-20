@@ -27,7 +27,13 @@
 --    a disclosure choice, not part of what is asserted), and a sensitive/
 --    restricted claim can never be made public.
 --
+-- 3. passport_public_claims(): the ONLY way a stranger reads a claim — an explicit allow-list projection.
+--    The raw passport_claims table is authenticated owner/reviewer/admin only (see 120100), because RLS
+--    cannot hide columns.
+--
 -- Rollback:
+--   drop function if exists public.passport_public_claims(uuid, uuid, integer);
+--   drop function if exists public.passport_public_claim_value(text, jsonb);
 --   drop function if exists public.passport_set_claim_visibility(uuid, text);
 --   drop function if exists public.passport_claim_from_activity(uuid);
 
@@ -161,3 +167,57 @@ $$;
 
 revoke all on function public.passport_set_claim_visibility(uuid, text) from public, anon;
 grant execute on function public.passport_set_claim_visibility(uuid, text) to authenticated;
+
+-- ── 3. the PUBLIC Passport projection ────────────────────────────────────
+-- The only way a stranger (anon or signed-in) reads a claim. Explicit allow-list, not a filtered copy of
+-- the row: no source_ref, issuer, created_by, provenance, evidence, verification internals, status
+-- reason, sensitivity or raw value. It answers "which claims may THIS Passport publicly show?" and
+-- nothing else, so it cannot be used to probe for hidden ones:
+--   * a hidden / private / sensitive / unverified / expired claim is simply absent (same as nonexistent);
+--   * it never lists across people (a profile id or a claim id is required) and is capped;
+--   * only claims PASSPORT ITSELF derived (source flow_platform) are headlined: a member can create a
+--     claim of any type with any title, and a verified check beside text they wrote is a forgery.
+
+create or replace function public.passport_public_claim_value(p_claim_type text, p_value jsonb)
+returns jsonb
+language sql
+immutable
+set search_path to 'pg_catalog'
+as $$
+  -- Default deny: an unlisted claim type contributes NO value fields. Mirrors PUBLIC_VALUE_FIELDS in
+  -- lib/passport/domain/projections.ts (a parity test keeps the two lists equal).
+  select case p_claim_type
+    when 'participation.activity' then jsonb_strip_nulls(jsonb_build_object(
+      'title', case when jsonb_typeof(p_value -> 'title') = 'string' then left(p_value ->> 'title', 200) end,
+      'activity_type', case when jsonb_typeof(p_value -> 'activity_type') = 'string' then left(p_value ->> 'activity_type', 64) end))
+    else '{}'::jsonb
+  end;
+$$;
+
+create or replace function public.passport_public_claims(p_profile_id uuid default null, p_claim_id uuid default null, p_limit integer default 20)
+returns table (id uuid, claim_type text, effective_at timestamptz, expires_at timestamptz, public_value jsonb)
+language sql
+stable
+security definer
+set search_path to 'pg_catalog', 'public'
+as $$
+  select c.id, c.claim_type, c.effective_at, c.expires_at, public.passport_public_claim_value(c.claim_type, c.value)
+    from public.passport_claims c
+   where (p_profile_id is not null or p_claim_id is not null)          -- never a bulk directory
+     and (p_profile_id is null or c.subject_id = p_profile_id)
+     and (p_claim_id is null or c.id = p_claim_id)
+     and c.subject_type = 'person'
+     and c.visibility = 'public'
+     and c.status = 'verified'
+     and (c.expires_at is null or c.expires_at > now())
+     and c.sensitivity = 'standard'
+     and c.source_system = 'flow_platform'
+     and public.passport_subject_is_public('person', c.subject_id)     -- public switch + block rules
+   order by c.effective_at desc nulls last, c.created_at desc
+   limit greatest(1, least(coalesce(p_limit, 20), 50));
+$$;
+
+revoke all on function public.passport_public_claim_value(text, jsonb) from public;
+grant execute on function public.passport_public_claim_value(text, jsonb) to anon, authenticated, service_role;
+revoke all on function public.passport_public_claims(uuid, uuid, integer) from public;
+grant execute on function public.passport_public_claims(uuid, uuid, integer) to anon, authenticated, service_role;

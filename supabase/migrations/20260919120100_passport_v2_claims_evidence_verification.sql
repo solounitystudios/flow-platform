@@ -40,7 +40,8 @@
 --   drop table if exists public.passport_verifications, public.passport_claim_evidence, public.passport_evidence, public.passport_claims;
 --   (then the helper functions: passport_can_act_as_verifier, passport_is_claim_reviewer,
 --    passport_is_evidence_reviewer, passport_method_policy, passport_claim_transition_allowed,
---    passport_artifacts_valid, passport_entity_exists, and the guard trigger functions)
+--    passport_artifacts_valid, passport_entity_exists, the independence helpers passport_verifier_independent /
+--    passport_controls / passport_org_controllers / passport_org_is_verified, and the guard trigger functions)
 
 -- ── A. policy tables as functions (mirrored in lib/passport/domain) ──────
 -- tests/unit/passport-sql-parity.test.ts parses these VALUES lists and fails
@@ -202,11 +203,17 @@ begin
   -- verification decision. Even a privileged writer (or a future careless
   -- RPC) cannot flip a claim to verified without one: evidence and assertion
   -- are never verification.
+  --
+  -- ...and that decision must be INDEPENDENT of the claim's subject: nobody who controls the subject
+  -- controls the verifier, and an organization verifier must be platform-verified. Enforced here as
+  -- well as in the RPCs so no privileged writer or future RPC can skip it.
   if new.status = 'verified' and old.status <> 'verified' and not exists (
     select 1 from public.passport_verifications v
     where v.claim_id = new.id and v.status = 'completed' and v.decision = 'verified'
+      and public.passport_verifier_independent(new.subject_type, new.subject_id, v.verifier_type, v.verifier_id)
+      and (v.verifier_type <> 'organization' or public.passport_org_is_verified(v.verifier_id))
   ) then
-    raise exception 'a claim cannot become verified without a completed verification decision' using errcode = 'check_violation';
+    raise exception 'a claim cannot become verified without a completed, independent verification decision' using errcode = 'check_violation';
   end if;
   -- After submission the assertion itself never changes; a correction is a
   -- new claim that supersedes this one.
@@ -371,6 +378,116 @@ create trigger passport_verifications_guard_trg before update on public.passport
 
 -- ── E. authorization helpers (SECURITY DEFINER to avoid RLS recursion) ───
 
+-- ── INDEPENDENCE OF CONTROL ──────────────────────────────────────────────
+-- A claim may only be verified through a party the claim's subject does NOT
+-- control. "A different user id" is not independence: a person can own an
+-- organization, hand a second account authority in it, and have that account
+-- verify the owner's claim "as" the organization. Independence is therefore
+-- decided over the SET OF ACCOUNTS that control each side.
+--
+-- Who controls an ORGANIZATION (established repo semantics, not invented here):
+--   * organizations.owner_id            — "the source of truth for who owns this org"
+--     (20260820132156: owner-only management; owner-only posting rights in
+--     20260820140929: "organization posting rights belong to the owner only").
+--   * active organization_members with role 'owner' or 'admin' — exactly the set
+--     the LEGACY verification path lets resolve a verification on the org's
+--     behalf (20260822180043 resolve_verification_as_organization: "only
+--     owner/admin"; recruiter/manager "cannot resolve claims").
+--   * any principal holding an ACTIVE Passport authority assignment on the org —
+--     they can decide verifications as the org (passport_can_act_as_verifier).
+-- Ordinary membership (recruiter / manager / invited / suspended / removed) is
+-- NOT control: an employee is exactly who an employer verifies.
+-- If organization_members later grants recruiter/manager any management power,
+-- add it HERE — this is the one place that decides.
+
+create or replace function public.passport_org_controllers(p_org_id uuid)
+returns table (principal_id uuid)
+language sql
+stable
+security definer
+set search_path to 'pg_catalog', 'public'
+as $$
+  select o.owner_id from public.organizations o where o.id = p_org_id and o.owner_id is not null
+  union
+  select m.profile_id from public.organization_members m
+   where m.organization_id = p_org_id and m.status = 'active' and m.role in ('owner', 'admin')
+  union
+  select a.principal_id from public.passport_authority_assignments a
+   where a.entity_type = 'organization' and a.entity_id = p_org_id and a.status = 'active'
+     and a.starts_at <= now() and (a.expires_at is null or a.expires_at > now());
+$$;
+
+-- Does this ACCOUNT control this subject/entity? (Like passport_subject_owner_ok, but for an explicit
+-- principal rather than the caller, and with organization control widened as above.)
+create or replace function public.passport_controls(p_principal uuid, p_type text, p_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path to 'pg_catalog', 'public'
+as $$
+  select p_principal is not null and coalesce(case public.passport_canonical_subject_type(p_type)
+    when 'person' then p_id = p_principal
+    when 'organization' then exists (select 1 from public.passport_org_controllers(p_id) c where c.principal_id = p_principal)
+    when 'event' then exists (
+      select 1 from public.events e
+       where e.id = p_id and (e.created_by = p_principal
+         or (e.organization_id is not null and exists (select 1 from public.passport_org_controllers(e.organization_id) c where c.principal_id = p_principal))))
+    when 'activity' then exists (
+      select 1 from public.activities a
+       where a.id = p_id and (a.created_by = p_principal
+         or (a.organization_id is not null and exists (select 1 from public.passport_org_controllers(a.organization_id) c where c.principal_id = p_principal))))
+    when 'project' then exists (select 1 from public.creative_projects c where c.id = p_id and c.owner_id = p_principal)
+    else false
+  end, false);
+$$;
+
+-- The platform's own trust flag for organizations (granted by FLOW, never self-assigned via UPDATE).
+create or replace function public.passport_org_is_verified(p_org_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path to 'pg_catalog', 'public'
+as $$
+  select exists (select 1 from public.organizations o where o.id = p_org_id and o.verified is true);
+$$;
+
+-- True when nobody who controls the SUBJECT also controls (speaks for) the VERIFIER.
+--   organization verifier -> the two control sets must be disjoint, and it cannot be the subject itself
+--   person verifier       -> that person must not control the subject
+--   system verifier       -> platform decision, always independent
+create or replace function public.passport_verifier_independent(p_subject_type text, p_subject_id uuid, p_verifier_type text, p_verifier_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path to 'pg_catalog', 'public'
+as $$
+  select case public.passport_canonical_subject_type(p_verifier_type)
+    when 'system' then true
+    when 'organization' then
+      p_verifier_id is not null
+      and not (public.passport_canonical_subject_type(p_subject_type) = 'organization' and p_subject_id = p_verifier_id)
+      and not exists (
+        select 1 from public.passport_org_controllers(p_verifier_id) c
+         where public.passport_controls(c.principal_id, p_subject_type, p_subject_id))
+    when 'person' then
+      p_verifier_id is not null and not public.passport_controls(p_verifier_id, p_subject_type, p_subject_id)
+    else false
+  end;
+$$;
+
+-- Internal decision helpers: no client role calls them directly (definer RPCs and triggers do).
+revoke all on function public.passport_org_controllers(uuid) from public, anon, authenticated;
+revoke all on function public.passport_controls(uuid, text, uuid) from public, anon, authenticated;
+revoke all on function public.passport_org_is_verified(uuid) from public, anon, authenticated;
+revoke all on function public.passport_verifier_independent(text, uuid, text, uuid) from public, anon, authenticated;
+grant execute on function public.passport_org_controllers(uuid) to service_role;
+grant execute on function public.passport_controls(uuid, text, uuid) to service_role;
+grant execute on function public.passport_org_is_verified(uuid) to service_role;
+grant execute on function public.passport_verifier_independent(text, uuid, text, uuid) to service_role;
+
 -- May the CALLER decide a verification of this method by this verifier ref,
 -- for a claim of this type? Entity-backed methods need an explicit authority
 -- assignment on the verifying entity — never a membership role.
@@ -420,10 +537,9 @@ as $$
   );
 $$;
 
--- anon: referenced by the public-read claims policy (parse-time EXECUTE check);
--- returns false for anon because passport_can_act_as_verifier requires auth.uid().
-revoke all on function public.passport_is_claim_reviewer(uuid) from public;
-grant execute on function public.passport_is_claim_reviewer(uuid) to anon, authenticated, service_role;
+-- (anon needs no grant: the base-table policy below is authenticated-only, and definer callers run as owner.)
+revoke all on function public.passport_is_claim_reviewer(uuid) from public, anon;
+grant execute on function public.passport_is_claim_reviewer(uuid) to authenticated, service_role;
 
 -- Reviewers can see the evidence attached to the claim they were asked to
 -- decide — and only that.
@@ -453,20 +569,21 @@ alter table public.passport_verifications enable row level security;
 
 revoke all on table public.passport_claims, public.passport_evidence, public.passport_claim_evidence, public.passport_verifications
   from public, anon, authenticated;
-grant select on table public.passport_claims to anon, authenticated;
-grant select on table public.passport_evidence, public.passport_claim_evidence, public.passport_verifications to authenticated;
+grant select on table public.passport_evidence, public.passport_claim_evidence, public.passport_verifications, public.passport_claims to authenticated;
 grant select on table public.passport_claims, public.passport_evidence, public.passport_claim_evidence, public.passport_verifications to service_role;
 
--- Claims: the owner sees everything of theirs; the world sees only claims the
--- subject explicitly made public AND that are currently verified, for a
--- subject that allows public display; a party asked to verify a claim sees it;
--- an AAL2 admin can audit. Everything else — drafts, rejected claims,
--- private claims — is invisible to everyone else.
-create policy passport_claims_read on public.passport_claims for select to anon, authenticated
+-- Claims: the RAW table is the internal canonical record, NOT the public API. RLS is row-level: it
+-- cannot hide columns, and a row "visible to the world" would hand out source_ref, issuer_id,
+-- created_by and the whole value. So no anonymous or stranger read of this table exists at all:
+--   * the owner sees everything of theirs;
+--   * a party asked to verify a claim sees it;
+--   * an AAL2 admin can audit;
+--   * the PUBLIC Passport is served only by passport_public_claims() (migration 120200), an
+--     explicit allow-list projection. Nothing else is public — drafts, rejected, private claims
+--     are invisible to everyone else.
+create policy passport_claims_read on public.passport_claims for select to authenticated
   using (
     public.passport_subject_owner_ok(subject_type, subject_id)
-    or (visibility = 'public' and status = 'verified' and (expires_at is null or expires_at > now())
-        and public.passport_subject_is_public(subject_type, subject_id))
     or public.passport_is_claim_reviewer(id)
     or public.is_flow_admin(true)
   );
@@ -759,6 +876,8 @@ begin
   if v_claim.status not in ('submitted', 'under_review') then
     return jsonb_build_object('ok', false, 'reason', 'claim_not_reviewable');
   end if;
+  -- One canonical spelling ('business' -> 'organization') so an alias can never dodge a check below.
+  p_verifier_type := public.passport_canonical_subject_type(p_verifier_type);
 
   select * into v_policy from public.passport_method_policy(p_method);
   if not found then
@@ -789,10 +908,19 @@ begin
     if not public.passport_entity_exists(p_verifier_type, p_verifier_id) then
       return jsonb_build_object('ok', false, 'reason', 'verifier_not_found');
     end if;
-    -- Independence: nobody verifies themselves, and an organization can't
-    -- verify a claim about itself.
+    -- Independence: nobody verifies themselves, an organization can't verify a claim about itself,
+    -- and — the part that is easy to get wrong — nobody can be verified by a party THEY CONTROL
+    -- (an organization they own/administer or hold authority in), whatever account does the deciding.
     if p_verifier_type = v_claim.subject_type and p_verifier_id = v_claim.subject_id then
       return jsonb_build_object('ok', false, 'reason', 'verifier_is_subject');
+    end if;
+    if not public.passport_verifier_independent(v_claim.subject_type, v_claim.subject_id, p_verifier_type, p_verifier_id) then
+      return jsonb_build_object('ok', false, 'reason', 'verifier_not_independent');
+    end if;
+    -- An organization's word only counts once FLOW has verified the organization (the established
+    -- rule of the legacy organization_verified tier: resolve_verification_as_organization).
+    if p_verifier_type = 'organization' and not public.passport_org_is_verified(p_verifier_id) then
+      return jsonb_build_object('ok', false, 'reason', 'verifier_not_verified');
     end if;
   end if;
 
@@ -890,13 +1018,22 @@ begin
   end if;
   select * into v_claim from public.passport_claims where id = v_ver.claim_id for update;
 
-  -- The subject can never decide their own claim, under any method.
-  if public.passport_subject_owner_ok(v_claim.subject_type, v_claim.subject_id) then
+  -- The subject can never decide their own claim, under any method — nor can anyone who controls the subject.
+  if public.passport_subject_owner_ok(v_claim.subject_type, v_claim.subject_id)
+     or public.passport_controls(auth.uid(), v_claim.subject_type, v_claim.subject_id) then
     return jsonb_build_object('ok', false, 'reason', 'self_verification_not_allowed');
   end if;
   if not public.passport_can_act_as_verifier(v_ver.verifier_type, v_ver.verifier_id, v_ver.method, v_claim.claim_type) then
     -- Indistinguishable from "no such request" to a caller who isn't the party.
     return jsonb_build_object('ok', false, 'reason', 'not_authorized');
+  end if;
+  -- Re-evaluated NOW, not trusted from request time: control and organization trust can change between
+  -- a request and its decision.
+  if not public.passport_verifier_independent(v_claim.subject_type, v_claim.subject_id, v_ver.verifier_type, v_ver.verifier_id) then
+    return jsonb_build_object('ok', false, 'reason', 'verifier_not_independent');
+  end if;
+  if v_ver.verifier_type = 'organization' and not public.passport_org_is_verified(v_ver.verifier_id) then
+    return jsonb_build_object('ok', false, 'reason', 'verifier_not_verified');
   end if;
   if v_ver.status <> 'requested' then
     return jsonb_build_object('ok', false, 'reason', 'not_pending');

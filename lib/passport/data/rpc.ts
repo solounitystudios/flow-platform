@@ -148,6 +148,8 @@ const REASON_MESSAGES: Record<string, string> = {
   method_not_available: "That kind of verification isn't available yet.",
   verifier_is_subject: "You can't verify your own claim.",
   self_verification_not_allowed: "You can't decide on your own claim.",
+  verifier_not_independent: "That party is connected to the person this concerns, so it can't verify it. Ask someone independent.",
+  verifier_not_verified: "That organization hasn't been verified by FLOW yet, so it can't verify claims.",
   verifier_not_found: "That reviewer couldn't be found.",
   already_requested: "You've already asked them to verify this.",
   already_attached: "That evidence is already attached.",
