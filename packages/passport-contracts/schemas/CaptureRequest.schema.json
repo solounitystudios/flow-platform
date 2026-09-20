@@ -39,7 +39,8 @@
             "venue",
             "event",
             "project",
-            "agency"
+            "agency",
+            "activity"
           ]
         },
         "id": {
@@ -70,7 +71,8 @@
             "venue",
             "event",
             "project",
-            "agency"
+            "agency",
+            "activity"
           ]
         },
         "id": {

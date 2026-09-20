@@ -39,6 +39,17 @@ and calls these same functions rather than reimplementing the logic inline,
 so a test failure here means the *actual* production decision changed, not
 a parallel copy that could drift.
 
+## Database replay + assertions (`tests/db/`)
+
+`npm run test:db` (`tests/db/replay.sh`) starts a **throwaway** local Postgres
+(the Supabase image family), applies every `supabase/migrations/*.sql` in
+order against an empty database, then runs each `tests/db/*.test.sql`. Those
+files impersonate real roles and JWT claims (`anon`, `authenticated`,
+`service_role`, AAL1/AAL2 admins) inside one rolled-back transaction, so they
+exercise RLS, grants and RPC authorization the way PostgREST would. It never
+touches a hosted project or real credentials, needs Docker, and is **not part
+of `npm run test` or CI** (yet) — run it before any PR that adds a migration.
+
 ## Commands
 
 | Command | Runs | Needs credentials? | Part of required CI? |

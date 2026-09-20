@@ -32,8 +32,11 @@ export const VerificationRecord = z.object({
   id: Uuid,
   claim_id: Uuid,
   method: VerificationMethod,
-  /** The person or entity that decided (or was asked to decide). */
-  verifier: SubjectRef,
+  /**
+   * The person or entity that decided (or was asked to decide), or the
+   * platform itself (`system`) for platform_verified decisions.
+   */
+  verifier: z.union([SubjectRef, z.object({ type: z.literal("system") })]),
   status: VerificationStatus,
   decision: VerificationDecision.nullable(),
   reason_code: z.string().max(64).nullable(),

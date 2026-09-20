@@ -15,7 +15,8 @@
         "venue",
         "event",
         "project",
-        "agency"
+        "agency",
+        "activity"
       ]
     },
     "id": {

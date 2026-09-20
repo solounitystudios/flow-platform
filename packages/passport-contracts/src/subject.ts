@@ -26,6 +26,8 @@ export const SUBJECT_TYPES = [
   "event",
   "project",
   "agency",
+  /** A Flow Activity (workshop, shift, class...) — a first-class participation object. */
+  "activity",
 ] as const;
 
 export const SubjectType = z.enum(SUBJECT_TYPES);

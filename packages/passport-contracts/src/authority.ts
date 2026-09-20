@@ -30,7 +30,7 @@ export type AuthorityType = z.infer<typeof AuthorityType>;
 export const AUTHORITY_SOURCES = ["record_ownership", "assigned", "delegated", "system"] as const;
 export const AuthoritySource = z.enum(AUTHORITY_SOURCES);
 
-export const AUTHORITY_STATUSES = ["active", "revoked"] as const;
+export const AUTHORITY_STATUSES = ["active", "revoked", "expired"] as const;
 
 /**
  * Narrowing of an assignment. Empty arrays mean "no restriction on that
@@ -54,6 +54,7 @@ export const AuthorityAssignment = z.object({
   starts_at: IsoTimestamp,
   expires_at: IsoTimestamp.nullable(),
   status: z.enum(AUTHORITY_STATUSES),
+  revoke_reason: z.string().max(200).nullable(),
   revoked_at: IsoTimestamp.nullable(),
 });
 export type AuthorityAssignment = z.infer<typeof AuthorityAssignment>;
