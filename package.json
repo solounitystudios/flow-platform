@@ -13,6 +13,7 @@
     "test:flow:quick": "vitest run tests/unit tests/security",
     "test:integration": "vitest run tests/integration",
     "test:db": "tests/db/replay.sh",
+    "test:e2e:gateway": "tests/e2e/run-gateway-e2e.sh",
     "contracts:schemas": "UPDATE_SCHEMAS=1 vitest run tests/unit/passport-contracts.test.ts"
   },
   "dependencies": {
