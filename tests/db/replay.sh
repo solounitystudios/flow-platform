@@ -47,7 +47,7 @@ fail=0
 for t in "$ROOT"/tests/db/*.test.sql; do
   [ -e "$t" ] || continue
   echo "assert: $(basename "$t")"
-  if ! "${PSQL[@]}" < "$t"; then fail=1; fi
+  if ! cat "$ROOT/tests/db/_helpers.sql" "$t" | "${PSQL[@]}"; then fail=1; fi
 done
 [ "$fail" = "0" ] && echo "DB assertions OK" || { echo "DB assertions FAILED"; exit 1; }
 [ "${KEEP:-0}" = "1" ] && echo "container kept: $NAME"
