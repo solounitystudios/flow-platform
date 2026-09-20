@@ -332,7 +332,7 @@ export interface ConnectorView {
     | { kind: "none"; text: string }
     | { kind: "unavailable"; text: string };
   capabilities: CapabilityView;
-  capabilitySource: "gateway_configuration" | "connection_record" | "none";
+  capabilitySource: "gateway_configuration" | "none";
   capabilityNote: string | null;
   needsAttention: boolean;
   attentionReasons: string[];
@@ -391,9 +391,12 @@ function buildConnector(key: string, record: ConnectionRecord | null, readOk: bo
     capabilities = describeCapabilities(configured.scopes);
     capabilitySource = "gateway_configuration";
   } else if (record) {
-    capabilities = describeCapabilities(record.scope);
-    capabilitySource = "connection_record";
-    capabilityNote = "Recorded on the connection. The gateway is not currently configured to accept this connector, so none of this can be used until it is.";
+    // The scopes stored on a record are a DEFAULT the database writes at first contact (it does not know what
+    // the connector's key was granted), so they are not evidence of any capability. With no gateway
+    // configuration for this connector the gateway accepts nothing from it: the truthful answer is "nothing".
+    capabilities = describeCapabilities([]);
+    capabilitySource = "none";
+    capabilityNote = "The gateway is not configured for this connector, so it cannot currently do anything. (The connection record lists default scopes written at first contact; those are not a grant and are not shown as capabilities.)";
   } else {
     capabilities = describeCapabilities([]);
     capabilitySource = "none";

@@ -136,7 +136,7 @@ describe("explainClaim", () => {
 describe("contextual projections", () => {
   const row = (over: Partial<ClaimRowInput> = {}): ClaimRowInput => ({
     id: U.claim, claim_type: "participation.activity", value: { title: "Welding workshop", activity_type: "workshop", activity_id: "SECRET-ACTIVITY-ID", internal: "x" },
-    status: "verified", effective_at: "2026-08-01T00:00:00Z", expires_at: null, visibility: "public", sensitivity: "standard", created_at: "2026-08-01T00:00:00Z", ...over,
+    status: "verified", effective_at: "2026-08-01T00:00:00Z", expires_at: null, visibility: "public", sensitivity: "standard", source_system: "flow_platform", created_at: "2026-08-01T00:00:00Z", ...over,
   });
 
   it("names the implemented views and marks every other as designed — nothing pretends to exist", () => {

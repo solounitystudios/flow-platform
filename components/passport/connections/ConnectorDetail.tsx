@@ -9,7 +9,6 @@ export type HistoryState = { state: "ok"; events: IntegrationEventView[] } | { s
 
 const SOURCE_TEXT = {
   gateway_configuration: "What the gateway currently enforces for this connector.",
-  connection_record: null,
   none: "No scopes: nothing is registered for this connector.",
 } as const;
 

@@ -294,10 +294,14 @@ describe("capabilities and scopes", () => {
     expect(view.capabilitySource).toBe("gateway_configuration");
     expect(view.capabilities.can.map((c) => c.scope)).toEqual(["evidence:read"]);
   });
-  it("falls back to the record's scopes, and says they cannot be used, when the gateway is not configured for the connector", () => {
-    const view = buildConnectionsCenter(input({ records: { ok: true, rows: [rec()], unreadable: 0 }, gateway: { credentialsPresent: true, config: { state: "not_configured" } } })).needsAttention[0];
-    expect(view.capabilitySource).toBe("connection_record");
-    expect(view.capabilityNote).toContain("none of this can be used");
+  it("does NOT present the record's default scopes as capabilities when the gateway is not configured for the connector", () => {
+    // The DB writes those scopes as a fixed default at first contact; they are not a grant. With no
+    // configuration the gateway accepts nothing from this connector, so the truthful answer is "nothing".
+    const view = buildConnectionsCenter(input({ records: { ok: true, rows: [rec({ scope: [...GATEWAY_SCOPES] })], unreadable: 0 }, gateway: { credentialsPresent: true, config: { state: "not_configured" } } })).needsAttention[0];
+    expect(view.capabilitySource).toBe("none");
+    expect(view.capabilities.can).toEqual([]);
+    expect(view.capabilities.flags.canSubmitEvidence).toBe(false);
+    expect(view.capabilityNote).toContain("not a grant");
   });
 });
 
