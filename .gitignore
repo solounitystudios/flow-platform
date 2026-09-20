@@ -25,3 +25,4 @@ next-env.d.ts
 /supabase/.temp/
 .vercel
 .env*
+.next-e2e.log
