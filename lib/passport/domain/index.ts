@@ -9,3 +9,4 @@ export * from "./legacy-adapters";
 export * from "./relationships";
 export * from "./explanation";
 export * from "./projections";
+export * from "./connections-center";

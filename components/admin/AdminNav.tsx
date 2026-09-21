@@ -27,6 +27,7 @@ export const ADMIN_NAV_GROUPS: SidebarNavGroup[] = [
       { href: "/admin/audit", label: "Reports", icon: "scroll-text" },
       { href: "/admin/verification", label: "Verification", icon: "shield-check" },
       { href: "/admin/evidence", label: "Proof & Evidence", icon: "badge-check" },
+      { href: "/admin/connections", label: "Connections", icon: "cable" },
     ],
   },
   {

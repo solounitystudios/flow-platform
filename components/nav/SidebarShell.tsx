@@ -21,6 +21,7 @@ import {
   Briefcase,
   CalendarDays,
   Building2,
+  Cable,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -46,6 +47,7 @@ const ICONS = {
   briefcase: Briefcase,
   "calendar-days": CalendarDays,
   "building-2": Building2,
+  cable: Cable,
 } as const satisfies Record<string, LucideIcon>;
 
 export type SidebarIconName = keyof typeof ICONS;
