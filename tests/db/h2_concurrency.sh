@@ -5,6 +5,10 @@
 # opens genuinely separate database sessions (one `docker exec psql` each) against the THROWAWAY container that
 # tests/db/replay.sh created, COMMITS its own fixtures there, and races them. It never touches a hosted project.
 #
+# It COMMITS rows into the throwaway database and the ledger is append-only, so it leaves events behind that break the other suites'
+# absolute-count assertions if they run afterwards in the same database. replay.sh therefore runs it last, and skips it when a
+# container is being KEPT for further work (KEEP=1) unless CONCURRENCY=1 is also set.
+#
 # Usage: tests/db/h2_concurrency.sh <container-name>      (replay.sh calls this after the DB assertions pass)
 set -euo pipefail
 
