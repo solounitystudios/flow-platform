@@ -78,7 +78,10 @@ begin
   -- information; a person issuer is named only to viewers with a relationship.
   v_issuer := case v_claim.issuer_kind
     when 'subject' then jsonb_build_object('kind', 'subject', 'label', null)
-    when 'external' then jsonb_build_object('kind', 'external', 'label', v_claim.issuer_label)
+    -- An external issuer's label is free text supplied by an integration, not a name Flow vouches for: only viewers
+    -- with a relationship see it. (Unreachable for a PUBLIC claim today — the projection admits only claims Passport
+    -- derived itself, whose issuer is always an entity — so this is default-deny defense in depth.)
+    when 'external' then jsonb_build_object('kind', 'external', 'label', case when v_full then v_claim.issuer_label else null end)
     else jsonb_build_object(
       'kind', 'entity',
       'entity_type', v_claim.issuer_type,
