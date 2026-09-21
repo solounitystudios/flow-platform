@@ -104,16 +104,27 @@ export interface PublicClaimView {
 }
 
 /**
- * The public face of a claim, or null when it must not appear publicly at all:
- * only claims that are explicitly public, currently verified, unexpired and
- * standard-sensitivity qualify. Deliberately carries no status, sensitivity,
- * source or reason — a public viewer is told a claim is verified by its very
- * presence, and nothing else.
+ * One row of passport_public_claims(): the DATABASE's allow-listed public shape. Eligibility — the Passport
+ * itself is public, the claim is public + verified + unexpired + standard-sensitivity + Passport-derived, and
+ * the viewer isn't blocked — is decided there, where it cannot be bypassed; the raw passport_claims table is not
+ * readable by the public at all (RLS cannot hide columns, so it must never be the public API).
  */
-export function projectClaimForPublic(row: ClaimRowInput, now: Date): PublicClaimView | null {
-  if (row.visibility !== "public" || row.sensitivity !== "standard") return null;
-  if (effectiveClaimStatus(row, now) !== "verified") return null;
-  return { id: row.id, claim_type: row.claim_type, title: claimTitle(row.claim_type, row.value, "public"), effective_at: row.effective_at, expires_at: row.expires_at };
+export interface PublicClaimRow {
+  id: string;
+  claim_type: string;
+  effective_at: string | null;
+  expires_at: string | null;
+  public_value: Record<string, unknown> | null;
+}
+
+/**
+ * The public face of a claim. The title is built ONLY from the fields allow-listed for the claim type
+ * (default deny), so even a row that over-returned could not put a private field on screen. Deliberately carries
+ * no status, sensitivity, source or reason — a public viewer is told a claim is verified by its very presence,
+ * and nothing else.
+ */
+export function presentPublicClaim(row: PublicClaimRow): PublicClaimView {
+  return { id: row.id, claim_type: row.claim_type, title: claimTitle(row.claim_type, row.public_value, "public"), effective_at: row.effective_at, expires_at: row.expires_at };
 }
 
 // ── credential-check view (consent-bound answers) ───────────────────────

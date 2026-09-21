@@ -60,9 +60,9 @@ begin
     v_viewer := 'admin';
   elsif public.passport_is_claim_reviewer(v_claim.id) then
     v_viewer := 'reviewer';
-  elsif v_claim.visibility = 'public' and v_claim.status = 'verified'
-        and (v_claim.expires_at is null or v_claim.expires_at > now())
-        and public.passport_subject_is_public(v_claim.subject_type, v_claim.subject_id) then
+  -- Public eligibility is delegated to the canonical M1 projection so the explanation
+  -- can never disclose a claim that passport_public_claims() would hide.
+  elsif exists (select 1 from public.passport_public_claims(null, v_claim.id, 1)) then
     v_viewer := 'public';
   else
     return jsonb_build_object('ok', false, 'reason', 'not_found');

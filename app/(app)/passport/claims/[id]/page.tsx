@@ -3,8 +3,8 @@ import { notFound, redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/data/profile";
-import { getClaimExplanation, getClaimRow } from "@/lib/passport/data";
-import { claimTitle } from "@/lib/passport/domain";
+import { getClaimExplanation, getClaimRow, getPublicClaimById } from "@/lib/passport/data";
+import { claimTitle, presentPublicClaim } from "@/lib/passport/domain";
 import { ClaimExplanationCard } from "@/components/passport/ClaimExplanationCard";
 import { ClaimVisibilityToggle } from "@/components/passport/ClaimVisibilityToggle";
 import { Card, CardBody } from "@/components/ui/Card";
@@ -23,8 +23,10 @@ export default async function ClaimExplanationPage({ params }: { params: Promise
   if (!explanation) notFound();
 
   const isOwner = explanation.viewer === "owner";
+  // Owner / asked reviewer / admin can read the canonical row; a stranger's title comes from the public projection.
   const row = await getClaimRow(supabase, id);
-  const title = row ? claimTitle(row.claim_type, row.value, isOwner ? "owner" : "public") : "Passport claim";
+  const publicRow = row ? null : await getPublicClaimById(supabase, id);
+  const title = row ? claimTitle(row.claim_type, row.value, isOwner ? "owner" : "public") : publicRow ? presentPublicClaim(publicRow).title : "Passport claim";
   const canShare = isOwner && explanation.claim.effective_status === "verified" && explanation.claim.sensitivity === "standard";
 
   return (

@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { Lock } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getPublicClaimsForProfile } from "@/lib/passport/data";
-import { projectClaimForPublic, type PublicClaimView } from "@/lib/passport/domain";
+import { presentPublicClaim } from "@/lib/passport/domain";
 import { getCurrentUser, getFullProfileByUsername } from "@/lib/data/profile";
 import { getReliabilityBreakdown } from "@/lib/data/reliability";
 import { getConnectionStatus, getSharedSkills } from "@/lib/data/connections";
@@ -94,13 +94,10 @@ export default async function PublicPassportPage({ params }: { params: Promise<{
     );
   }
 
-  // Only reached for a public Passport. RLS independently limits these rows to
-  // public + verified + unexpired; the projection then drops anything not
-  // explicitly shareable and strips every field the public may not see.
-  const now = new Date();
-  const publicClaims = (await getPublicClaimsForProfile(await createClient(), profile.id))
-    .map((row) => projectClaimForPublic(row, now))
-    .filter((claim): claim is PublicClaimView => claim !== null);
+  // Only reached for a public Passport. The rows come from the allow-listed passport_public_claims() projection —
+  // the database has already decided which claims are shareable and returns nothing else; the raw claims table is
+  // not public. presentPublicClaim then builds each title from the allow-listed fields only.
+  const publicClaims = (await getPublicClaimsForProfile(await createClient(), profile.id)).map(presentPublicClaim);
 
   return (
     <PassportShell>

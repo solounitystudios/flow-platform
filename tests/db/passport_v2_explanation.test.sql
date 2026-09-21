@@ -13,12 +13,21 @@ insert into auth.users (id, email) values
 update public.profiles set full_name = 'Sam Subject' where id = 'a0000000-0000-4000-8000-000000000001';
 update public.profiles set full_name = 'Pat Peer' where id = 'c0000000-0000-4000-8000-000000000003';
 insert into public.organizations (id, owner_id, name) values ('01000000-0000-4000-8000-000000000001', 'b0000000-0000-4000-8000-000000000002', 'Buffalo Welding Guild');
+
+-- This fixture represents an organization Flow has independently verified.
+-- Organization verification cannot be self-assigned by the organization.
+select set_config('flow.internal_write', 'true', true);
+update public.organizations
+   set verified = true
+ where id = '01000000-0000-4000-8000-000000000001';
+select set_config('flow.internal_write', '', true);
+
 insert into public.admins (profile_id, role, active) values ('f0000000-0000-4000-8000-000000000006', 'admin', true);
 
 -- an org-verified public license claim with two pieces of evidence (one with a sensitive artifact ref)
 insert into public.passport_claims (id, subject_type, subject_id, claim_type, value, issuer_kind, visibility, status, effective_at, expires_at, source_system, source_ref, created_by)
   values ('c1000000-0000-4000-8000-000000000001', 'person', 'a0000000-0000-4000-8000-000000000001', 'credential.license', '{"class":"CDL-A"}', 'subject', 'public', 'submitted',
-          now() - interval '5 days', now() + interval '200 days', 'manual', 'INTERNAL-REF-77', 'a0000000-0000-4000-8000-000000000001');
+          now() - interval '5 days', now() + interval '200 days', 'flow_platform', 'INTERNAL-REF-77', 'a0000000-0000-4000-8000-000000000001');
 insert into public.passport_evidence (id, subject_type, subject_id, evidence_type, source_kind, artifacts, provenance, sensitivity, status, created_by) values
   ('e1000000-0000-4000-8000-0000000000e1', 'person', 'a0000000-0000-4000-8000-000000000001', 'document', 'manual_upload',
    '[{"artifact_id":"doc-1","kind":"document","media_type":"application/pdf","storage":{"provider":"flow_storage","ref":"evidence/SECRET-PATH/license.pdf"}}]', '{"note":"PRIVATE-NOTE-do-not-leak"}', 'sensitive', 'received', 'a0000000-0000-4000-8000-000000000001'),
@@ -103,6 +112,52 @@ begin
   -- public claim only through the public view (no evidence kinds, no history)
   r := public.passport_claim_explanation(pub);
   perform passport_test.check_true((r ->> 'viewer') = 'public' and (r -> 'evidence') = '{"count": 2}'::jsonb, 'the peer sees the OTHER claim only through the public view');
+end $$;
+
+-- ── M1 parity: explanation can never disclose what the canonical public projection hides ──
+-- Two claims that are public + verified + unexpired on a public passport, but that
+-- passport_public_claims() (the M1 boundary) deliberately rejects:
+--   * a MANUAL claim: a member can write any title, so it is never a trusted public headline
+--   * a SENSITIVE platform-derived claim
+-- passport_claim_explanation() delegates its public branch to the projection, so both must be
+-- indistinguishable from a nonexistent claim to anon and to a stranger.
+select passport_test.reset();  -- the previous block ends impersonating a peer; fixtures are written as the owner role
+insert into public.passport_claims (id, subject_type, subject_id, claim_type, value, issuer_kind, visibility, status, sensitivity, effective_at, source_system, created_by) values
+  ('c3000000-0000-4000-8000-000000000003', 'person', 'a0000000-0000-4000-8000-000000000001', 'attestation.peer', '{"title":"Forged headline"}', 'subject', 'public', 'submitted', 'standard', now(), 'manual', 'a0000000-0000-4000-8000-000000000001'),
+  ('c4000000-0000-4000-8000-000000000004', 'person', 'a0000000-0000-4000-8000-000000000001', 'attestation.peer', '{"title":"Sensitive detail"}', 'subject', 'public', 'submitted', 'sensitive', now(), 'flow_platform', 'a0000000-0000-4000-8000-000000000001');
+insert into public.passport_verifications (claim_id, method, verifier_type, verifier_id, status, decision, reason_code, decided_at, decided_by) values
+  ('c3000000-0000-4000-8000-000000000003', 'peer_attested', 'person', 'c0000000-0000-4000-8000-000000000003', 'completed', 'verified', 'known_personally', now(), 'c0000000-0000-4000-8000-000000000003'),
+  ('c4000000-0000-4000-8000-000000000004', 'peer_attested', 'person', 'c0000000-0000-4000-8000-000000000003', 'completed', 'verified', 'known_personally', now(), 'c0000000-0000-4000-8000-000000000003');
+update public.passport_claims set status = 'verified' where id in ('c3000000-0000-4000-8000-000000000003', 'c4000000-0000-4000-8000-000000000004');
+
+do $$
+declare pub uuid := 'c1000000-0000-4000-8000-000000000001';
+        manual_claim uuid := 'c3000000-0000-4000-8000-000000000003'; sensitive_claim uuid := 'c4000000-0000-4000-8000-000000000004';
+        x uuid := 'd0000000-0000-4000-8000-000000000004'; nothing jsonb; c uuid;
+begin
+  perform passport_test.check_true((select status from public.passport_claims where id = manual_claim) = 'verified'
+    and (select visibility from public.passport_claims where id = manual_claim) = 'public'
+    and (select source_system from public.passport_claims where id = manual_claim) = 'manual', 'fixture: the manual claim is verified + public (only its source makes it ineligible)');
+
+  perform passport_test.as_anon();
+  nothing := public.passport_claim_explanation(gen_random_uuid());
+  -- positive control: the claim the projection accepts is explained, and only that one
+  perform passport_test.check_true((select count(*) from public.passport_public_claims(null, pub, 1)) = 1, 'control: the projection returns the platform-derived public claim');
+  perform passport_test.check_true((public.passport_claim_explanation(pub) ->> 'viewer') = 'public', 'control: ... and the explanation serves it to the public');
+
+  foreach c in array array[manual_claim, sensitive_claim] loop
+    perform passport_test.as_anon();
+    perform passport_test.check_true((select count(*) from public.passport_public_claims(null, c, 1)) = 0, 'the projection rejects this claim for anon');
+    perform passport_test.check_true(public.passport_claim_explanation(c) = nothing, 'the explanation is byte-identical to a nonexistent claim for anon (no oracle, no weaker path)');
+    perform passport_test.as_user(x);
+    perform passport_test.check_true((select count(*) from public.passport_public_claims(null, c, 1)) = 0, 'the projection rejects this claim for a stranger');
+    perform passport_test.check_true(public.passport_claim_explanation(c) = nothing, 'the explanation is byte-identical to a nonexistent claim for a stranger');
+  end loop;
+
+  -- the owner is unaffected: they can still ask why about their own manual claim
+  perform passport_test.as_user('a0000000-0000-4000-8000-000000000001');
+  perform passport_test.check_true((public.passport_claim_explanation(manual_claim) ->> 'viewer') = 'owner', 'the owner can still explain their own manual claim');
+  perform passport_test.reset();
 end $$;
 
 do $$

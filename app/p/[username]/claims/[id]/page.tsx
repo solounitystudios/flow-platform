@@ -3,8 +3,8 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { ArrowLeft } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
-import { getClaimExplanation, getClaimRow, getProfileIdByUsername } from "@/lib/passport/data";
-import { claimTitle } from "@/lib/passport/domain";
+import { getClaimExplanation, getClaimRow, getProfileIdByUsername, getPublicClaimById } from "@/lib/passport/data";
+import { claimTitle, presentPublicClaim } from "@/lib/passport/domain";
 import { ClaimExplanationCard } from "@/components/passport/ClaimExplanationCard";
 import { PublicPassportShell } from "@/components/passport/PublicPassportShell";
 import { isUuid } from "@/lib/geo";
@@ -28,8 +28,10 @@ export default async function PublicClaimExplanationPage({ params }: { params: P
   // The URL must be honest: a claim is only ever shown under the Passport it belongs to.
   if (explanation.claim.subject.type !== "person" || explanation.claim.subject.id !== profileId) notFound();
 
-  const row = await getClaimRow(supabase, id);
-  const title = row ? claimTitle(row.claim_type, row.value, explanation.viewer === "owner" ? "owner" : "public") : "Passport claim";
+  // The title comes from the allow-listed public projection; only the OWNER may read the canonical row.
+  const publicRow = await getPublicClaimById(supabase, id, profileId);
+  const ownerRow = !publicRow && explanation.viewer === "owner" ? await getClaimRow(supabase, id) : null;
+  const title = publicRow ? presentPublicClaim(publicRow).title : ownerRow ? claimTitle(ownerRow.claim_type, ownerRow.value, "owner") : "Passport claim";
 
   return (
     <PublicPassportShell>

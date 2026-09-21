@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import { ClaimExplanation, VERIFICATION_METHODS } from "@flow/passport-contracts";
@@ -9,11 +9,13 @@ import {
   buildCredentialCheckView,
   claimTitle,
   explainClaim,
+  presentPublicClaim,
   projectClaimForOwner,
-  projectClaimForPublic,
   reasonLabel,
   type ClaimRowInput,
+  type PublicClaimRow,
 } from "@/lib/passport/domain";
+import { getPublicClaimById, getPublicClaimsForProfile } from "@/lib/passport/data/claims";
 
 const U = { claim: "11111111-1111-4111-8111-111111111111", subject: "22222222-2222-4222-8222-222222222222", ev: "33333333-3333-4333-8333-333333333333" };
 const NOW = new Date("2026-09-01T12:00:00Z");
@@ -148,28 +150,58 @@ describe("contextual projections", () => {
     expect(view).toMatchObject({ title: "Welding workshop (Workshop)", status: "verified", visibility: "private" });
   });
 
+  // The public read path is passport_public_claims() (M1): it returns rows already restricted to eligible claims
+  // (public + verified + unexpired + standard + Passport-derived, public Passport, not blocked). Eligibility is
+  // asserted in tests/db; here we prove the presenter/data layer add no widening of their own.
+  const publicRow = (over: Partial<PublicClaimRow> = {}): PublicClaimRow => ({
+    id: U.claim, claim_type: "participation.activity", effective_at: "2026-08-01T00:00:00Z", expires_at: null,
+    // deliberately OVER-returned: a private id and an unlisted key the presenter must never surface
+    public_value: { title: "Welding workshop", activity_type: "workshop", activity_id: "SECRET-ACTIVITY-ID", internal: "x" }, ...over,
+  });
+
   it("public view exposes only allow-listed value fields", () => {
-    const view = projectClaimForPublic(row(), NOW);
-    expect(view?.title).toBe("Welding workshop (Workshop)");
+    const view = presentPublicClaim(publicRow());
+    expect(view.title).toBe("Welding workshop (Workshop)");
     expect(JSON.stringify(view)).not.toContain("SECRET-ACTIVITY-ID");
     expect(JSON.stringify(view)).not.toContain("internal");
-    expect(Object.keys(view ?? {}).sort()).toEqual(["claim_type", "effective_at", "expires_at", "id", "title"]);
+    expect(Object.keys(view).sort()).toEqual(["claim_type", "effective_at", "expires_at", "id", "title"]);
   });
 
   it("default-denies unlisted claim types: no value fields at all reach the public", () => {
-    const unlisted = projectClaimForPublic(row({ claim_type: "credential.license", value: { title: "Secret licence number 12345", class: "CDL-A" } }), NOW);
-    expect(unlisted?.title).toBe("Credential — license");
+    const unlisted = presentPublicClaim(publicRow({ claim_type: "credential.license", public_value: { title: "Secret licence number 12345", class: "CDL-A" } }));
+    expect(unlisted.title).toBe("Credential — license");
     expect(JSON.stringify(unlisted)).not.toContain("12345");
     expect(Object.keys(PUBLIC_VALUE_FIELDS)).toEqual(["participation.activity"]);
+    expect(presentPublicClaim(publicRow({ public_value: null })).title).toBe("Completed a Flow activity");
   });
 
-  it("the public never sees private, unverified, expired or sensitive claims", () => {
-    expect(projectClaimForPublic(row({ visibility: "private" }), NOW)).toBeNull();
-    expect(projectClaimForPublic(row({ status: "submitted" }), NOW)).toBeNull();
-    expect(projectClaimForPublic(row({ status: "rejected" }), NOW)).toBeNull();
-    expect(projectClaimForPublic(row({ status: "revoked" }), NOW)).toBeNull();
-    expect(projectClaimForPublic(row({ expires_at: "2026-08-15T00:00:00Z" }), NOW)).toBeNull();
-    expect(projectClaimForPublic(row({ sensitivity: "sensitive" }), NOW)).toBeNull();
+  it("the public data layer reads ONLY the allow-listed projection, never the raw claims table", async () => {
+    const rpc = vi.fn().mockResolvedValue({ data: [{ ...publicRow(), source_ref: "INTERNAL-REF-77", created_by: "someone", value: { class: "CDL-A" } }], error: null });
+    const from = vi.fn(() => { throw new Error("the public path must not read a table"); });
+    const client = { rpc, from } as never;
+
+    const list = await getPublicClaimsForProfile(client, U.subject);
+    expect(rpc).toHaveBeenCalledWith("passport_public_claims", { p_profile_id: U.subject, p_limit: 20 });
+    expect(from).not.toHaveBeenCalled();
+    // columns the database might one day over-return are stripped before any component can see them
+    expect(Object.keys(list[0]).sort()).toEqual(["claim_type", "effective_at", "expires_at", "id", "public_value"]);
+    expect(JSON.stringify(list)).not.toContain("INTERNAL-REF-77");
+
+    const one = await getPublicClaimById(client, U.claim, U.subject);
+    expect(rpc).toHaveBeenLastCalledWith("passport_public_claims", { p_claim_id: U.claim, p_profile_id: U.subject, p_limit: 1 });
+    expect(one?.id).toBe(U.claim);
+    expect(from).not.toHaveBeenCalled();
+  });
+
+  it("the public data layer fails closed: a database error or a malformed row yields nothing", async () => {
+    const errored = { rpc: vi.fn().mockResolvedValue({ data: null, error: { message: "boom" } }) } as never;
+    expect(await getPublicClaimsForProfile(errored, U.subject)).toEqual([]);
+    expect(await getPublicClaimById(errored, U.claim)).toBeNull();
+    const malformed = { rpc: vi.fn().mockResolvedValue({ data: [{ id: "not-a-uuid", claim_type: "x" }], error: null }) } as never;
+    expect(await getPublicClaimsForProfile(malformed, U.subject)).toEqual([]);
+    // a hidden claim and a nonexistent one are the same empty answer (no existence oracle)
+    const empty = { rpc: vi.fn().mockResolvedValue({ data: [], error: null }) } as never;
+    expect(await getPublicClaimById(empty, U.claim)).toBeNull();
   });
 
   it("owner view shows an overdue verified claim as expired even before any sweep", () => {

@@ -5568,6 +5568,7 @@ export const Constants = {
   },
 } as const
 
+
 export type PassportSummary = DefaultSchema["Views"]["passport_summary"]["Row"];
 export type ReliabilityBreakdown = DefaultSchema["Views"]["reliability_breakdown"]["Row"];
 

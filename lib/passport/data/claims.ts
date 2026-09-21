@@ -1,7 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { z } from "zod";
 import { ClaimExplanation } from "@flow/passport-contracts";
 import type { Database } from "@/lib/database.types";
-import type { ClaimRowInput } from "@/lib/passport/domain";
+import type { ClaimRowInput, PublicClaimRow } from "@/lib/passport/domain";
 
 type Client = SupabaseClient<Database>;
 
@@ -22,9 +23,9 @@ function toRow(row: Database["public"]["Tables"]["passport_claims"]["Row"]): Cla
 }
 
 /**
- * The person's own canonical claims. RLS returns the owner's claims (and
- * would also return other people's PUBLIC claims), so the subject filter is
- * explicit. Newest first.
+ * The person's own canonical claims. RLS returns only claims the caller owns (or was asked to review); the subject
+ * filter is explicit anyway. Newest first. This is the OWNER representation — full rows, read from the canonical
+ * table. Public data never comes from here (see getPublicClaimsForProfile).
  */
 export async function getMyClaims(supabase: Client, profileId: string): Promise<ClaimRowInput[]> {
   const { data, error } = await supabase
@@ -41,26 +42,43 @@ export async function getMyClaims(supabase: Client, profileId: string): Promise<
 }
 
 /**
- * Claims a stranger may see on someone's public Passport. RLS already limits
- * this to public + verified + unexpired claims of a public passport; the
- * filters here just make the intent explicit and cheap. The caller still
- * projects each row through projectClaimForPublic.
+ * The wire shape of passport_public_claims(). `.strip()` (zod's default for objects) drops anything the database
+ * might one day over-return, so an extra column can never reach a component; a row that doesn't match at all makes
+ * the whole result empty (fail closed) rather than half-trusted.
  */
-export async function getPublicClaimsForProfile(supabase: Client, profileId: string): Promise<ClaimRowInput[]> {
-  const { data, error } = await supabase
-    .from("passport_claims")
-    .select(CLAIM_COLUMNS)
-    .eq("subject_type", "person")
-    .eq("subject_id", profileId)
-    .eq("visibility", "public")
-    .eq("status", "verified")
-    .order("effective_at", { ascending: false, nullsFirst: false })
-    .limit(20);
+const PublicClaimRowSchema = z.object({
+  id: z.string().uuid(),
+  claim_type: z.string().min(1),
+  effective_at: z.string().nullable(),
+  expires_at: z.string().nullable(),
+  public_value: z.record(z.string(), z.unknown()).nullable(),
+});
+
+async function callPublicClaims(supabase: Client, args: { p_profile_id?: string; p_claim_id?: string; p_limit: number }): Promise<PublicClaimRow[]> {
+  const { data, error } = await supabase.rpc("passport_public_claims", args);
   if (error) {
-    console.error("[getPublicClaimsForProfile]", error.message);
+    // The fact, not the message body: it can carry schema detail.
+    console.error("[passport_public_claims] query failed");
     return [];
   }
-  return (data ?? []).map((row) => toRow(row as Database["public"]["Tables"]["passport_claims"]["Row"]));
+  const parsed = z.array(PublicClaimRowSchema).safeParse(data ?? []);
+  if (!parsed.success) {
+    console.error("[passport_public_claims] response violated the contract");
+    return [];
+  }
+  return parsed.data;
+}
+
+/**
+ * Claims a stranger may see on someone's public Passport, from the ONLY public read path: the allow-listed
+ * passport_public_claims() projection. The raw passport_claims table is not readable by the public (RLS is
+ * row-level; it cannot hide source_ref, issuer_id, created_by or the raw value).
+ */
+export const getPublicClaimsForProfile = (supabase: Client, profileId: string) => callPublicClaims(supabase, { p_profile_id: profileId, p_limit: 20 });
+
+/** One public claim by id (for its explanation page), or null when it isn't publicly visible — same answer as "doesn't exist". */
+export async function getPublicClaimById(supabase: Client, claimId: string, profileId?: string): Promise<PublicClaimRow | null> {
+  return (await callPublicClaims(supabase, { p_claim_id: claimId, p_profile_id: profileId, p_limit: 1 }))[0] ?? null;
 }
 
 /**
@@ -86,9 +104,9 @@ export async function getClaimExplanation(supabase: Client, claimId: string): Pr
 }
 
 /**
- * One claim row, as RLS lets THIS viewer read it (null when they can't). Used
- * only to title the explanation page; what the viewer may be told about the
- * claim's provenance still comes from the explanation RPC.
+ * One claim row as RLS lets THIS viewer read it: the owner (or an asked reviewer / admin) gets the canonical row;
+ * everyone else gets null. Used only to title the owner's explanation page; what a viewer may be told about a
+ * claim's provenance comes from the explanation RPC, and a stranger's title from getPublicClaimById.
  */
 export async function getClaimRow(supabase: Client, claimId: string): Promise<ClaimRowInput | null> {
   const { data } = await supabase.from("passport_claims").select(CLAIM_COLUMNS).eq("id", claimId).maybeSingle();
