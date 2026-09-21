@@ -4,9 +4,11 @@ Reviewed: 2026-09-20 · stack tip `c52d59f` (#32) · method: read all seven migr
 freshly-replayed database** (catalog interrogation, 35+ executable probes, real-concurrency probes) and mutation-test the
 tests themselves. Evidence: `tests/db/repros/`. Fixes: `20260919120700_passport_v2_review_fixes.sql` + code changes in this PR.
 
-> **Status update — 2026-09-21: H2 and M1 are remediated.** The register below is the review as written on 2026-09-20; its
-> H2 and M1 rows are annotated with their current status and the full remediation record is in
-> [Addendum: H2 / M1 remediation](#addendum-h2--m1-remediation). One residual (the DB half of M4/R11) remains open.
+> **Status update — 2026-09-21 (corrected after an independent QA pass of the published stack).** M1 is remediated. H2 is
+> remediated **for control independence** (a person cannot be verified by an organization they control), but its second leg — the verifier
+> organization must be FLOW-verified — is **bypassable by `INSERT`** (QA F1, HIGH, open). The register below is the review as written on
+> 2026-09-20 with H2/M1 annotated; the record is in [Addendum: H2 / M1 remediation](#addendum-h2--m1-remediation) and
+> [QA pass of the published stack](#qa-pass-of-the-published-stack). Open: F1 (HIGH), R11-DB / F2 (MEDIUM), F3 (LOW).
 
 **Verdict: no BLOCKER. Two HIGH findings — one fixed here, one open and needing a policy decision. The stack is _not_ ready to
 merge until the open HIGH is decided and the merge preconditions at the bottom are met.**
@@ -31,7 +33,7 @@ test, build) ran **only on #27** (it triggers on PRs to `main`); #28–#32 have 
 | # | Sev | Where | Finding | Status |
 |---|---|---|---|---|
 | H1 | **HIGH** | #30 (`passport_revoke_consent`, gateway RPCs) | **Consent is not evaluated at the point of use for capture requests.** A subject revokes (or the grant expires); the capture request stays open ≤14 days; the gateway keeps serving it and ingesting evidence about the subject. *Repro R05: after revoke, status=`requested`, ingest `ok=true`, evidence +1.* Impact: personal data collected after consent withdrawal (incl. location if the request allowed it). Prereq: a normal consent-based request. | **FIXED** (migration 120700) |
-| H2 | **HIGH** | #28 (`passport_can_act_as_verifier`, `passport_request_verification`) | **Verification independence is enforced per *account*, not per *control*.** Any user can create an org (`orgs_owner_manage`), assign a second account `evidence_reviewer`, and verify their own claim "as" that org. *Repro R09c/e: claim → `verified`, `organizations.verified=false`.* The public "why" page then says "Verified by <org name>". Direct self-verification (R09a/b/d) **is** blocked. Exploitable via the API by any signed-in user; no UI path exists today. Peer-attestation by a sock-puppet account is inherent and cannot be stopped in SQL. | ~~OPEN — `BLOCKED_REQUIRES_SCHEMA_AUTHORIZATION`~~ → **REMEDIATED 2026-09-21** in #28 (`ce18e17`); see addendum |
+| H2 | **HIGH** | #28 (`passport_can_act_as_verifier`, `passport_request_verification`) | **Verification independence is enforced per *account*, not per *control*.** Any user can create an org (`orgs_owner_manage`), assign a second account `evidence_reviewer`, and verify their own claim "as" that org. *Repro R09c/e: claim → `verified`, `organizations.verified=false`.* The public "why" page then says "Verified by <org name>". Direct self-verification (R09a/b/d) **is** blocked. Exploitable via the API by any signed-in user; no UI path exists today. Peer-attestation by a sock-puppet account is inherent and cannot be stopped in SQL. | ~~OPEN — `BLOCKED_REQUIRES_SCHEMA_AUTHORIZATION`~~ → **PARTIALLY REMEDIATED 2026-09-21**: control independence fixed in #28 (`ce18e17`); the FLOW-verified-org leg is bypassable by INSERT (**F1, open**); see addendum |
 | M1 | MEDIUM | #28 (`passport_claims_read`, anon `SELECT`) | **The public projection is enforced only in the app layer.** `anon` can read the *raw* row of any public claim: `source_ref` (`activity_participants:<uuid>`), `issuer_id` (the host's profile id), `created_by`, full `value`. The explanation RPC deliberately hides `source_ref` and person-issuer labels from the public — the table exposes them. *Repro R04a.* | ~~OPEN — `BLOCKED_REQUIRES_SCHEMA_AUTHORIZATION`~~ → **REMEDIATED 2026-09-21** in #28 (`ce18e17`) + #31; see addendum |
 | M2 | MEDIUM | #30 (`passport_capture_related_ok`) | `SECURITY DEFINER`, arbitrary subject id, executable by any signed-in user: an oracle for "did person P apply to / attend / join X?". *Repro R01.* Prereq: know P's and X's UUIDs. | **FIXED** (revoked from `authenticated`) |
 | M3 | MEDIUM (latent) | #30 (`passport_gateway_get_capture_request`, `report_capture_status`) | **Capture requests are not bound to a producer.** Any gateway client holding the scope can read or drive *any* request (`get_capture_request` takes no client id). *Repro R06a/b.* Latent: only `flow_capture` exists. **Must be fixed before a second gateway client is ever registered.** | OPEN (design decision) |
@@ -108,7 +110,7 @@ real head (its tree content is byte-identical to the previously reconciled tip `
 onto it. The two conflicts (both in the files the M1 rework replaced) were resolved in favour of the M1 side: this PR's M4 guard
 (`source_system = flow_platform`) now lives in the database projection, and its unit tests were ported to assert that.
 
-### H2 — reproduced, then fixed
+### H2 — reproduced, then fixed (control independence; see F1 for the open second leg)
 * **Reproduction (pre-fix tree = old #31 tip `45a1d35`):** S owns an organization FLOW has *not* verified, gives a second account
   reviewer authority in it, requests verification from that organization, and the second account's decision leaves S's own claim
   `verified` (`organizations.verified = f`).
@@ -143,6 +145,7 @@ revoked / expired / not-started / wrong-org / wrong-scope authority, the guard t
 allow-list default-deny, the explanation's viewer tiers, disclosure revocation and expiry) — **38/38 killed**; the suites are green after restore.
 
 ### Still open
+* **F1 (HIGH), F2 (MEDIUM), F3 (LOW), F4 (INFO)** — see [QA pass of the published stack](#qa-pass-of-the-published-stack). The H2 test matrix and the mutation runner did not catch F1: they exercise the `UPDATE` path of `organizations.verified`, never `INSERT`.
 * **R11-DB (the database half of M4) — MEDIUM, needs a policy decision, not fixed here.** A member can create a claim of a
   platform-reserved type (`participation.activity`, source `manual`) and have a second account peer-verify it. It is correctly never on the
   public Passport (the projection admits only `flow_platform` claims). But `passport_disclose('claim_valid', 'participation.activity')` does not
@@ -151,3 +154,19 @@ allow-list default-deny, the explanation's viewer tiers, disclosure revocation a
 * M3, M5, M6 and L5–L7 as in the register (M6: CI still does not run the DB suites; `tests/db/replay.sh` must be run locally).
 * The public explanation carries `null`-valued keys for private fields because the cross-repo `ClaimExplanation` contract requires them
   (field names only, never values).
+
+## QA pass of the published stack
+
+Run 2026-09-21 against the published tips (#31 `8b96d27`, #32 `10859cc`, #33 `26d7b75`) by a fresh, read-only reviewer that formed its own
+conclusions against a throwaway Postgres; F1–F3 were then **reproduced independently** (`tests/db/repros/passport_v2_qa_findings.repro.sql`).
+Verdicts: **M1 PASS**; **H2 PASS for control-set independence** (32 attack cases denied at request, decision and guard-trigger level; helpers not
+callable by `anon`/`authenticated`) **with the F1 caveat**. All 72 Passport functions pin `search_path`; no `passport_*` table is readable by `anon`; no
+V2 function touches `flow.internal_write`; replay from empty is clean (59 migrations).
+
+| ID | Severity | Finding | Status |
+|---|---|---|---|
+| F1 | **HIGH** | `organizations.verified` is guarded on `UPDATE` only (`protect_organization_fields` is `BEFORE UPDATE`; owner policy is `FOR ALL`). Any user can `INSERT` an organization with `verified = true`; a second account owning it can assign itself reviewer authority and verify the first account's claim (`employer_verified` etc.), which then answers `true` to a consented `passport_disclose`. Defeats H2's platform-vetting leg; control independence is unaffected. Root cause pre-dates V2. | **OPEN** — fix belongs in #28's territory (guard `INSERT`, or force `verified = false` on non-internal inserts) |
+| F2 | MEDIUM | One account can host, self-register, self-check-in and self-complete its own activity; `passport_claim_from_activity` (system verifier, always independent) yields a verified claim that `anon` sees on the public projection as "Verified by Flow". No host ≠ participant rule exists. | **OPEN** |
+| F3 | LOW | The claims guard trigger is `UPDATE`-only; `service_role` (full DML by default privileges on every `passport_*` table) can `INSERT` a `verified` claim directly. Needs the service key; related to M5. | **OPEN** |
+| F4 | INFO | Control independence is a point-in-time check (serial-equivalent; no lock between control changes and decisions; control gained after verification is not re-evaluated). `passport_record_verification` returns `not_found` vs `not_authorized`, an id-existence oracle for random UUIDs, contrary to its comment. `passport_subject_is_public` (anon-callable) reveals whether a profile id has a public Passport. The header comment of 120700 still says raw claims are anon-readable. | INFO (reported by the reviewer; not independently reproduced) |
+| R11-DB | MEDIUM, product-policy dependent | See the addendum: a member-created `participation.activity` claim, peer-verified, is accepted by a consented `passport_disclose('claim_valid', …)`. Never on the public projection. | **OPEN**, deliberately not fixed |
