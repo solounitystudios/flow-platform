@@ -14,7 +14,11 @@ import { ReliabilityCard } from "@/components/passport/ReliabilityCard";
 import { Achievements } from "@/components/passport/Achievements";
 import { CredentialBadges } from "@/components/passport/CredentialBadges";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
+import { VerifiedClaims } from "@/components/passport/VerifiedClaims";
 import { flowIdFromUuid } from "@/lib/passport";
+import { createClient } from "@/lib/supabase/server";
+import { getMyClaims } from "@/lib/passport/data";
+import { projectClaimForOwner } from "@/lib/passport/domain";
 
 export default async function PassportPage() {
   const user = await getCurrentUser();
@@ -26,12 +30,16 @@ export default async function PassportPage() {
   const { profile, passport, skills, recommendations, credentials } = full;
   const username = profile.username ?? user.id.slice(0, 8);
   const breakdown = await getReliabilityBreakdown(user.id);
-  const [allAchievements, earnedAchievements, credentialTypes, foundingClass] = await Promise.all([
+  const supabase = await createClient();
+  const now = new Date();
+  const [allAchievements, earnedAchievements, credentialTypes, foundingClass, claimRows] = await Promise.all([
     getAllAchievements(),
     getEarnedAchievements(user.id),
     getCredentialTypes(),
     getFoundingClassStatus(user.id),
+    getMyClaims(supabase, user.id),
   ]);
+  const claims = claimRows.map((row) => projectClaimForOwner(row, now));
 
   return (
     <div className="space-y-6">
@@ -66,6 +74,15 @@ export default async function PassportPage() {
       <Card>
         <CardBody>
           <PassportActions username={username} initialPublic={profile.public_passport} />
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <h2 className="font-bold text-ink-900 dark:text-white">Verified activity</h2>
+        </CardHeader>
+        <CardBody>
+          <VerifiedClaims claims={claims} />
         </CardBody>
       </Card>
 

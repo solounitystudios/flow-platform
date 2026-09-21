@@ -50,4 +50,16 @@ for t in "$ROOT"/tests/db/*.test.sql; do
   if ! cat "$ROOT/tests/db/_helpers.sql" "$t" | "${PSQL[@]}"; then fail=1; fi
 done
 [ "$fail" = "0" ] && echo "DB assertions OK" || { echo "DB assertions FAILED"; exit 1; }
-[ "${KEEP:-0}" = "1" ] && echo "container kept: $NAME"
+
+# Real parallel sessions (H2-12) can't run inside a single rolled-back transaction. This commits its own fixtures into
+# the same THROWAWAY container (and the ledger is append-only), so it runs last — and is skipped for a KEPT container, which
+# is meant to stay pristine for the suites, the review repros and the mutation runner (opt back in with CONCURRENCY=1).
+if [ "${KEEP:-0}" != "1" ] || [ "${CONCURRENCY:-0}" = "1" ]; then
+  echo "concurrency: h2_concurrency.sh"
+  bash "$ROOT/tests/db/h2_concurrency.sh" "$NAME" || { echo "DB concurrency checks FAILED"; exit 1; }
+  echo "DB concurrency OK"
+else
+  echo "concurrency: skipped (KEEP=1 keeps the database pristine; CONCURRENCY=1 to include it)"
+fi
+# An `[ ... ] && echo` as the last line would make a successful run exit 1 whenever KEEP is unset.
+if [ "${KEEP:-0}" = "1" ]; then echo "container kept: $NAME"; fi

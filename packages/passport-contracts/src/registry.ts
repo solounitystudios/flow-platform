@@ -9,6 +9,7 @@ import { IntegrationConnection } from "./integration";
 import { CaptureRequest, CaptureStatusReport, EvidencePackage, EvidencePackageReceipt, EvidenceSummary } from "./capture";
 import { GatewayErrorBody } from "./errors";
 import { SubjectRef } from "./subject";
+import { ClaimExplanation } from "./explanation";
 
 /**
  * Every schema published as JSON Schema. The files under `schemas/` are
@@ -34,4 +35,5 @@ export const WIRE_SCHEMAS = {
   EvidencePackageReceipt,
   EvidenceSummary,
   GatewayErrorBody,
+  ClaimExplanation,
 } as const;

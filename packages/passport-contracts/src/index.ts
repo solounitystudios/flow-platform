@@ -12,6 +12,7 @@ export * from "./events";
 export * from "./integration";
 export * from "./capture";
 export * from "./errors";
+export * from "./explanation";
 export * from "./signing";
 export { sha256Hex, hmacSha256Hex, toHex } from "./crypto";
 export * from "./registry";

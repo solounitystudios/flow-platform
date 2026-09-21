@@ -40,6 +40,7 @@ import {
   CONSENT_TRANSITIONS,
   PURPOSE_ALLOWED_CATEGORIES,
   RELATIONSHIP_TRANSITIONS,
+  PUBLIC_VALUE_FIELDS,
   RELATION_RULES,
   VERIFICATION_METHOD_POLICY,
   claimCategoryFor,
@@ -244,6 +245,22 @@ describe("SQL <-> contracts parity: capture + integrations", () => {
     const summary = keysAsserted("summary shape matches the EvidenceSummary contract").filter((k) => k !== "C");
     expect(summary.length).toBeGreaterThan(7);
     expect(summary).toEqual(Object.keys(EvidenceSummary.shape).sort());
+  });
+});
+
+describe("SQL <-> TS parity: the public claim-value allow-list (M1)", () => {
+  // passport_public_claim_value() is the ENFORCEMENT (database); PUBLIC_VALUE_FIELDS is the TypeScript mirror that builds titles.
+  // If they ever disagree, one of them is either leaking a field or silently dropping one.
+  const fn = sql.slice(sql.indexOf("create or replace function public.passport_public_claim_value"));
+  const body = fn.slice(0, fn.indexOf("$$;", fn.indexOf("as $$")));
+  const arms = [...body.matchAll(/when '([^']+)' then jsonb_strip_nulls\(jsonb_build_object\(([\s\S]*?)\)\)\s*(?=when|else)/g)];
+
+  it("lists exactly the same claim types and fields, and defaults every other type to nothing", () => {
+    const fromSql = Object.fromEntries(arms.map(([, type, args]) => [type, [...args.matchAll(/^\s*'([a-z_]+)',/gm)].map((m) => m[1]).sort()]));
+    const fromTs = Object.fromEntries(Object.entries(PUBLIC_VALUE_FIELDS).map(([type, fields]) => [type, [...fields].sort()]));
+    expect(arms.length, "the allow-list arms were not parsed").toBeGreaterThan(0);
+    expect(fromSql).toEqual(fromTs);
+    expect(body).toMatch(/else '\{\}'::jsonb/);
   });
 });
 

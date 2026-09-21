@@ -9,6 +9,9 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { JoinActivityButton } from "@/components/activities/JoinActivityButton";
 import { ActivityParticipantRow } from "@/components/activities/ActivityParticipantRow";
 import { ActivityStatusControls } from "@/components/activities/ActivityStatusControls";
+import { AddToPassportButton } from "@/components/activities/AddToPassportButton";
+import { createClient } from "@/lib/supabase/server";
+import { getMyClaimIdForActivity } from "@/lib/passport/data";
 import { formatDateTime } from "@/lib/utils";
 
 const ACTIVITY_TYPE_LABEL: Record<string, string> = {
@@ -31,6 +34,10 @@ export default async function ActivityDetailPage({ params }: { params: Promise<{
 
   const spotsLeft = activity.capacity != null ? activity.capacity - activity.registered : null;
   const canJoin = activity.status === "published";
+
+  // Only the HOST's "completed" mark makes an outcome claimable; registering or checking in never does.
+  const canAddToPassport = Boolean(user) && !activity.isOwner && activity.myParticipation?.status === "completed";
+  const existingClaimId = canAddToPassport && user ? await getMyClaimIdForActivity(await createClient(), user.id, activity.id) : null;
 
   const participants = activity.isOwner ? await getParticipantsForActivity(activity.id) : [];
   const activeParticipants = participants.filter((p) => p.status === "registered" || p.status === "attended");
@@ -83,6 +90,8 @@ export default async function ActivityDetailPage({ params }: { params: Promise<{
             ) : (
               <p className="text-sm text-ink-400">This activity is no longer open to join.</p>
             ))}
+
+          {canAddToPassport && <AddToPassportButton activityId={activity.id} existingClaimId={existingClaimId} />}
         </CardBody>
       </Card>
 
