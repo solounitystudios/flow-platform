@@ -50,5 +50,11 @@ for t in "$ROOT"/tests/db/*.test.sql; do
   if ! cat "$ROOT/tests/db/_helpers.sql" "$t" | "${PSQL[@]}"; then fail=1; fi
 done
 [ "$fail" = "0" ] && echo "DB assertions OK" || { echo "DB assertions FAILED"; exit 1; }
+
+# Real parallel sessions (H2-12) can't run inside a single rolled-back transaction. This commits its own fixtures into
+# the same THROWAWAY container, so it runs last.
+echo "concurrency: h2_concurrency.sh"
+bash "$ROOT/tests/db/h2_concurrency.sh" "$NAME" || { echo "DB concurrency checks FAILED"; exit 1; }
+echo "DB concurrency OK"
 # An `[ ... ] && echo` as the last line would make a successful run exit 1 whenever KEEP is unset.
 if [ "${KEEP:-0}" = "1" ]; then echo "container kept: $NAME"; fi
