@@ -39,14 +39,14 @@ of whose controllers also controls the subject (a person, an organization, an ev
 
 ### Where it is checked (defence in depth)
 
-1. **`passport_request_verification`** — refuses `verifier_not_independent`, and `verifier_not_verified` unless FLOW has set `organizations.verified` (never self-assigned: the guard trigger honours only FLOW's internal write path).
+1. **`passport_request_verification`** — refuses `verifier_not_independent`, and `verifier_not_verified` unless `organizations.verified` is set. **Known gap (QA F1):** the trigger protecting that flag fires on `UPDATE` only, so an organization created with `verified = true` on `INSERT` satisfies this check; see Known limits.
 2. **`passport_record_verification`** — **re-evaluates both at decision time**, plus that the decider does not control the subject. Control and organization trust can change between a request and its decision; nothing is trusted from request time.
 3. **`passport_claims` guard trigger** — refuses a transition to `verified` unless a completed decision exists that is independent and, for organizations, FLOW-verified. A privileged writer or a future careless RPC cannot skip 1–2.
 
 ### Fail-closed and revocation semantics
 
 * Authority is read from the table on **every call** (STABLE SQL, no caching). A committed revocation is visible to an already-open connection immediately; expired and not-yet-started assignments confer nothing, with no sweep needed.
-* A refusal is indistinguishable from "no such request" for a caller who is not the named party (`not_authorized` / `not_found`); no verification row is created and the claim does not move.
+* A refusal creates no verification row and does not move the claim. A caller who is not the named party gets `not_authorized` or `not_found` (QA F4: the two are distinguishable for random ids, so this is not a perfect existence-oracle defence).
 * A decided verification is immutable and cannot be decided again (`not_pending`). Concurrent decisions serialize on the claim row: exactly one wins.
 
 ### Scope semantics
@@ -128,6 +128,10 @@ A new function or view that returns claim data and is left executable by `anon` 
 | TS projection / data layer | `tests/unit/passport-explanation.test.ts`, `tests/unit/passport-review.test.ts` |
 
 ## Known limits
+
+* **OPEN — HIGH (QA F1): the "organization must be FLOW-verified" leg of H2 is bypassable.** `protect_organization_fields` is `BEFORE UPDATE` only and the owner policy is `FOR ALL`, so any signed-in user can `INSERT` an organization with `verified = true`. A second account that owns such an organization and assigns itself reviewer authority can verify another user's claim through it: control independence still holds (two accounts), but the platform-vetting requirement does not. Root cause pre-dates Passport V2; V2 trusts the flag. Reproduction: `tests/db/repros/passport_v2_qa_findings.repro.sql` (F1).
+* **OPEN — MEDIUM (QA F2): a host can complete their own activity.** `passport_claim_from_activity` uses a `system` verifier, which is always independent, and `activity_participants` has no host ≠ participant rule, so one account can host, self-register, self-check-in, self-complete, claim, and publish a "Verified by Flow" claim that `anon` sees in the public projection (repro F2).
+* **OPEN — LOW (QA F3):** the `passport_claims` guard trigger is `UPDATE`-only, so a privileged writer (`service_role` holds full DML on every `passport_*` table by default privileges) can `INSERT` a `verified` claim directly (repro F3).
 
 * **Peer attestation by a second account is inherent** and cannot be stopped in SQL; independence is over *control*, not identity.
 * **Platform-reserved claim types are not reserved at the DB level.** A member can create a `participation.activity` claim (source `manual`) and have it peer-verified. The public projection never shows it, but `passport_disclose('claim_valid', …)` does not filter on `source_system`, so a consented grantee can be told `answer: true`. Closing this needs a policy decision (which claim types only Passport may create); see the review addendum.

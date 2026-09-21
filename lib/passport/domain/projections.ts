@@ -35,6 +35,8 @@ export interface ClaimRowInput {
   expires_at: string | null;
   visibility: "private" | "public";
   sensitivity: Sensitivity;
+  /** Where the assertion came from. A user-created claim is always "manual"; Passport-derived ones are "flow_platform". */
+  source_system: string;
   created_at: string;
 }
 

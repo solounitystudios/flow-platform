@@ -6,7 +6,7 @@ import type { ClaimRowInput, PublicClaimRow } from "@/lib/passport/domain";
 
 type Client = SupabaseClient<Database>;
 
-const CLAIM_COLUMNS = "id, claim_type, value, status, effective_at, expires_at, visibility, sensitivity, created_at";
+const CLAIM_COLUMNS = "id, claim_type, value, status, effective_at, expires_at, visibility, sensitivity, source_system, created_at";
 
 function toRow(row: Database["public"]["Tables"]["passport_claims"]["Row"]): ClaimRowInput {
   return {
@@ -18,6 +18,7 @@ function toRow(row: Database["public"]["Tables"]["passport_claims"]["Row"]): Cla
     expires_at: row.expires_at,
     visibility: row.visibility as ClaimRowInput["visibility"],
     sensitivity: row.sensitivity as ClaimRowInput["sensitivity"],
+    source_system: row.source_system,
     created_at: row.created_at,
   };
 }

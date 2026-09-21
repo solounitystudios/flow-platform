@@ -91,7 +91,9 @@ describe("the read path is the caller's own session, read-only", () => {
 describe("no new database surface", () => {
   it("adds no migration for the Connections Center", () => {
     const names = fs.readdirSync(path.join(ROOT, "supabase/migrations")).filter((f) => f.endsWith(".sql"));
-    // Compare on the timestamp prefix only: the latest existing migration is the claim-explanation one.
-    expect(names.filter((n) => n.slice(0, 14) > "20260919120600")).toEqual([]);
+    // Compare on the timestamp prefix only. The one migration allowed after the claim-explanation one is the
+    // independent security review's fix migration; the Connections Center itself added none.
+    expect(names.filter((n) => n.slice(0, 14) > "20260919120600" && !/_passport_v2_review_fixes\.sql$/.test(n))).toEqual([]);
+    expect(names.filter((n) => /connection/i.test(n) && n.slice(0, 14) > "20260919120500")).toEqual([]);
   });
 });
